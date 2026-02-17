@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="atracker — Local activity tracker dashboard showing app usage, timeline, and daily history.">
+    <title>atracker — Activity Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app">
+        <!-- Sidebar -->
+        <nav class="sidebar">
+            <div class="sidebar-brand">
+                <div class="brand-icon">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"/>
+                        <polyline points="12 6 12 12 16 14"/>
+                    </svg>
+                </div>
+                <span class="brand-text">atracker</span>
+            </div>
+
+            <div class="nav-links">
+                <a href="#" class="nav-link active" data-view="today" id="nav-today">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                    <span>Today</span>
+                </a>
+                <a href="#" class="nav-link" data-view="history" id="nav-history">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                    <span>History</span>
+                </a>
+                <a href="#" class="nav-link" data-view="settings" id="nav-settings">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                    <span>Settings</span>
+                </a>
+            </div>
+
+            <div class="sidebar-footer">
+                <div class="status-indicator" id="daemon-status">
+                    <span class="status-dot"></span>
+                    <span class="status-text">Connecting...</span>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="content">
+            <!-- Today View -->
+            <section class="view active" id="view-today">
+                <div class="view-header">
+                    <h1>Today's Activity</h1>
+                    <div class="header-meta">
+                        <span class="current-date" id="current-date"></span>
+                        <span class="total-tracked" id="total-tracked">—</span>
+                    </div>
+                </div>
+
+                <!-- Now Tracking Card -->
+                <div class="card card-glow" id="now-tracking-card">
+                    <div class="card-label">Now Tracking</div>
+                    <div class="now-tracking">
+                        <div class="now-app-icon" id="now-icon">—</div>
+                        <div class="now-details">
+                            <div class="now-app" id="now-app">Waiting for data...</div>
+                            <div class="now-title" id="now-title">—</div>
+                        </div>
+                        <div class="now-duration" id="now-duration">—</div>
+                    </div>
+                </div>
+
+                <!-- Timeline -->
+                <div class="card">
+                    <div class="card-label">Timeline</div>
+                    <div class="timeline-container" id="timeline-container">
+                        <div class="timeline-empty">No activity recorded yet</div>
+                    </div>
+                    <div class="timeline-labels" id="timeline-labels"></div>
+                </div>
+
+                <!-- App Usage -->
+                <div class="card">
+                    <div class="card-label">App Usage</div>
+                    <div class="usage-list" id="usage-list">
+                        <div class="usage-empty">No data yet — start tracking!</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- History View -->
+            <section class="view" id="view-history">
+                <div class="view-header">
+                    <h1>Activity History</h1>
+                    <div class="header-meta">
+                        <select class="select-period" id="history-period">
+                            <option value="7">Last 7 days</option>
+                            <option value="14">Last 14 days</option>
+                            <option value="30">Last 30 days</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-label">Daily Active Time</div>
+                    <div class="history-chart" id="history-chart">
+                        <div class="usage-empty">Loading history...</div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-label">Daily Breakdown</div>
+                    <div class="history-table" id="history-table"></div>
+                </div>
+            </section>
+
+            <!-- Settings View -->
+            <section class="view" id="view-settings">
+                <div class="view-header">
+                    <h1>Settings</h1>
+                </div>
+
+                <div class="card">
+                    <div class="card-label">Categories</div>
+                    <p class="card-description">Categories auto-color your apps in the timeline and usage charts.</p>
+                    <div class="categories-list" id="categories-list"></div>
+                </div>
+
+                <div class="card">
+                    <div class="card-label">Daemon Info</div>
+                    <div class="daemon-info" id="daemon-info">
+                        <div class="info-row"><span>Status</span><span id="info-status">—</span></div>
+                        <div class="info-row"><span>Database</span><span id="info-db">—</span></div>
+                        <div class="info-row"><span>Port</span><span>8932</span></div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

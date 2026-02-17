@@ -1,0 +1,8 @@
+{
+  "uuid": "atracker@local",
+  "name": "Activity Tracker Window Watcher",
+  "description": "Exposes active window info via DBus for the atracker daemon",
+  "shell-version": ["46"],
+  "version": 1,
+  "url": ""
+}
