@@ -53,7 +53,7 @@ class Watcher:
             try:
                 await self._poll()
             except Exception as e:
-                logger.warning("Poll error: %s", e)
+                logger.exception("Poll error (will retry)")
             await asyncio.sleep(POLL_INTERVAL)
 
     async def stop(self):

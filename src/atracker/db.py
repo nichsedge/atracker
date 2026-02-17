@@ -12,8 +12,14 @@ import aiosqlite
 DB_DIR = Path(os.environ.get("ATRACKER_DATA_DIR", Path.home() / ".local" / "share" / "atracker"))
 DB_PATH = DB_DIR / "atracker.db"
 
-# cr-sqlite extension path — bundled in lib/
-CRSQLITE_PATH = str(Path(__file__).parent.parent.parent / "lib" / "crsqlite")
+# cr-sqlite extension path — bundled in src/atracker/lib/
+_pkg_lib = Path(__file__).parent / "lib"
+_root_lib = Path(__file__).parent.parent.parent / "lib"
+CRSQLITE_PATH_DIR = _pkg_lib if _pkg_lib.exists() else _root_lib
+
+# Find the actual shared library file
+_crsqlite_files = list(CRSQLITE_PATH_DIR.glob("crsqlite.*")) + list(CRSQLITE_PATH_DIR.glob("libcrsqlite.*"))
+CRSQLITE_PATH = str(_crsqlite_files[0]) if _crsqlite_files else str(CRSQLITE_PATH_DIR / "crsqlite.so")
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS events (
@@ -41,20 +47,32 @@ CREATE INDEX IF NOT EXISTS idx_events_wm_class ON events(wm_class);
 
 DEFAULT_CATEGORIES = [
     ("Browser", "firefox|chromium|google-chrome|brave|zen", "#3b82f6"),
-    ("Terminal", "gnome-terminal|kitty|alacritty|wezterm|foot|Tilix|konsole", "#10b981"),
-    ("Editor", "code|Code|cursor|Cursor|neovim|emacs|sublime|jetbrains", "#8b5cf6"),
+    ("Terminal", "gnome-terminal|kitty|alacritty|java", "#10b981"),
+    ("Editor", "code|Code|antigravity|DBeaver|jetbrains", "#8b5cf6"),
     ("Communication", "slack|discord|telegram|signal|teams|zoom", "#f59e0b"),
     ("Files", "nautilus|thunar|dolphin|nemo", "#6366f1"),
     ("Media", "vlc|mpv|spotify|rhythmbox|totem", "#ec4899"),
-    ("Office", "libreoffice|soffice|evince|okular", "#14b8a6"),
+    ("Office", "libreoffice|soffice|evince|okular|obsidian", "#14b8a6"),
 ]
 
 
 def _load_crsqlite(conn: sqlite3.Connection) -> None:
-    """Load cr-sqlite extension into a connection."""
+    """Load and validate cr-sqlite extension."""
+    if not Path(CRSQLITE_PATH).exists():
+        import sys
+        print(f"CRITICAL: Extension file not found at {CRSQLITE_PATH}", file=sys.stderr)
+        return
+
     conn.enable_load_extension(True)
-    conn.load_extension(CRSQLITE_PATH)
-    conn.enable_load_extension(False)
+    try:
+        conn.load_extension(CRSQLITE_PATH)
+        # Validate extension is working
+        conn.execute("SELECT crsql_db_version()")
+    except Exception as e:
+        import sys
+        print(f"CRITICAL: Failed to load/validate cr-sqlite: {e}", file=sys.stderr)
+    finally:
+        conn.enable_load_extension(False)
 
 
 def _get_device_id() -> str:
@@ -180,11 +198,9 @@ async def init_db() -> None:
 
 
 def _crsqlite_factory(*args, **kwargs):
-    """Connection factory that loads cr-sqlite extension."""
+    """Connection factory that loads and validates cr-sqlite extension."""
     conn = sqlite3.Connection(*args, **kwargs)
-    conn.enable_load_extension(True)
-    conn.load_extension(CRSQLITE_PATH)
-    conn.enable_load_extension(False)
+    _load_crsqlite(conn)
     return conn
 
 
@@ -206,6 +222,10 @@ async def _aconn():
     try:
         yield db
     finally:
+        try:
+            await db.execute("SELECT crsql_finalize()")
+        except:
+            pass
         await db.close()
 
 
