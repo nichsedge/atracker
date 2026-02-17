@@ -4,12 +4,26 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.Query
 import androidx.room.OnConflictStrategy
+import androidx.room.RawQuery
+import androidx.sqlite.db.SupportSQLiteQuery
 import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface EventDao {
-    @Insert(onConflict = OnConflictStrategy.IGNORE) // CRDT handles conflicts, but we ignore local dupes
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertEvent(event: EventEntity)
+
+    @Query("SELECT * FROM events ORDER BY timestamp DESC LIMIT :limit")
+    suspend fun getRecentEvents(limit: Int = 10): List<EventEntity>
+
+    @Query("SELECT SUM(duration_secs) FROM events WHERE date(timestamp) = date('now', 'localtime')")
+    suspend fun getTodayTotalSeconds(): Double?
+
+    @Query("SELECT COUNT(DISTINCT wm_class) FROM events WHERE date(timestamp) = date('now', 'localtime')")
+    suspend fun getTodayAppCount(): Int
+
+    @Query("SELECT * FROM events")
+    suspend fun getAllEventsList(): List<EventEntity> // Renamed to avoid conflict with Flow version
     
     @Query("SELECT * FROM events ORDER BY timestamp DESC")
     fun getAllEvents(): Flow<List<EventEntity>>

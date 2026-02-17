@@ -19,27 +19,37 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.UUID
-import java.time.LocalDateTime
+import java.time.Instant
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 class UsageTrackerService : Service() {
     private val serviceJob = Job()
     private val serviceScope = CoroutineScope(Dispatchers.IO + serviceJob)
     private lateinit var usageStatsManager: UsageStatsManager
+    private lateinit var notificationManager: NotificationManager
     private var isRunning = false
     
     private var lastPackage = ""
     private var lastClass = ""
     private var lastStart = System.currentTimeMillis()
+    private var currentAppName = "Waiting..."
+
+    companion object {
+        private const val NOTIFICATION_ID = 1
+        private const val CHANNEL_ID = "TrackerChannel"
+        private val isoFormatter = DateTimeFormatter.ISO_INSTANT
+    }
 
     override fun onCreate() {
         super.onCreate()
         usageStatsManager = getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
+        notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         createNotificationChannel()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        startForeground(1, createNotification())
+        startForeground(NOTIFICATION_ID, createNotification())
         if (!isRunning) {
             isRunning = true
             startTracking()
@@ -49,9 +59,9 @@ class UsageTrackerService : Service() {
 
     private fun startTracking() {
         serviceScope.launch {
-            while (isRunning) { // Poll every 5 seconds
+            while (isRunning) {
                 checkUsage()
-                delay(5000)
+                delay(5000) // Poll every 5 seconds
             }
         }
     }
@@ -62,12 +72,15 @@ class UsageTrackerService : Service() {
         val events = usageStatsManager.queryEvents(startTime, endTime)
         val event = UsageEvents.Event()
 
-        var latestEvent: UsageEvents.Event? = null
+        var latestEvent: EventData? = null
         while (events.hasNextEvent()) {
             events.getNextEvent(event)
             if (event.eventType == UsageEvents.Event.MOVE_TO_FOREGROUND) {
-                latestEvent = UsageEvents.Event()
-                latestEvent.copyFrom(event)
+                latestEvent = EventData(
+                    packageName = event.packageName,
+                    className = event.className ?: "",
+                    timestamp = event.timeStamp
+                )
             }
         }
 
@@ -78,14 +91,27 @@ class UsageTrackerService : Service() {
             if (pkg != lastPackage || cls != lastClass) {
                 // App changed! Record previous event if valid
                 if (lastPackage.isNotEmpty()) {
-                    recordEvent(lastPackage, lastClass, lastStart, latestEvent.timeStamp)
+                    recordEvent(lastPackage, lastClass, lastStart, latestEvent.timestamp)
                 }
                 
                 // Update current
                 lastPackage = pkg
                 lastClass = cls
-                lastStart = latestEvent.timeStamp
+                lastStart = latestEvent.timestamp
+                currentAppName = getAppName(pkg)
+                
+                // Update notification
+                updateNotification()
             }
+        }
+    }
+
+    private fun getAppName(packageName: String): String {
+        return try {
+            val appInfo = packageManager.getApplicationInfo(packageName, 0)
+            packageManager.getApplicationLabel(appInfo).toString()
+        } catch (e: Exception) {
+            packageName.substringAfterLast('.')
         }
     }
 
@@ -93,21 +119,20 @@ class UsageTrackerService : Service() {
         val duration = (end - start) / 1000.0
         if (duration < 1.0) return
 
-        val now = LocalDateTime.now() // formatting simplified for example
-        val fmt = DateTimeFormatter.ISO_LOCAL_DATE_TIME
-        
-        // We'd use proper time conversion here to ISO string
-        // For simplicity using string placeholders
-        val startStr = start.toString() 
-        val endStr = end.toString()
+        val startStr = Instant.ofEpochMilli(start)
+            .atZone(ZoneId.systemDefault())
+            .format(isoFormatter)
+        val endStr = Instant.ofEpochMilli(end)
+            .atZone(ZoneId.systemDefault())
+            .format(isoFormatter)
         
         val entity = EventEntity(
             id = UUID.randomUUID().toString(),
-            device_id = "android-" + UUID.randomUUID().toString().take(8), // In reality, persist a device ID
-            timestamp = startStr, // Needs real ISO formatting
+            device_id = ATrackerApp.settings.getDeviceId(),
+            timestamp = startStr,
             end_timestamp = endStr,
-            wm_class = pkg, // Android package as wm_class
-            title = cls.substringAfterLast('.'),
+            wm_class = pkg,
+            title = cls.substringAfterLast('.').ifEmpty { pkg },
             pid = 0,
             duration_secs = duration,
             is_idle = false
@@ -121,21 +146,27 @@ class UsageTrackerService : Service() {
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
-                "TrackerChannel",
+                CHANNEL_ID,
                 "Activity Tracker",
                 NotificationManager.IMPORTANCE_LOW
-            )
-            val manager = getSystemService(NotificationManager::class.java)
-            manager.createNotificationChannel(channel)
+            ).apply {
+                description = "Tracks your app usage in the background"
+            }
+            notificationManager.createNotificationChannel(channel)
         }
     }
 
     private fun createNotification(): Notification {
-        return NotificationCompat.Builder(this, "TrackerChannel")
+        return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("ATracker Running")
-            .setContentText("Tracking activity...")
+            .setContentText("Tracking: $currentAppName")
             .setSmallIcon(android.R.drawable.ic_menu_recent_history)
+            .setOngoing(true)
             .build()
+    }
+
+    private fun updateNotification() {
+        notificationManager.notify(NOTIFICATION_ID, createNotification())
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -147,8 +178,10 @@ class UsageTrackerService : Service() {
     }
 }
 
-// Extension to copy event since UsageEvents.Event doesn't implement Cloneable publicly nicely
-fun UsageEvents.Event.copyFrom(other: UsageEvents.Event) {
-    // Reflection or manual copy of fields if needed, or just use the reference if safe in this loop
-    // Actually, UsageEvents.Event is reused by the iterator so we must copy fields manually
-}
+// Data class to hold event information
+private data class EventData(
+    val packageName: String,
+    val className: String,
+    val timestamp: Long
+)
+
