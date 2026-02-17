@@ -21,9 +21,9 @@ interface EventDao {
     suspend fun getCount(): Int
 
     // cr-sqlite sync primitives via raw queries
-    @Query("SELECT crsql_db_version()")
-    suspend fun getDbVersion(): Long
+    // @Query("SELECT crsql_db_version()")
+    // suspend fun getDbVersion(): Long
 
-    @Query("SELECT crsql_site_id()")
-    suspend fun getSiteId(): ByteArray
+    // @Query("SELECT crsql_site_id()")
+    // suspend fun getSiteId(): ByteArray
 }

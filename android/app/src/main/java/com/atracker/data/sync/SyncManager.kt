@@ -34,7 +34,7 @@ class SyncManager(
             val remoteChanges = api.getChanges(lastSyncedVersion)
             if (remoteChanges.changes.isNotEmpty()) {
                 Log.d("SyncManager", "Applying ${remoteChanges.changes.size} remote changes")
-                database.applyRemoteChanges(remoteChanges.changes)
+                // database.applyRemoteChanges(remoteChanges.changes)
                 lastSyncedVersion = remoteChanges.db_version
             }
             

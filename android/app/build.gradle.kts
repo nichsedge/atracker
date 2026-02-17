@@ -19,10 +19,6 @@ android {
         vectorDrawables {
             useSupportLibrary = true
         }
-
-        ndk {
-            abiFilters.addAll(listOf("x86", "x86_64", "armeabi-v7a", "arm64-v8a"))
-        }
     }
 
     buildTypes {
@@ -42,7 +38,7 @@ android {
         compose = true
     }
     composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.1"
+        kotlinCompilerExtensionVersion = "1.5.10"
     }
     packaging {
         resources {
@@ -65,8 +61,6 @@ dependencies {
     implementation("androidx.room:room-runtime:2.6.1")
     implementation("androidx.room:room-ktx:2.6.1")
     ksp("androidx.room:room-compiler:2.6.1")
-    implementation("com.github.requery:sqlite-android:3.41.2") // Custom SQLite for cr-sqlite
-    implementation("com.github.vlcn-io:cr-sqlite-android:0.15.1-vlcn-0.19.0-alpha.5")
 
     // Retrofit for Sync API
     implementation("com.squareup.retrofit2:retrofit:2.9.0")

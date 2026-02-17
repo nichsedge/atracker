@@ -5,9 +5,6 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.sqlite.db.SupportSQLiteDatabase
-import io.requery.android.database.sqlite.RequerySQLiteOpenHelperFactory
-import org.sqlite.database.sqlite.SQLiteDatabase
-import vlcn.CrsqliteUtil
 
 @Database(entities = [EventEntity::class, CategoryEntity::class], version = 1, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
@@ -24,14 +21,6 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "atracker.db"
                 )
-                .openHelperFactory(RequerySQLiteOpenHelperFactory())
-                .addCallback(object : RoomDatabase.Callback() {
-                    override fun onOpen(db: SupportSQLiteDatabase) {
-                        super.onOpen(db)
-                        db.execSQL("SELECT load_extension('libcrsqlite');")
-                        CrsqliteUtil.setup(db, context)
-                    }
-                })
                 .build()
                 INSTANCE = instance
                 instance
