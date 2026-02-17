@@ -5,6 +5,8 @@ After=graphical-session.target
 [Service]
 Type=simple
 ExecStart=%h/.local/bin/uv run --project %h/Projects/atracker atracker start
+# To use the Rust binary instead, comment the line above and uncomment below:
+# ExecStart=%h/Projects/atracker/rust/target/release/atracker start
 Restart=on-failure
 RestartSec=5
 Environment=DISPLAY=:0
