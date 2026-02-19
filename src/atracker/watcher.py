@@ -28,6 +28,7 @@ class Watcher:
         self._current_title = ""
         self._current_pid = 0
         self._current_start: datetime | None = None
+        self._last_poll_time: datetime | None = None
         self._is_idle = False
 
     async def start(self):
@@ -39,7 +40,9 @@ class Watcher:
         self._bus = await MessageBus(bus_type=BusType.SESSION).connect()
 
         self._running = True
-        self._current_start = datetime.now()
+        now = datetime.now()
+        self._current_start = now
+        self._last_poll_time = now
 
         # Set up signal handlers for graceful shutdown
         loop = asyncio.get_event_loop()
@@ -50,8 +53,19 @@ class Watcher:
                      POLL_INTERVAL, IDLE_THRESHOLD // 1000)
 
         while self._running:
+            # Check for time jumps (suspend/resume)
+            now = datetime.now()
+            if self._last_poll_time:
+                delta = (now - self._last_poll_time).total_seconds()
+                if delta > (POLL_INTERVAL * 4):  # e.g. >20s gap
+                    logger.warning("Time jump detected (%.1fs). Ending previous event at %s.",
+                                   delta, self._last_poll_time)
+                    await self._flush_current_event(end_time=self._last_poll_time)
+                    self._current_start = now
+
             try:
                 await self._poll()
+                self._last_poll_time = datetime.now()
             except Exception as e:
                 logger.exception("Poll error (will retry)")
             await asyncio.sleep(POLL_INTERVAL)
@@ -184,13 +198,13 @@ class Watcher:
         except Exception:
             return 0
 
-    async def _flush_current_event(self):
+    async def _flush_current_event(self, end_time: datetime | None = None):
         """Save the current tracked event to the database."""
         if self._current_start is None or not self._current_wm_class:
-            self._current_start = datetime.now()
+            self._current_start = end_time or datetime.now()
             return
 
-        now = datetime.now()
+        now = end_time or datetime.now()
         duration = (now - self._current_start).total_seconds()
 
         if duration < 1:
