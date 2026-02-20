@@ -52,24 +52,6 @@ DEFAULT_CATEGORIES = [
 ]
 
 
-def _cleanup_crsqlite(conn: sqlite3.Connection) -> None:
-    """Drop cr-sqlite triggers and tables if they exist to allow standard inserts."""
-    try:
-        # Check if we have any crsql triggers
-        cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='trigger' AND name LIKE '%__crsql_%'")
-        triggers = [row[0] for row in cursor.fetchall()]
-        for trigger in triggers:
-            conn.execute(f"DROP TRIGGER IF EXISTS \"{trigger}\"")
-        
-        # Optionally Drop crsql metadata tables if they exist
-        conn.execute("DROP TABLE IF EXISTS crsql_changes")
-        conn.execute("DROP TABLE IF EXISTS crsql_tracked_as_crr")
-        conn.execute("DROP TABLE IF EXISTS crsql_db_version")
-        conn.execute("DROP TABLE IF EXISTS crsql_site_id")
-    except Exception:
-        pass
-
-
 def _get_device_id() -> str:
     """Get or create a persistent device ID for this machine."""
     id_file = DB_DIR / "device_id"
@@ -90,77 +72,14 @@ def get_device_id() -> str:
         DEVICE_ID = _get_device_id()
     return DEVICE_ID
 
+_current_tracking_state = None
 
-def _migrate_if_needed(conn: sqlite3.Connection) -> None:
-    """Migrate old schema (INTEGER id) to new (TEXT UUID id) if needed."""
-    cursor = conn.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='events'")
-    row = cursor.fetchone()
-    if row is None:
-        return  # Table doesn't exist yet, no migration needed
+def set_current_state(state: dict | None):
+    global _current_tracking_state
+    _current_tracking_state = state
 
-    table_sql = row[0]
-    if "INTEGER PRIMARY KEY" not in table_sql:
-        return  # Already migrated
-
-    # Old schema detected — migrate
-    device_id = get_device_id()
-    conn.execute("ALTER TABLE events RENAME TO events_old")
-    conn.executescript("""
-        CREATE TABLE events (
-            id TEXT PRIMARY KEY NOT NULL,
-            device_id TEXT NOT NULL DEFAULT '',
-            timestamp TEXT NOT NULL DEFAULT '',
-            end_timestamp TEXT NOT NULL DEFAULT '',
-            wm_class TEXT NOT NULL DEFAULT '',
-            title TEXT NOT NULL DEFAULT '',
-            pid INTEGER NOT NULL DEFAULT 0,
-            duration_secs REAL NOT NULL DEFAULT 0,
-            is_idle INTEGER NOT NULL DEFAULT 0
-        );
-    """)
-    # Copy data with UUID conversion
-    conn.execute(f"""
-        INSERT INTO events (id, device_id, timestamp, end_timestamp, wm_class, title, pid, duration_secs, is_idle)
-        SELECT
-            lower(hex(randomblob(4)) || '-' || hex(randomblob(2)) || '-4' ||
-                  substr(hex(randomblob(2)),2) || '-' ||
-                  substr('89ab', abs(random()) % 4 + 1, 1) ||
-                  substr(hex(randomblob(2)),2) || '-' ||
-                  hex(randomblob(6))),
-            '{device_id}',
-            timestamp, end_timestamp, wm_class, title, pid, duration_secs, is_idle
-        FROM events_old
-    """)
-    conn.execute("DROP TABLE events_old")
-
-    # Migrate categories table too
-    cursor2 = conn.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='categories'")
-    cat_row = cursor2.fetchone()
-    if cat_row and "INTEGER PRIMARY KEY" in cat_row[0]:
-        conn.execute("ALTER TABLE categories RENAME TO categories_old")
-        conn.executescript("""
-            CREATE TABLE categories (
-                id TEXT PRIMARY KEY NOT NULL,
-                name TEXT NOT NULL DEFAULT '',
-                wm_class_pattern TEXT NOT NULL DEFAULT '',
-                color TEXT NOT NULL DEFAULT '#3b82f6'
-            );
-        """)
-        conn.execute("""
-            INSERT INTO categories (id, name, wm_class_pattern, color)
-            SELECT
-                lower(hex(randomblob(4)) || '-' || hex(randomblob(2)) || '-4' ||
-                      substr(hex(randomblob(2)),2) || '-' ||
-                      substr('89ab', abs(random()) % 4 + 1, 1) ||
-                      substr(hex(randomblob(2)),2) || '-' ||
-                      hex(randomblob(6))),
-                name, wm_class_pattern, color
-            FROM categories_old
-        """)
-        conn.execute("DROP TABLE categories_old")
-
-    conn.commit()
-
+def get_current_state() -> dict | None:
+    return _current_tracking_state
 
 async def init_db() -> None:
     """Initialize database and migrate if needed."""
@@ -168,8 +87,6 @@ async def init_db() -> None:
 
     conn = sqlite3.connect(str(DB_PATH))
     try:
-        _cleanup_crsqlite(conn)
-        _migrate_if_needed(conn)
         conn.executescript(SCHEMA)
 
         # Seed default categories if empty

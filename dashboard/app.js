@@ -3,11 +3,12 @@
    ============================================================ */
 
 const API = '';  // Same origin
-const REFRESH_INTERVAL = 15_000; // 15 seconds
+// REFRESH_INTERVAL removed in favor of WebSockets
 
 // State
 let currentView = 'today';
-let refreshTimer = null;
+let ws = null;
+let reconnectTimer = null;
 
 // ============ Init ============
 
@@ -17,7 +18,8 @@ document.addEventListener('DOMContentLoaded', () => {
     setupSettingsEvents();
     setCurrentDate();
     loadView('today');
-    startAutoRefresh();
+    initWebSocket();
+    checkNotificationPermission();
 });
 
 
@@ -169,6 +171,7 @@ function updateNowTracking(timeline) {
         return;
     }
     const last = timeline[timeline.length - 1];
+
     if (last.is_idle) {
         document.getElementById('now-app').textContent = 'Idle';
         document.getElementById('now-title').textContent = 'No active window';
@@ -446,16 +449,103 @@ function updateDaemonStatus(online) {
 }
 
 
-// ============ Auto Refresh ============
+// ============ WebSocket & Notifications ============
 
-function startAutoRefresh() {
-    if (refreshTimer) clearInterval(refreshTimer);
-    refreshTimer = setInterval(() => {
-        if (currentView === 'today') {
-            loadToday();
+function initWebSocket() {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${protocol}//${window.location.host}/ws`;
+
+    console.log('Connecting to WebSocket:', wsUrl);
+    ws = new WebSocket(wsUrl);
+
+    ws.onopen = () => {
+        console.log('WebSocket connected');
+        updateDaemonStatus(true);
+        if (reconnectTimer) {
+            clearTimeout(reconnectTimer);
+            reconnectTimer = null;
         }
-    }, REFRESH_INTERVAL);
+        // Refresh data on connect/reconnect
+        if (currentView === 'today') loadToday();
+    };
+
+    ws.onmessage = (event) => {
+        try {
+            const data = JSON.parse(event.data);
+            handleWsMessage(data);
+        } catch (err) {
+            console.error('Failed to parse WS message:', err);
+        }
+    };
+
+    ws.onclose = () => {
+        console.log('WebSocket disconnected');
+        updateDaemonStatus(false);
+        scheduleReconnect();
+    };
+
+    ws.onerror = (err) => {
+        console.error('WebSocket error:', err);
+        ws.close();
+    };
 }
+
+function scheduleReconnect() {
+    if (reconnectTimer) return;
+    reconnectTimer = setTimeout(() => {
+        reconnectTimer = null;
+        initWebSocket();
+    }, 5000);
+}
+
+function handleWsMessage(data) {
+    console.log('WS Message:', data);
+
+    if (data.type === 'activity') {
+        // Update "Now Tracking" immediately
+        if (currentView === 'today') {
+            loadToday(); // Refresh all summaries/timeline for the change
+        }
+    } else if (data.type === 'idle') {
+        notify('Idle Detected', 'You have been marked as idle.');
+        if (currentView === 'today') loadToday();
+    } else if (data.type === 'resume') {
+        notify('Active Again', 'Welcome back! Activity tracking resumed.');
+        if (currentView === 'today') loadToday();
+    }
+}
+
+function checkNotificationPermission() {
+    if (!("Notification" in window)) return;
+
+    const notifyBtn = document.getElementById('btn-enable-notifications');
+    if (Notification.permission === 'granted') {
+        if (notifyBtn) notifyBtn.style.display = 'none';
+    } else if (Notification.permission !== 'denied') {
+        if (notifyBtn) notifyBtn.style.display = 'inline-block';
+    }
+}
+
+window.requestNotificationPermission = function () {
+    if (!("Notification" in window)) return;
+
+    Notification.requestPermission().then(permission => {
+        if (permission === 'granted') {
+            const notifyBtn = document.getElementById('btn-enable-notifications');
+            if (notifyBtn) notifyBtn.style.display = 'none';
+            new Notification('Notifications Enabled', { body: 'You will now receive alerts for idle/resume events.' });
+        }
+    });
+};
+
+function notify(title, body) {
+    if (Notification.permission === 'granted') {
+        new Notification(title, { body, icon: '/favicon.ico' });
+    }
+}
+
+
+// --- startAutoRefresh removed (WebSockets handle it) ---
 
 
 // ============ Helpers ============
@@ -493,6 +583,7 @@ function formatDuration(secs) {
     if (h > 0) return `${h}h ${m}m`;
     return `${m}m`;
 }
+
 
 function formatDayLabel(dateStr) {
     if (!dateStr) return '—';

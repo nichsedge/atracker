@@ -11,6 +11,7 @@ from dbus_next.aio import MessageBus
 from dbus_next import BusType, Variant
 
 from atracker import db
+from atracker.api import broadcast_event
 
 logger = logging.getLogger("atracker.watcher")
 
@@ -127,12 +128,21 @@ class Watcher:
             self._current_title = "Idle"
             self._current_pid = 0
             self._current_start = datetime.now()
+            db.set_current_state({
+                "wm_class": "__idle__",
+                "title": "Idle",
+                "timestamp": self._current_start.isoformat(),
+                "duration_secs": 0,
+                "is_idle": True
+            })
+            broadcast_event({"type": "idle"})
             logger.debug("User went idle")
             return
 
         if was_idle and not self._is_idle:
             # Came back from idle — flush idle event
             await self._flush_current_event()
+            broadcast_event({"type": "resume"})
             logger.debug("User returned from idle")
 
         if self._is_idle:
@@ -154,6 +164,18 @@ class Watcher:
             self._current_title = title
             self._current_pid = pid
             self._current_start = datetime.now()
+            db.set_current_state({
+                "wm_class": wm_class,
+                "title": title,
+                "timestamp": self._current_start.isoformat(),
+                "duration_secs": 0,
+                "is_idle": False
+            })
+            broadcast_event({
+                "type": "activity",
+                "wm_class": wm_class,
+                "title": title
+            })
             logger.debug("Window changed: %s — %s", wm_class, title)
 
     async def _get_active_window(self) -> dict | None:

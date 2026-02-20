@@ -4,11 +4,14 @@ import re
 from datetime import date, datetime
 from pathlib import Path
 
-from fastapi import FastAPI, Query, HTTPException, Body
+from fastapi import FastAPI, Query, HTTPException, Body, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+
+import asyncio
+import logging
 
 from atracker import db
 
@@ -28,6 +31,47 @@ class SettingsUpdate(BaseModel):
     idle_threshold: str
 
 
+# --- Real-Time State ---
+_ws_clients: list[WebSocket] = []
+api_loop: asyncio.AbstractEventLoop | None = None
+logger = logging.getLogger("atracker.api")
+
+
+class ConnectionManager:
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        _ws_clients.append(websocket)
+        logger.debug(f"WS client connected. Total: {len(_ws_clients)}")
+
+    def disconnect(self, websocket: WebSocket):
+        if websocket in _ws_clients:
+            _ws_clients.remove(websocket)
+            logger.debug(f"WS client disconnected. Total: {len(_ws_clients)}")
+
+    async def broadcast(self, message: dict):
+        if not _ws_clients:
+            return
+            
+        # Create a list of tasks for sending messages
+        disconnected = []
+        for ws in _ws_clients:
+            try:
+                await ws.send_json(message)
+            except Exception:
+                disconnected.append(ws)
+        
+        # Cleanup any stale connections
+        for ws in disconnected:
+            self.disconnect(ws)
+
+manager = ConnectionManager()
+
+def broadcast_event(event_data: dict):
+    """Synchronous bridge to broadcast to WS clients from other threads."""
+    if api_loop and api_loop.is_running():
+        asyncio.run_coroutine_threadsafe(manager.broadcast(event_data), api_loop)
+
+
 app = FastAPI(title="atracker", version="0.1.0")
 
 app.add_middleware(
@@ -40,7 +84,23 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def startup():
+    global api_loop
+    api_loop = asyncio.get_running_loop()
     await db.init_db()
+
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await manager.connect(websocket)
+    try:
+        while True:
+            # Keep connection alive
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
+    except Exception as e:
+        logger.error(f"WebSocket error: {e}")
+        manager.disconnect(websocket)
 
 
 @app.get("/api/status")
@@ -66,6 +126,36 @@ async def summary(target_date: str = Query(None, alias="date")):
     """Get per-app usage summary for a date."""
     d = _parse_date(target_date)
     rows = await db.get_summary(d)
+    
+    if d == date.today():
+        curr = db.get_current_state()
+        if curr and not curr.get("is_idle") and curr.get("wm_class") and curr.get("wm_class") != "__idle__":
+            try:
+                curr_start = datetime.fromisoformat(curr["timestamp"])
+                duration = (datetime.now() - curr_start).total_seconds()
+                
+                found = False
+                for r in rows:
+                    if r["wm_class"] == curr["wm_class"]:
+                        r["total_secs"] += duration
+                        r["event_count"] += 1
+                        r["last_seen"] = datetime.now().isoformat()
+                        found = True
+                        break
+                
+                if not found:
+                    rows.append({
+                        "wm_class": curr["wm_class"],
+                        "total_secs": duration,
+                        "event_count": 1,
+                        "first_seen": curr["timestamp"],
+                        "last_seen": datetime.now().isoformat()
+                    })
+                
+                rows.sort(key=lambda x: x["total_secs"], reverse=True)
+            except Exception as e:
+                logger.error(f"Error appending current state to summary: {e}")
+
     categories = await db.get_categories()
     # Enrich with category color
     for row in rows:
@@ -79,6 +169,20 @@ async def timeline(target_date: str = Query(None, alias="date")):
     """Get timeline blocks for a date."""
     d = _parse_date(target_date)
     rows = await db.get_timeline(d)
+    
+    if d == date.today():
+        curr = db.get_current_state()
+        if curr:
+            try:
+                curr_start = datetime.fromisoformat(curr["timestamp"])
+                duration = (datetime.now() - curr_start).total_seconds()
+                curr_event = dict(curr)
+                curr_event["duration_secs"] = duration
+                curr_event["end_timestamp"] = datetime.now().isoformat()
+                rows.append(curr_event)
+            except Exception as e:
+                logger.error(f"Error appending current state to timeline: {e}")
+
     categories = await db.get_categories()
     for row in rows:
         row["color"] = _match_category_color(row["wm_class"], categories)
