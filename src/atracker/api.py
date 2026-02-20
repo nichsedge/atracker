@@ -23,6 +23,11 @@ class CategoryImport(BaseModel):
     categories: list[dict]
 
 
+class SettingsUpdate(BaseModel):
+    poll_interval: str
+    idle_threshold: str
+
+
 app = FastAPI(title="atracker", version="0.1.0")
 
 app.add_middleware(
@@ -141,6 +146,21 @@ async def import_categories(data: CategoryImport, replace: bool = Query(False)):
             imported += 1
             
     return {"message": f"Imported {imported} categories."}
+
+
+@app.get("/api/settings")
+async def get_settings():
+    """Get all settings."""
+    settings = await db.get_settings()
+    return settings
+
+
+@app.post("/api/settings")
+async def update_settings(settings: SettingsUpdate):
+    """Update settings."""
+    await db.set_setting("poll_interval", settings.poll_interval)
+    await db.set_setting("idle_threshold", settings.idle_threshold)
+    return {"message": "Settings updated"}
 
 
 

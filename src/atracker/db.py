@@ -32,6 +32,11 @@ CREATE TABLE IF NOT EXISTS categories (
     color TEXT NOT NULL DEFAULT '#3b82f6'
 );
 
+CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY NOT NULL,
+    value TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_events_timestamp ON events(timestamp);
 CREATE INDEX IF NOT EXISTS idx_events_wm_class ON events(wm_class);
 """
@@ -176,6 +181,18 @@ async def init_db() -> None:
                     "INSERT INTO categories (id, name, wm_class_pattern, color) VALUES (?, ?, ?, ?)",
                     (cat_id, name, pattern, color),
                 )
+        
+        # Seed default settings if empty
+        settings = [
+            ("poll_interval", "5"),
+            ("idle_threshold", "120") # seconds (dashboard uses seconds)
+        ]
+        for key, value in settings:
+            conn.execute(
+                "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)",
+                (key, value)
+            )
+
         conn.commit()
     finally:
         conn.close()
@@ -348,3 +365,37 @@ async def clear_categories() -> None:
     async with _aconn() as db:
         await db.execute("DELETE FROM categories")
         await db.commit()
+
+
+async def get_settings() -> dict[str, str]:
+    """Get all settings as a dict."""
+    async with _aconn() as db:
+        cursor = await db.execute("SELECT key, value FROM settings")
+        rows = await cursor.fetchall()
+        return {r["key"]: r["value"] for r in rows}
+
+
+async def get_setting(key: str, default: str = "") -> str:
+    """Get a single setting."""
+    async with _aconn() as db:
+        cursor = await db.execute("SELECT value FROM settings WHERE key = ?", (key,))
+        row = await cursor.fetchone()
+        return row["value"] if row else default
+
+
+async def set_setting(key: str, value: str) -> None:
+    """Set a setting."""
+    async with _aconn() as db:
+        await db.execute(
+            "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+            (key, value)
+        )
+        await db.commit()
+
+
+def get_setting_sync(key: str, default: str = "") -> str:
+    """Get a single setting synchronously."""
+    with sqlite3.connect(str(DB_PATH)) as conn:
+        cursor = conn.execute("SELECT value FROM settings WHERE key = ?", (key,))
+        row = cursor.fetchone()
+        return row[0] if row else default

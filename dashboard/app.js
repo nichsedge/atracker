@@ -14,6 +14,7 @@ let refreshTimer = null;
 document.addEventListener('DOMContentLoaded', () => {
     setupNavigation();
     setupCategoryEvents();
+    setupSettingsEvents();
     setCurrentDate();
     loadView('today');
     startAutoRefresh();
@@ -245,14 +246,22 @@ function renderHistoryTable(history) {
 
 async function loadSettings() {
     try {
-        const [catRes, statusRes] = await Promise.all([
+        const [catRes, statusRes, settingsRes] = await Promise.all([
             fetchAPI('/api/categories'),
             fetchAPI('/api/status'),
+            fetchAPI('/api/settings'),
         ]);
 
         renderCategories(catRes.categories);
         document.getElementById('info-status').textContent = statusRes.status;
         document.getElementById('info-db').textContent = statusRes.db_path;
+
+        if (settingsRes.poll_interval) {
+            document.getElementById('set-poll-interval').value = settingsRes.poll_interval;
+        }
+        if (settingsRes.idle_threshold) {
+            document.getElementById('set-idle-threshold').value = settingsRes.idle_threshold;
+        }
     } catch (err) {
         console.error('Failed to load settings:', err);
     }
@@ -373,6 +382,28 @@ function setupCategoryEvents() {
             fileImport.value = ''; // Reset
         };
         reader.readAsText(file);
+    });
+}
+
+function setupSettingsEvents() {
+    const tuningForm = document.getElementById('settings-tuning-form');
+    tuningForm?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const payload = {
+            poll_interval: document.getElementById('set-poll-interval').value,
+            idle_threshold: document.getElementById('set-idle-threshold').value
+        };
+
+        try {
+            await fetchAPI('/api/settings', {
+                method: 'POST',
+                body: JSON.stringify(payload)
+            });
+            alert('Settings saved successfully. The watcher will pick up changes within 60 seconds.');
+        } catch (err) {
+            console.error('Failed to save settings', err);
+            alert('Failed to save settings');
+        }
     });
 }
 

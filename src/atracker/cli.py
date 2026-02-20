@@ -23,7 +23,39 @@ def main():
     logger = logging.getLogger("atracker.cli")
 
     args = sys.argv[1:]
-    command = args[0] if args else "start"
+    
+    # Very basic arg parsing
+    command = "start"
+    poll_interval = None
+    idle_threshold = None
+    
+    i = 0
+    while i < len(args):
+        arg = args[i]
+        if arg == "start":
+            command = "start"
+        elif arg == "status":
+            command = "status"
+        elif arg == "help":
+            command = "help"
+        elif arg == "--poll-interval" and i + 1 < len(args):
+            poll_interval = int(args[i+1])
+            i += 1
+        elif arg == "--idle-threshold" and i + 1 < len(args):
+            # CLI flag is in seconds, internal is in milliseconds for watcher
+            # but watcher now expects seconds in DB so let's keep it consistent
+            # actually watcher.py expects ms internally but run_watcher takes 
+            # whatever and constructor handles it. 
+            # Wait, let's look at watcher.py again.
+            # self._idle_threshold = idle_threshold or DEFAULT_IDLE_THRESHOLD
+            # DEFAULT_IDLE_THRESHOLD is 120,000 (ms).
+            # So if passed via CLI, it should be in ms if we want to match,
+            # but the task says "idle threshold (2 minutes)". 
+            # Usually CLI flags for timeouts are in seconds.
+            # I'll make CLI flags take seconds.
+            idle_threshold = int(args[i+1]) * 1000
+            i += 1
+        i += 1
 
     if command == "start":
         logger.info("Starting atracker daemon...")
@@ -35,7 +67,7 @@ def main():
 
         # Run the watcher in the main async loop
         try:
-            asyncio.run(run_watcher())
+            asyncio.run(run_watcher(poll_interval=poll_interval, idle_threshold=idle_threshold))
         except KeyboardInterrupt:
             logger.info("Shutting down...")
 
@@ -53,12 +85,16 @@ def main():
             sys.exit(1)
 
     elif command == "help":
-        print("Usage: atracker [start|status|help]")
+        print("Usage: atracker [start|status|help] [options]")
         print("")
         print("Commands:")
         print("  start   Start the activity tracker daemon (default)")
         print("  status  Check if the daemon is running")
         print("  help    Show this help message")
+        print("")
+        print("Options (for 'start'):")
+        print("  --poll-interval SECS    How often to poll the active window (default: 5)")
+        print("  --idle-threshold SECS   How long to wait before marking as idle (default: 120)")
 
     else:
         print(f"Unknown command: {command}")

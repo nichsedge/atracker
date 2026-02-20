@@ -13,8 +13,8 @@ from atracker import db
 
 logger = logging.getLogger("atracker.watcher_windows")
 
-POLL_INTERVAL = 5  # seconds
-IDLE_THRESHOLD = 120_000  # milliseconds (2 minutes)
+DEFAULT_POLL_INTERVAL = 5  # seconds
+DEFAULT_IDLE_THRESHOLD = 120_000  # milliseconds (2 minutes)
 
 # Windows API structures and functions
 user32 = ctypes.windll.user32
@@ -70,7 +70,7 @@ def get_active_window_info() -> dict | None:
 class WatcherWindows:
     """Polls the Windows API for active window info and records events."""
 
-    def __init__(self):
+    def __init__(self, poll_interval=None, idle_threshold=None):
         self._running = False
         self._current_wm_class = ""
         self._current_title = ""
@@ -78,6 +78,13 @@ class WatcherWindows:
         self._current_start: datetime | None = None
         self._last_poll_time: datetime | None = None
         self._is_idle = False
+        
+        # Configuration
+        self._poll_interval = poll_interval or DEFAULT_POLL_INTERVAL
+        self._idle_threshold = idle_threshold or DEFAULT_IDLE_THRESHOLD
+        self._last_settings_refresh = 0
+        self._manual_poll = poll_interval is not None
+        self._manual_idle = idle_threshold is not None
 
     async def start(self):
         """Start the watcher loop."""
@@ -99,14 +106,17 @@ class WatcherWindows:
             pass
 
         logger.info("Windows Watcher started — polling every %ds, idle threshold %ds",
-                     POLL_INTERVAL, IDLE_THRESHOLD // 1000)
+                     self._poll_interval, self._idle_threshold // 1000)
 
         while self._running:
+            # Periodically refresh settings from DB
+            await self._refresh_settings()
+
             # Check for time jumps (suspend/resume)
             now = datetime.now()
             if self._last_poll_time:
                 delta = (now - self._last_poll_time).total_seconds()
-                if delta > (POLL_INTERVAL * 4):  # e.g. >20s gap
+                if delta > (self._poll_interval * 4):  # e.g. >20s gap
                     logger.warning("Time jump detected (%.1fs). Ending previous event at %s.",
                                    delta, self._last_poll_time)
                     await self._flush_current_event(end_time=self._last_poll_time)
@@ -117,7 +127,31 @@ class WatcherWindows:
                 self._last_poll_time = datetime.now()
             except Exception as e:
                 logger.exception("Poll error (will retry)")
-            await asyncio.sleep(POLL_INTERVAL)
+            await asyncio.sleep(self._poll_interval)
+
+    async def _refresh_settings(self):
+        """Refresh poll_interval and idle_threshold from database every 60s."""
+        now = datetime.now().timestamp()
+        if now - self._last_settings_refresh < 60:
+            return
+
+        try:
+            settings = await db.get_settings()
+            if not self._manual_poll and "poll_interval" in settings:
+                new_interval = int(settings["poll_interval"])
+                if new_interval != self._poll_interval:
+                    logger.info("Settings updated from DB: poll_interval = %ds", new_interval)
+                    self._poll_interval = new_interval
+            if not self._manual_idle and "idle_threshold" in settings:
+                # Dashboard saves idle_threshold in seconds
+                new_threshold = int(settings["idle_threshold"]) * 1000
+                if new_threshold != self._idle_threshold:
+                    logger.info("Settings updated from DB: idle_threshold = %ds", new_threshold // 1000)
+                    self._idle_threshold = new_threshold
+        except Exception as e:
+            logger.error("Failed to refresh settings: %s", e)
+        finally:
+            self._last_settings_refresh = now
 
     async def stop(self):
         """Stop the watcher and flush the current event."""
@@ -131,7 +165,7 @@ class WatcherWindows:
         # Check idle state via GetLastInputInfo
         idle_ms = get_idle_time_ms()
         was_idle = self._is_idle
-        self._is_idle = idle_ms > IDLE_THRESHOLD
+        self._is_idle = idle_ms > self._idle_threshold
 
         if self._is_idle and not was_idle:
             # Just became idle — flush active event, start idle event
@@ -200,14 +234,14 @@ class WatcherWindows:
         self._current_start = now
 
 
-async def run_watcher():
+async def run_watcher(poll_interval=None, idle_threshold=None):
     """Entry point for the watcher."""
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
         datefmt="%H:%M:%S",
     )
-    watcher = WatcherWindows()
+    watcher = WatcherWindows(poll_interval=poll_interval, idle_threshold=idle_threshold)
     try:
         await watcher.start()
     except KeyboardInterrupt:
