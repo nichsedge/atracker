@@ -9,8 +9,10 @@ from pathlib import Path
 
 import aiosqlite
 
-DB_DIR = Path(os.environ.get("ATRACKER_DATA_DIR", Path.home() / ".local" / "share" / "atracker"))
-DB_PATH = DB_DIR / "atracker.db"
+from atracker.config import config
+
+DB_PATH = config.db_path
+DB_DIR = DB_PATH.parent
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS events (
@@ -100,11 +102,11 @@ async def init_db() -> None:
                 )
         
         # Seed default settings if empty
-        settings = [
-            ("poll_interval", "5"),
-            ("idle_threshold", "120") # seconds (dashboard uses seconds)
+        settings_defaults = [
+            ("poll_interval", str(config.poll_interval)),
+            ("idle_threshold", str(config.idle_threshold)) # seconds (dashboard uses seconds)
         ]
-        for key, value in settings:
+        for key, value in settings_defaults:
             conn.execute(
                 "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)",
                 (key, value)
@@ -181,10 +183,10 @@ async def get_events(target_date: date) -> list[dict]:
         return [dict(r) for r in rows]
 
 
-async def get_summary(target_date: date) -> list[dict]:
-    """Get per-app usage summary for a specific date."""
-    day_start = f"{target_date.isoformat()}T00:00:00"
-    day_end = f"{target_date.isoformat()}T23:59:59"
+async def get_summary_range(start_date: date, end_date: date) -> list[dict]:
+    """Get per-app usage summary for a date range (inclusive)."""
+    range_start = f"{start_date.isoformat()}T00:00:00"
+    range_end = f"{end_date.isoformat()}T23:59:59"
     async with _aconn() as db:
         db.row_factory = aiosqlite.Row
         cursor = await db.execute(
@@ -197,16 +199,16 @@ async def get_summary(target_date: date) -> list[dict]:
                WHERE timestamp >= ? AND timestamp <= ? AND is_idle = 0 AND wm_class != ''
                GROUP BY wm_class
                ORDER BY total_secs DESC""",
-            (day_start, day_end),
+            (range_start, range_end),
         )
         rows = await cursor.fetchall()
         return [dict(r) for r in rows]
 
 
-async def get_timeline(target_date: date) -> list[dict]:
-    """Get timeline blocks for visualization."""
-    day_start = f"{target_date.isoformat()}T00:00:00"
-    day_end = f"{target_date.isoformat()}T23:59:59"
+async def get_timeline_range(start_date: date, end_date: date) -> list[dict]:
+    """Get timeline blocks for a date range."""
+    range_start = f"{start_date.isoformat()}T00:00:00"
+    range_end = f"{end_date.isoformat()}T23:59:59"
     async with _aconn() as db:
         db.row_factory = aiosqlite.Row
         cursor = await db.execute(
@@ -214,14 +216,24 @@ async def get_timeline(target_date: date) -> list[dict]:
                FROM events
                WHERE timestamp >= ? AND timestamp <= ?
                ORDER BY timestamp""",
-            (day_start, day_end),
+            (range_start, range_end),
         )
         rows = await cursor.fetchall()
         return [dict(r) for r in rows]
 
 
+async def get_timeline(target_date: date) -> list[dict]:
+    """Get timeline blocks for visualization."""
+    return await get_timeline_range(target_date, target_date)
+
+
+async def get_summary(target_date: date) -> list[dict]:
+    """Get per-app usage summary for a specific date."""
+    return await get_summary_range(target_date, target_date)
+
+
 async def get_daily_totals(days: int = 7) -> list[dict]:
-    """Get daily usage totals over N days."""
+    """Get daily usage totals over last N days."""
     async with _aconn() as db:
         db.row_factory = aiosqlite.Row
         cursor = await db.execute(
@@ -234,6 +246,27 @@ async def get_daily_totals(days: int = 7) -> list[dict]:
                GROUP BY DATE(timestamp)
                ORDER BY day DESC""",
             (f"-{days} days",),
+        )
+        rows = await cursor.fetchall()
+        return [dict(r) for r in rows]
+
+
+async def get_daily_totals_range(start_date: date, end_date: date) -> list[dict]:
+    """Get daily usage totals over a specific range."""
+    range_start = start_date.isoformat()
+    range_end = end_date.isoformat()
+    async with _aconn() as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            """SELECT DATE(timestamp) as day,
+                      SUM(CASE WHEN is_idle = 0 THEN duration_secs ELSE 0 END) as active_secs,
+                      SUM(CASE WHEN is_idle = 1 THEN duration_secs ELSE 0 END) as idle_secs,
+                      COUNT(*) as event_count
+               FROM events
+               WHERE DATE(timestamp) >= ? AND DATE(timestamp) <= ?
+               GROUP BY DATE(timestamp)
+               ORDER BY day DESC""",
+            (range_start, range_end),
         )
         rows = await cursor.fetchall()
         return [dict(r) for r in rows]

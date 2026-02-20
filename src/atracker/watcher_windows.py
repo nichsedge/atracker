@@ -10,11 +10,12 @@ from ctypes import wintypes
 import os
 
 from atracker import db
+from atracker.config import config
 
 logger = logging.getLogger("atracker.watcher_windows")
 
-DEFAULT_POLL_INTERVAL = 5  # seconds
-DEFAULT_IDLE_THRESHOLD = 120_000  # milliseconds (2 minutes)
+DEFAULT_POLL_INTERVAL = config.poll_interval  # seconds
+DEFAULT_IDLE_THRESHOLD = config.idle_threshold * 1000  # milliseconds
 
 # Windows API structures and functions
 user32 = ctypes.windll.user32
@@ -237,7 +238,7 @@ class WatcherWindows:
 async def run_watcher(poll_interval=None, idle_threshold=None):
     """Entry point for the watcher."""
     logging.basicConfig(
-        level=logging.INFO,
+        level=getattr(logging, config.log_level.upper(), logging.INFO),
         format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
         datefmt="%H:%M:%S",
     )

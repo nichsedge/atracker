@@ -35,8 +35,26 @@ function setupNavigation() {
         });
     });
 
-    document.getElementById('history-period')?.addEventListener('change', () => {
+    document.getElementById('history-period')?.addEventListener('change', (e) => {
+        const customControls = document.getElementById('custom-range-controls');
+        if (e.target.value === 'custom') {
+            customControls.style.display = 'flex';
+        } else {
+            customControls.style.display = 'none';
+            loadHistory();
+        }
+    });
+
+    document.getElementById('btn-apply-range')?.addEventListener('click', () => {
         loadHistory();
+    });
+
+    document.getElementById('btn-export-range')?.addEventListener('click', () => {
+        exportRange();
+    });
+
+    document.getElementById('btn-close-comparison')?.addEventListener('click', () => {
+        document.getElementById('comparison-card').style.display = 'none';
     });
 }
 
@@ -191,13 +209,115 @@ function updateNowTracking(timeline) {
 
 async function loadHistory() {
     try {
-        const days = parseInt(document.getElementById('history-period')?.value || '7');
-        const res = await fetchAPI(`/api/history?days=${days}`);
+        const period = document.getElementById('history-period')?.value || '7';
+        let res;
+
+        if (period === 'custom') {
+            const start = document.getElementById('range-start').value;
+            const end = document.getElementById('range-end').value;
+            if (!start || !end) return;
+            res = await fetchAPI(`/api/range/history?start=${start}&end=${end}`);
+        } else {
+            const days = parseInt(period);
+            res = await fetchAPI(`/api/history?days=${days}`);
+        }
+
         renderHistoryChart(res.history);
         renderHistoryTable(res.history);
     } catch (err) {
         console.error('Failed to load history:', err);
     }
+}
+
+async function exportRange() {
+    const period = document.getElementById('history-period')?.value || '7';
+    let start, end;
+
+    if (period === 'custom') {
+        start = document.getElementById('range-start').value;
+        end = document.getElementById('range-end').value;
+    } else {
+        const days = parseInt(period);
+        const endDate = new Date();
+        const startDate = new Date();
+        startDate.setDate(endDate.getDate() - days);
+        start = startDate.toISOString().split('T')[0];
+        end = endDate.toISOString().split('T')[0];
+    }
+
+    if (!start || !end) {
+        alert('Please select a date range first');
+        return;
+    }
+
+    window.location.href = `${API}/api/export?start=${start}&end=${end}&format=csv`;
+}
+
+window.prepareComparison = async function () {
+    const period = document.getElementById('history-period')?.value || '7';
+    let startA, endA;
+
+    if (period === 'custom') {
+        startA = document.getElementById('range-start').value;
+        endA = document.getElementById('range-end').value;
+    } else {
+        const days = parseInt(period);
+        const endDate = new Date();
+        const startDate = new Date();
+        startDate.setDate(endDate.getDate() - days);
+        startA = startDate.toISOString().split('T')[0];
+        endA = endDate.toISOString().split('T')[0];
+    }
+
+    if (!startA || !endA) {
+        alert('Please select a range for Period A first');
+        return;
+    }
+
+    const startB = prompt("Enter Start Date for Period B (YYYY-MM-DD)", "");
+    if (!startB) return;
+    const endB = prompt("Enter End Date for Period B (YYYY-MM-DD)", "");
+    if (!endB) return;
+
+    try {
+        const [resA, resB] = await Promise.all([
+            fetchAPI(`/api/range/summary?start=${startA}&end=${endA}`),
+            fetchAPI(`/api/range/summary?start=${startB}&end=${endB}`)
+        ]);
+
+        document.getElementById('comparison-card').style.display = 'block';
+        renderSummaryTo(resA.summary, 'comp-a-summary');
+        renderSummaryTo(resB.summary, 'comp-b-summary');
+
+        // Scroll to comparison
+        document.getElementById('comparison-card').scrollIntoView({ behavior: 'smooth' });
+    } catch (err) {
+        console.error('Comparison failed:', err);
+        alert('Failed to load comparison data');
+    }
+};
+
+function renderSummaryTo(summary, containerId) {
+    const container = document.getElementById(containerId);
+    if (!summary || summary.length === 0) {
+        container.innerHTML = '<div class="usage-empty">No data</div>';
+        return;
+    }
+
+    const maxSecs = Math.max(...summary.map(s => s.total_secs));
+
+    container.innerHTML = summary.map(app => `
+        <div class="usage-row">
+            <div class="usage-color" style="background: ${app.color}"></div>
+            <div class="usage-info">
+                <div class="usage-app-name">${escapeHtml(app.wm_class)}</div>
+                <div class="usage-bar-container">
+                    <div class="usage-bar" style="width: ${(app.total_secs / maxSecs * 100).toFixed(1)}%; background: ${app.color}"></div>
+                </div>
+            </div>
+            <div class="usage-time">${app.total_formatted}</div>
+        </div>
+    `).join('');
 }
 
 function renderHistoryChart(history) {

@@ -1,12 +1,14 @@
 """FastAPI REST API and static file server for the dashboard."""
 
 import re
+import csv
+import io
 from datetime import date, datetime
 from pathlib import Path
 
 from fastapi import FastAPI, Query, HTTPException, Body, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -197,6 +199,68 @@ async def history(days: int = Query(7)):
         row["active_formatted"] = _format_duration(row["active_secs"])
         row["idle_formatted"] = _format_duration(row["idle_secs"])
     return {"days": days, "history": rows}
+
+
+@app.get("/api/range/summary")
+async def range_summary(start: str = Query(...), end: str = Query(...)):
+    """Get per-app usage summary for a date range."""
+    s = _parse_date(start)
+    e = _parse_date(end)
+    rows = await db.get_summary_range(s, e)
+    
+    # We don't append "Now Tracking" for ranges as it's usually historical
+    categories = await db.get_categories()
+    for row in rows:
+        row["color"] = _match_category_color(row["wm_class"], categories)
+        row["total_formatted"] = _format_duration(row["total_secs"])
+    return {"start": s.isoformat(), "end": e.isoformat(), "summary": rows}
+
+
+@app.get("/api/range/history")
+async def range_history(start: str = Query(...), end: str = Query(...)):
+    """Get daily totals for a date range."""
+    s = _parse_date(start)
+    e = _parse_date(end)
+    rows = await db.get_daily_totals_range(s, e)
+    for row in rows:
+        row["active_formatted"] = _format_duration(row["active_secs"])
+        row["idle_formatted"] = _format_duration(row["idle_secs"])
+    return {"start": s.isoformat(), "end": e.isoformat(), "history": rows}
+
+
+@app.get("/api/export")
+async def export_data(start: str = Query(...), end: str = Query(...), format: str = Query("csv")):
+    """Export raw events for a date range."""
+    s = _parse_date(start)
+    e = _parse_date(end)
+    
+    # Get timeline blocks (which are merged/cleaner events)
+    rows = await db.get_timeline_range(s, e)
+    
+    if format == "json":
+        return {"start": s.isoformat(), "end": e.isoformat(), "events": rows}
+    
+    # CSV format
+    output = io.StringIO()
+    writer = csv.DictWriter(output, fieldnames=["timestamp", "end_timestamp", "wm_class", "title", "duration_secs", "is_idle"])
+    writer.writeheader()
+    for r in rows:
+        writer.writerow({
+            "timestamp": r["timestamp"],
+            "end_timestamp": r["end_timestamp"],
+            "wm_class": r["wm_class"],
+            "title": r["title"],
+            "duration_secs": r["duration_secs"],
+            "is_idle": r["is_idle"]
+        })
+    
+    output.seek(0)
+    filename = f"atracker_export_{s.isoformat()}_{e.isoformat()}.csv"
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
 
 
 @app.get("/api/categories")

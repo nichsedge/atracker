@@ -760,3 +760,73 @@ html, body {
     gap: 8px;
     margin-left: auto;
 }
+
+/* ============ Range & Comparison ============ */
+.header-controls {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.input-date {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    color: var(--text-primary);
+    padding: 6px 10px;
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    font-family: inherit;
+    outline: none;
+}
+
+.input-date:focus {
+    border-color: var(--border-active);
+}
+
+.comparison-container {
+    display: flex;
+    gap: 30px;
+    align-items: flex-start;
+    margin-top: 10px;
+}
+
+.comparison-period {
+    flex: 1;
+    min-width: 0;
+}
+
+.comparison-period h4 {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    margin-bottom: 15px;
+    letter-spacing: 0.5px;
+}
+
+.comparison-divider {
+    display: flex;
+    align-items: center;
+    color: var(--text-muted);
+    font-weight: 800;
+    font-size: 12px;
+    padding-top: 50px;
+}
+
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+@media (max-width: 900px) {
+    .comparison-container {
+        flex-direction: column;
+    }
+    .comparison-divider {
+        padding: 10px 0;
+        justify-content: center;
+    }
+}

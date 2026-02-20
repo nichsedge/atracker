@@ -109,12 +109,29 @@
             <section class="view" id="view-history">
                 <div class="view-header">
                     <h1>Activity History</h1>
-                    <div class="header-meta">
+                    <div class="header-controls">
                         <select class="select-period" id="history-period">
                             <option value="7">Last 7 days</option>
                             <option value="14">Last 14 days</option>
                             <option value="30">Last 30 days</option>
+                            <option value="custom">Custom Range</option>
                         </select>
+                        <div id="custom-range-controls"
+                            style="display: none; align-items: center; gap: 0.5rem; margin-left: 1rem;">
+                            <input type="date" id="range-start" class="input-date">
+                            <span>to</span>
+                            <input type="date" id="range-end" class="input-date">
+                            <button class="btn btn-primary" id="btn-apply-range">Apply</button>
+                        </div>
+                        <button class="btn btn-secondary" id="btn-export-range" style="margin-left: 1rem;">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                <polyline points="7 10 12 15 17 10" />
+                                <line x1="12" y1="15" x2="12" y2="3" />
+                            </svg>
+                            <span>Export</span>
+                        </button>
                     </div>
                 </div>
 
@@ -128,6 +145,31 @@
                 <div class="card">
                     <div class="card-label">Daily Breakdown</div>
                     <div class="history-table" id="history-table"></div>
+                </div>
+
+                <!-- Comparison View (Hidden by default) -->
+                <div class="card" id="comparison-card" style="display: none;">
+                    <div class="card-header"
+                        style="display: flex; justify-content: space-between; align-items: center;">
+                        <div class="card-label">Comparison</div>
+                        <button class="btn btn-secondary" id="btn-close-comparison">Close</button>
+                    </div>
+                    <div class="comparison-container">
+                        <div class="comparison-period">
+                            <h4>Period A</h4>
+                            <div id="comp-a-summary" class="usage-list"></div>
+                        </div>
+                        <div class="comparison-divider">VS</div>
+                        <div class="comparison-period">
+                            <h4>Period B</h4>
+                            <div id="comp-b-summary" class="usage-list"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="margin-top: 1rem; display: flex; gap: 1rem;">
+                    <button class="btn btn-secondary" id="btn-toggle-comparison" onclick="prepareComparison()">Compare
+                        with another period</button>
                 </div>
             </section>
 

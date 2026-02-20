@@ -13,10 +13,16 @@ else:
     from atracker.watcher import run_watcher
 
 
+from atracker.config import config
+
+
 def main():
     """Main entry point — runs watcher + API server together."""
+    config.ensure_config_file()
+    
+    # Use log level from config
     logging.basicConfig(
-        level=logging.INFO,
+        level=getattr(logging, config.log_level.upper(), logging.INFO),
         format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
         datefmt="%H:%M:%S",
     )
@@ -42,24 +48,13 @@ def main():
             poll_interval = int(args[i+1])
             i += 1
         elif arg == "--idle-threshold" and i + 1 < len(args):
-            # CLI flag is in seconds, internal is in milliseconds for watcher
-            # but watcher now expects seconds in DB so let's keep it consistent
-            # actually watcher.py expects ms internally but run_watcher takes 
-            # whatever and constructor handles it. 
-            # Wait, let's look at watcher.py again.
-            # self._idle_threshold = idle_threshold or DEFAULT_IDLE_THRESHOLD
-            # DEFAULT_IDLE_THRESHOLD is 120,000 (ms).
-            # So if passed via CLI, it should be in ms if we want to match,
-            # but the task says "idle threshold (2 minutes)". 
-            # Usually CLI flags for timeouts are in seconds.
-            # I'll make CLI flags take seconds.
             idle_threshold = int(args[i+1]) * 1000
             i += 1
         i += 1
 
     if command == "start":
         logger.info("Starting atracker daemon...")
-        logger.info("Dashboard will be available at http://localhost:8932")
+        logger.info(f"Dashboard will be available at http://localhost:{config.dashboard_port}")
 
         # Run API server in a background thread
         api_thread = threading.Thread(target=_run_api_server, daemon=True)
@@ -74,7 +69,7 @@ def main():
     elif command == "status":
         import urllib.request
         try:
-            with urllib.request.urlopen("http://localhost:8932/api/status", timeout=2) as resp:
+            with urllib.request.urlopen(f"http://localhost:{config.dashboard_port}/api/status", timeout=2) as resp:
                 import json
                 data = json.loads(resp.read())
                 print(f"✅ atracker is running")
@@ -93,8 +88,8 @@ def main():
         print("  help    Show this help message")
         print("")
         print("Options (for 'start'):")
-        print("  --poll-interval SECS    How often to poll the active window (default: 5)")
-        print("  --idle-threshold SECS   How long to wait before marking as idle (default: 120)")
+        print(f"  --poll-interval SECS    How often to poll the active window (default: {config.poll_interval})")
+        print(f"  --idle-threshold SECS   How long to wait before marking as idle (default: {config.idle_threshold})")
 
     else:
         print(f"Unknown command: {command}")
@@ -105,7 +100,7 @@ def main():
 def _run_api_server():
     """Run the FastAPI server in a separate thread."""
     from atracker.api import app
-    uvicorn.run(app, host="0.0.0.0", port=8932, log_level="warning")
+    uvicorn.run(app, host=config.dashboard_host, port=config.dashboard_port, log_level="warning")
 
 
 if __name__ == "__main__":
