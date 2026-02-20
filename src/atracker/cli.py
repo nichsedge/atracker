@@ -7,7 +7,10 @@ import threading
 
 import uvicorn
 
-from atracker.watcher import run_watcher
+if sys.platform == "win32":
+    from atracker.watcher_windows import run_watcher
+else:
+    from atracker.watcher import run_watcher
 
 
 def main():

@@ -1,6 +1,6 @@
 # atracker
 
-Local-first activity watcher & tracker for Linux (GNOME/Wayland).
+Local-first activity watcher & tracker for Linux (GNOME/Wayland) and Windows.
 
 ## Quick Start (Python)
 
@@ -11,8 +11,11 @@ uv sync
 # Start the daemon + dashboard
 uv run atracker start
 
-# Open dashboard
+# Open dashboard (Linux)
 xdg-open http://localhost:8932
+
+# Open dashboard (Windows)
+start http://localhost:8932
 ```
 
 ## Quick Start (Rust)
