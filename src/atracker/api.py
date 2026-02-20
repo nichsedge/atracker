@@ -10,12 +10,10 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from atracker import db
-from atracker.sync import router as sync_router
 
 DASHBOARD_DIR = Path(__file__).parent.parent.parent / "dashboard"
 
 app = FastAPI(title="atracker", version="0.1.0")
-app.include_router(sync_router)
 
 app.add_middleware(
     CORSMiddleware,

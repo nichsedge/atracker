@@ -1,4 +1,4 @@
-"""SQLite database layer for activity events with cr-sqlite CRDT support."""
+"""SQLite database layer for activity events."""
 
 import json
 import os
@@ -11,15 +11,6 @@ import aiosqlite
 
 DB_DIR = Path(os.environ.get("ATRACKER_DATA_DIR", Path.home() / ".local" / "share" / "atracker"))
 DB_PATH = DB_DIR / "atracker.db"
-
-# cr-sqlite extension path — bundled in src/atracker/lib/
-_pkg_lib = Path(__file__).parent / "lib"
-_root_lib = Path(__file__).parent.parent.parent / "lib"
-CRSQLITE_PATH_DIR = _pkg_lib if _pkg_lib.exists() else _root_lib
-
-# Find the actual shared library file
-_crsqlite_files = list(CRSQLITE_PATH_DIR.glob("crsqlite.*")) + list(CRSQLITE_PATH_DIR.glob("libcrsqlite.*"))
-CRSQLITE_PATH = str(_crsqlite_files[0]) if _crsqlite_files else str(CRSQLITE_PATH_DIR / "crsqlite.so")
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS events (
@@ -56,23 +47,22 @@ DEFAULT_CATEGORIES = [
 ]
 
 
-def _load_crsqlite(conn: sqlite3.Connection) -> None:
-    """Load and validate cr-sqlite extension."""
-    if not Path(CRSQLITE_PATH).exists():
-        import sys
-        print(f"CRITICAL: Extension file not found at {CRSQLITE_PATH}", file=sys.stderr)
-        return
-
-    conn.enable_load_extension(True)
+def _cleanup_crsqlite(conn: sqlite3.Connection) -> None:
+    """Drop cr-sqlite triggers and tables if they exist to allow standard inserts."""
     try:
-        conn.load_extension(CRSQLITE_PATH)
-        # Validate extension is working
-        conn.execute("SELECT crsql_db_version()")
-    except Exception as e:
-        import sys
-        print(f"CRITICAL: Failed to load/validate cr-sqlite: {e}", file=sys.stderr)
-    finally:
-        conn.enable_load_extension(False)
+        # Check if we have any crsql triggers
+        cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='trigger' AND name LIKE '%__crsql_%'")
+        triggers = [row[0] for row in cursor.fetchall()]
+        for trigger in triggers:
+            conn.execute(f"DROP TRIGGER IF EXISTS \"{trigger}\"")
+        
+        # Optionally Drop crsql metadata tables if they exist
+        conn.execute("DROP TABLE IF EXISTS crsql_changes")
+        conn.execute("DROP TABLE IF EXISTS crsql_tracked_as_crr")
+        conn.execute("DROP TABLE IF EXISTS crsql_db_version")
+        conn.execute("DROP TABLE IF EXISTS crsql_site_id")
+    except Exception:
+        pass
 
 
 def _get_device_id() -> str:
@@ -168,19 +158,14 @@ def _migrate_if_needed(conn: sqlite3.Connection) -> None:
 
 
 async def init_db() -> None:
-    """Initialize database, migrate if needed, and set up CRRs."""
+    """Initialize database and migrate if needed."""
     DB_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Use sync sqlite3 for migration + CRR setup (cr-sqlite needs it)
     conn = sqlite3.connect(str(DB_PATH))
     try:
-        _load_crsqlite(conn)
+        _cleanup_crsqlite(conn)
         _migrate_if_needed(conn)
         conn.executescript(SCHEMA)
-
-        # Enable CRR on tables
-        conn.execute("SELECT crsql_as_crr('events')")
-        conn.execute("SELECT crsql_as_crr('categories')")
 
         # Seed default categories if empty
         count = conn.execute("SELECT COUNT(*) FROM categories").fetchone()[0]
@@ -193,20 +178,12 @@ async def init_db() -> None:
                 )
         conn.commit()
     finally:
-        conn.execute("SELECT crsql_finalize()")
         conn.close()
 
 
-def _crsqlite_factory(*args, **kwargs):
-    """Connection factory that loads and validates cr-sqlite extension."""
-    conn = sqlite3.Connection(*args, **kwargs)
-    _load_crsqlite(conn)
-    return conn
-
-
 async def get_db() -> aiosqlite.Connection:
-    """Get an async database connection with cr-sqlite loaded."""
-    db = await aiosqlite.connect(str(DB_PATH), factory=_crsqlite_factory)
+    """Get an async database connection."""
+    db = await aiosqlite.connect(str(DB_PATH))
     db.row_factory = aiosqlite.Row
     return db
 
@@ -216,24 +193,19 @@ from contextlib import asynccontextmanager as _acm
 
 @_acm
 async def _aconn():
-    """Async context manager for a cr-sqlite-enabled aiosqlite connection."""
-    db = await aiosqlite.connect(str(DB_PATH), factory=_crsqlite_factory)
+    """Async context manager for an aiosqlite connection."""
+    db = await aiosqlite.connect(str(DB_PATH))
     db.row_factory = aiosqlite.Row
     try:
         yield db
     finally:
-        try:
-            await db.execute("SELECT crsql_finalize()")
-        except:
-            pass
         await db.close()
 
 
 def get_sync_db() -> sqlite3.Connection:
-    """Get a sync database connection with cr-sqlite loaded (for sync operations)."""
+    """Get a sync database connection."""
     conn = sqlite3.connect(str(DB_PATH))
     conn.row_factory = sqlite3.Row
-    _load_crsqlite(conn)
     return conn
 
 
@@ -340,86 +312,3 @@ async def get_categories() -> list[dict]:
         cursor = await db.execute("SELECT * FROM categories ORDER BY name")
         rows = await cursor.fetchall()
         return [dict(r) for r in rows]
-
-
-# --- cr-sqlite Sync Operations (sync context, uses sqlite3 directly) ---
-
-
-def sync_get_site_id() -> str:
-    """Get this database's cr-sqlite site ID."""
-    conn = get_sync_db()
-    try:
-        site_id = conn.execute("SELECT crsql_site_id()").fetchone()[0]
-        return site_id.hex()
-    finally:
-        conn.execute("SELECT crsql_finalize()")
-        conn.close()
-
-
-def sync_get_db_version() -> int:
-    """Get the current cr-sqlite db version (logical clock)."""
-    conn = get_sync_db()
-    try:
-        return conn.execute("SELECT crsql_db_version()").fetchone()[0]
-    finally:
-        conn.execute("SELECT crsql_finalize()")
-        conn.close()
-
-
-def sync_get_changes(since_version: int) -> list[dict]:
-    """Get all changes since a given db version for sync."""
-    conn = get_sync_db()
-    try:
-        cursor = conn.execute(
-            """SELECT "table", "pk", "cid", "val", "col_version", "db_version", "site_id", "cl", "seq"
-               FROM crsql_changes
-               WHERE db_version > ?""",
-            (since_version,),
-        )
-        changes = []
-        for row in cursor:
-            changes.append({
-                "table": row[0],
-                "pk": row[1].hex() if isinstance(row[1], bytes) else str(row[1]),
-                "cid": row[2],
-                "val": row[3],
-                "col_version": row[4],
-                "db_version": row[5],
-                "site_id": row[6].hex() if isinstance(row[6], bytes) else str(row[6]),
-                "cl": row[7],
-                "seq": row[8],
-            })
-        return changes
-    finally:
-        conn.execute("SELECT crsql_finalize()")
-        conn.close()
-
-
-def sync_apply_changes(changes: list[dict]) -> int:
-    """Apply remote changes to the local database. Returns new db version."""
-    conn = get_sync_db()
-    try:
-        for change in changes:
-            pk = bytes.fromhex(change["pk"]) if isinstance(change["pk"], str) else change["pk"]
-            site_id = bytes.fromhex(change["site_id"]) if isinstance(change["site_id"], str) else change["site_id"]
-            conn.execute(
-                """INSERT INTO crsql_changes ("table", "pk", "cid", "val", "col_version", "db_version", "site_id", "cl", "seq")
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (
-                    change["table"],
-                    pk,
-                    change["cid"],
-                    change["val"],
-                    change["col_version"],
-                    change["db_version"],
-                    site_id,
-                    change["cl"],
-                    change["seq"],
-                ),
-            )
-        conn.commit()
-        new_version = conn.execute("SELECT crsql_db_version()").fetchone()[0]
-        return new_version
-    finally:
-        conn.execute("SELECT crsql_finalize()")
-        conn.close()
