@@ -1,24 +1,28 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="atracker — Local activity tracker dashboard showing app usage, timeline, and daily history.">
+    <meta name="description"
+        content="atracker — Local activity tracker dashboard showing app usage, timeline, and daily history.">
     <title>atracker — Activity Dashboard</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
     <div class="app">
         <!-- Sidebar -->
         <nav class="sidebar">
             <div class="sidebar-brand">
                 <div class="brand-icon">
-                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <circle cx="12" cy="12" r="10"/>
-                        <polyline points="12 6 12 12 16 14"/>
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10" />
+                        <polyline points="12 6 12 12 16 14" />
                     </svg>
                 </div>
                 <span class="brand-text">atracker</span>
@@ -26,15 +30,26 @@
 
             <div class="nav-links">
                 <a href="#" class="nav-link active" data-view="today" id="nav-today">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="4" width="18" height="18" rx="2" />
+                        <line x1="16" y1="2" x2="16" y2="6" />
+                        <line x1="8" y1="2" x2="8" y2="6" />
+                        <line x1="3" y1="10" x2="21" y2="10" />
+                    </svg>
                     <span>Today</span>
                 </a>
                 <a href="#" class="nav-link" data-view="history" id="nav-history">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+                    </svg>
                     <span>History</span>
                 </a>
                 <a href="#" class="nav-link" data-view="settings" id="nav-settings">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="3" />
+                        <path
+                            d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                    </svg>
                     <span>Settings</span>
                 </a>
             </div>
@@ -125,6 +140,12 @@
                 <div class="card">
                     <div class="card-label">Categories</div>
                     <p class="card-description">Categories auto-color your apps in the timeline and usage charts.</p>
+                    <div class="settings-actions" style="margin-bottom: 1rem; display: flex; gap: 0.5rem;">
+                        <button class="btn btn-primary" id="btn-add-category">Add Category</button>
+                        <button class="btn btn-secondary" id="btn-export-categories">Export</button>
+                        <button class="btn btn-secondary" id="btn-import-categories">Import</button>
+                        <input type="file" id="file-import-categories" accept=".json" style="display: none;">
+                    </div>
                     <div class="categories-list" id="categories-list"></div>
                 </div>
 
@@ -140,6 +161,43 @@
         </main>
     </div>
 
+    <!-- Category Modal -->
+    <div class="modal-backdrop" id="category-modal" style="display: none;">
+        <div class="modal">
+            <div class="modal-header">
+                <h2 id="modal-title">Add Category</h2>
+                <button class="modal-close" id="btn-close-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="category-form">
+                    <input type="hidden" id="cat-id">
+                    <div class="form-group">
+                        <label for="cat-name">Name</label>
+                        <input type="text" id="cat-name" required placeholder="e.g. Browser">
+                    </div>
+                    <div class="form-group">
+                        <label for="cat-pattern">Regex Pattern (wm_class)</label>
+                        <input type="text" id="cat-pattern" required placeholder="e.g. firefox|chrome">
+                    </div>
+                    <div class="form-group">
+                        <label for="cat-color">Color</label>
+                        <div class="color-picker-wrapper" style="display: flex; align-items: center; gap: 1rem;">
+                            <input type="color" id="cat-color" value="#3b82f6"
+                                style="cursor: pointer; width: 40px; height: 40px; border: none; padding: 0; background: none;">
+                            <span id="cat-color-hex">#3b82f6</span>
+                        </div>
+                    </div>
+                    <div class="modal-actions"
+                        style="margin-top: 2rem; display: flex; justify-content: flex-end; gap: 1rem;">
+                        <button type="button" class="btn btn-secondary" id="btn-cancel-modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Save</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <script src="app.js"></script>
 </body>
+
 </html>

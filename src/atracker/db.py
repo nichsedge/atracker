@@ -312,3 +312,39 @@ async def get_categories() -> list[dict]:
         cursor = await db.execute("SELECT * FROM categories ORDER BY name")
         rows = await cursor.fetchall()
         return [dict(r) for r in rows]
+
+
+async def add_category(name: str, wm_class_pattern: str, color: str) -> str:
+    """Add a new category and return its UUID."""
+    cat_id = str(uuid.uuid4())
+    async with _aconn() as db:
+        await db.execute(
+            "INSERT INTO categories (id, name, wm_class_pattern, color) VALUES (?, ?, ?, ?)",
+            (cat_id, name, wm_class_pattern, color)
+        )
+        await db.commit()
+    return cat_id
+
+
+async def update_category(cat_id: str, name: str, wm_class_pattern: str, color: str) -> None:
+    """Update an existing category."""
+    async with _aconn() as db:
+        await db.execute(
+            "UPDATE categories SET name = ?, wm_class_pattern = ?, color = ? WHERE id = ?",
+            (name, wm_class_pattern, color, cat_id)
+        )
+        await db.commit()
+
+
+async def delete_category(cat_id: str) -> None:
+    """Delete a category."""
+    async with _aconn() as db:
+        await db.execute("DELETE FROM categories WHERE id = ?", (cat_id,))
+        await db.commit()
+
+
+async def clear_categories() -> None:
+    """Delete all categories."""
+    async with _aconn() as db:
+        await db.execute("DELETE FROM categories")
+        await db.commit()

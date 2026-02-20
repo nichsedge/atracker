@@ -4,14 +4,24 @@ import re
 from datetime import date, datetime
 from pathlib import Path
 
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, Query, HTTPException, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 
 from atracker import db
 
 DASHBOARD_DIR = Path(__file__).parent.parent.parent / "dashboard"
+
+class CategoryCreate(BaseModel):
+    name: str
+    wm_class_pattern: str
+    color: str
+
+class CategoryImport(BaseModel):
+    categories: list[dict]
+
 
 app = FastAPI(title="atracker", version="0.1.0")
 
@@ -85,6 +95,54 @@ async def categories():
     """Get all categories."""
     rows = await db.get_categories()
     return {"categories": rows}
+
+
+@app.post("/api/categories")
+async def create_category(cat: CategoryCreate):
+    """Create a new category."""
+    cat_id = await db.add_category(cat.name, cat.wm_class_pattern, cat.color)
+    return {"id": cat_id, "message": "Category created"}
+
+
+@app.put("/api/categories/{cat_id}")
+async def update_category(cat_id: str, cat: CategoryCreate):
+    """Update an existing category."""
+    await db.update_category(cat_id, cat.name, cat.wm_class_pattern, cat.color)
+    return {"id": cat_id, "message": "Category updated"}
+
+
+@app.delete("/api/categories/{cat_id}")
+async def delete_category(cat_id: str):
+    """Delete a category."""
+    await db.delete_category(cat_id)
+    return {"id": cat_id, "message": "Category deleted"}
+
+
+@app.get("/api/categories/export")
+async def export_categories():
+    """Export all categories."""
+    rows = await db.get_categories()
+    return {"categories": rows}
+
+
+@app.post("/api/categories/import")
+async def import_categories(data: CategoryImport, replace: bool = Query(False)):
+    """Import categories, optionally replacing existing ones."""
+    if replace:
+        await db.clear_categories()
+    
+    imported = 0
+    for cat in data.categories:
+        name = cat.get("name")
+        pattern = cat.get("wm_class_pattern")
+        color = cat.get("color", "#64748b")
+        if name and pattern:
+            await db.add_category(name, pattern, color)
+            imported += 1
+            
+    return {"message": f"Imported {imported} categories."}
+
+
 
 
 # --- Static files for dashboard ---

@@ -13,10 +13,12 @@ let refreshTimer = null;
 
 document.addEventListener('DOMContentLoaded', () => {
     setupNavigation();
+    setupCategoryEvents();
     setCurrentDate();
     loadView('today');
     startAutoRefresh();
 });
+
 
 
 // ============ Navigation ============
@@ -268,9 +270,134 @@ function renderCategories(categories) {
             <div class="category-color" style="background: ${cat.color}"></div>
             <div class="category-name">${escapeHtml(cat.name)}</div>
             <div class="category-pattern">${escapeHtml(cat.wm_class_pattern)}</div>
+            <div class="category-actions">
+                <button class="btn btn-secondary" style="padding: 4px 8px; font-size: 11px;" onclick="editCategory('${cat.id}', '${escapeHtml(cat.name).replace(/'/g, "\\'")}', '${escapeHtml(cat.wm_class_pattern).replace(/'/g, "\\'")}', '${cat.color}')">Edit</button>
+                <button class="btn btn-danger" style="padding: 4px 8px; font-size: 11px;" onclick="deleteCategory('${cat.id}')">Delete</button>
+            </div>
         </div>
     `).join('');
 }
+
+// ============ Category Management ============
+
+function setupCategoryEvents() {
+    const modal = document.getElementById('category-modal');
+    const form = document.getElementById('category-form');
+    const colorInput = document.getElementById('cat-color');
+    const colorHex = document.getElementById('cat-color-hex');
+    const btnAdd = document.getElementById('btn-add-category');
+    const btnExport = document.getElementById('btn-export-categories');
+    const btnImport = document.getElementById('btn-import-categories');
+    const fileImport = document.getElementById('file-import-categories');
+
+    btnAdd?.addEventListener('click', () => {
+        document.getElementById('modal-title').textContent = 'Add Category';
+        form.reset();
+        document.getElementById('cat-id').value = '';
+        colorHex.textContent = colorInput.value;
+        modal.style.display = 'flex';
+    });
+
+    document.getElementById('btn-close-modal')?.addEventListener('click', () => modal.style.display = 'none');
+    document.getElementById('btn-cancel-modal')?.addEventListener('click', () => modal.style.display = 'none');
+
+    colorInput?.addEventListener('input', (e) => {
+        colorHex.textContent = e.target.value;
+    });
+
+    form?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const id = document.getElementById('cat-id').value;
+        const payload = {
+            name: document.getElementById('cat-name').value,
+            wm_class_pattern: document.getElementById('cat-pattern').value,
+            color: document.getElementById('cat-color').value
+        };
+
+        try {
+            if (id) {
+                await fetchAPI(`/api/categories/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
+            } else {
+                await fetchAPI(`/api/categories`, { method: 'POST', body: JSON.stringify(payload) });
+            }
+            modal.style.display = 'none';
+            loadSettings(); // Reload categories
+        } catch (err) {
+            console.error('Failed to save category', err);
+            alert('Error saving category');
+        }
+    });
+
+    btnExport?.addEventListener('click', async () => {
+        try {
+            const res = await fetchAPI('/api/categories/export');
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(res, null, 2));
+            const downloadAnchorNode = document.createElement('a');
+            downloadAnchorNode.setAttribute("href", dataStr);
+            downloadAnchorNode.setAttribute("download", "atracker_categories.json");
+            document.body.appendChild(downloadAnchorNode);
+            downloadAnchorNode.click();
+            downloadAnchorNode.remove();
+        } catch (err) {
+            console.error('Export failed', err);
+            alert('Failed to export categories');
+        }
+    });
+
+    btnImport?.addEventListener('click', () => {
+        fileImport.click();
+    });
+
+    fileImport?.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+            try {
+                const data = JSON.parse(event.target.result);
+                const replace = confirm("Do you want to replace all existing categories? (Cancel to just add/merge)");
+
+                await fetch(`${API}/api/categories/import?replace=${replace}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+
+                alert('Categories imported successfully');
+                loadSettings();
+            } catch (err) {
+                console.error('Import failed', err);
+                alert('Invalid JSON file or import failed');
+            }
+            fileImport.value = ''; // Reset
+        };
+        reader.readAsText(file);
+    });
+}
+
+window.editCategory = function (id, name, pattern, color) {
+    document.getElementById('modal-title').textContent = 'Edit Category';
+    document.getElementById('cat-id').value = id;
+    document.getElementById('cat-name').value = name;
+    document.getElementById('cat-pattern').value = pattern;
+    document.getElementById('cat-color').value = color;
+    document.getElementById('cat-color-hex').textContent = color;
+    document.getElementById('category-modal').style.display = 'flex';
+};
+
+window.deleteCategory = async function (id) {
+    if (confirm('Are you sure you want to delete this category?')) {
+        try {
+            await fetchAPI(`/api/categories/${id}`, { method: 'DELETE' });
+            loadSettings();
+        } catch (err) {
+            console.error('Failed to delete category', err);
+            alert('Failed to delete category');
+        }
+    }
+};
+
 
 
 // ============ Daemon Status ============
@@ -302,8 +429,12 @@ function startAutoRefresh() {
 
 // ============ Helpers ============
 
-async function fetchAPI(path) {
-    const res = await fetch(`${API}${path}`);
+async function fetchAPI(path, options = {}) {
+    const fetchOptions = { ...options };
+    if (fetchOptions.body && typeof fetchOptions.body === 'string' && !fetchOptions.headers) {
+        fetchOptions.headers = { 'Content-Type': 'application/json' };
+    }
+    const res = await fetch(`${API}${path}`, fetchOptions);
     if (!res.ok) throw new Error(`API ${path}: ${res.status}`);
     return res.json();
 }
