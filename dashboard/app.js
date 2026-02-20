@@ -89,10 +89,11 @@ function loadView(view) {
 
 async function loadToday() {
     try {
-        const [summaryRes, timelineRes, statusRes] = await Promise.all([
+        const [summaryRes, timelineRes, statusRes, metricsRes] = await Promise.all([
             fetchAPI('/api/summary'),
             fetchAPI('/api/timeline'),
             fetchAPI('/api/status'),
+            fetchAPI('/api/metrics'),
         ]);
 
         updateDaemonStatus(true);
@@ -100,10 +101,68 @@ async function loadToday() {
         renderTimeline(timelineRes.timeline);
         updateTotalTracked(summaryRes.summary);
         updateNowTracking(timelineRes.timeline);
+        renderMetrics(metricsRes);
+        renderGoals(summaryRes.summary);
     } catch (err) {
         console.error('Failed to load today:', err);
         updateDaemonStatus(false);
     }
+}
+
+function renderMetrics(metrics) {
+    const focusEl = document.getElementById('focus-score');
+    const switchEl = document.getElementById('context-switches');
+    if (focusEl) focusEl.textContent = metrics.focus_score;
+    if (switchEl) switchEl.textContent = metrics.context_switches;
+}
+
+function renderGoals(summary) {
+    const container = document.getElementById('goals-list');
+    const goalsCard = document.getElementById('goals-card');
+
+    // We need the category definitions to know the goals
+    fetchAPI('/api/categories').then(res => {
+        const categories = res.categories;
+        const goalCats = categories.filter(c => c.daily_goal_secs > 0 || c.daily_limit_secs > 0);
+
+        if (goalCats.length === 0) {
+            goalsCard.style.display = 'none';
+            return;
+        }
+
+        goalsCard.style.display = 'block';
+        container.innerHTML = goalCats.map(cat => {
+            const usage = summary.find(s => s.wm_class.toLowerCase().match(new RegExp(cat.wm_class_pattern, 'i')));
+            const usageSecs = usage ? usage.total_secs : 0;
+
+            let html = `<div class="goal-row">
+                <div class="goal-header">
+                    <div class="goal-name"><span class="category-color-small" style="background: ${cat.color}; width: 10px; height: 10px; border-radius: 50%; display: inline-block;"></span> ${cat.name}</div>
+                    <div class="goal-status">`;
+
+            if (cat.daily_goal_secs > 0) {
+                const pct = Math.min(100, (usageSecs / cat.daily_goal_secs * 100)).toFixed(0);
+                html += `Goal: ${formatDuration(usageSecs)} / ${formatDuration(cat.daily_goal_secs)} (${pct}%)`;
+                const barColor = pct >= 100 ? '#10b981' : cat.color;
+                html += `</div></div>
+                    <div class="goal-bar-container">
+                        <div class="goal-bar" style="width: ${pct}%; background: ${barColor}"></div>
+                    </div>`;
+            } else if (cat.daily_limit_secs > 0) {
+                const pct = (usageSecs / cat.daily_limit_secs * 100).toFixed(0);
+                const isOver = usageSecs > cat.daily_limit_secs;
+                html += `Limit: ${formatDuration(usageSecs)} / ${formatDuration(cat.daily_limit_secs)} (${pct}%)`;
+                const barColor = isOver ? '#ef4444' : cat.color;
+                html += `</div></div>
+                    <div class="goal-bar-container">
+                        <div class="goal-bar ${isOver ? 'over-limit' : ''}" style="width: ${Math.min(100, pct)}%; background: ${barColor}"></div>
+                    </div>`;
+            }
+
+            html += `</div>`;
+            return html;
+        }).join('');
+    });
 }
 
 function renderSummary(summary) {
@@ -139,39 +198,63 @@ function renderTimeline(timeline) {
         return;
     }
 
-    // Calculate total duration for proportional widths
-    const totalDuration = timeline.reduce((sum, t) => sum + t.duration_secs, 0);
-    if (totalDuration === 0) {
-        container.innerHTML = '<div class="timeline-empty">No activity recorded yet</div>';
-        return;
+    // Modern 24h Timeline logic
+    // We map blocks to their absolute position in the day
+    // The view covers from the first event's hour to the last event's hour + 1
+    const firstEvent = new Date(timeline[0].timestamp);
+    const lastEvent = new Date(timeline[timeline.length - 1].end_timestamp);
+
+    // Set view range: from start of first hour to end of last hour
+    const startTime = new Date(firstEvent);
+    startTime.setMinutes(0, 0, 0);
+    const endTime = new Date(lastEvent);
+    if (endTime.getMinutes() > 0) {
+        endTime.setHours(endTime.getHours() + 1);
     }
+    endTime.setMinutes(0, 0, 0);
+
+    const rangeMs = endTime.getTime() - startTime.getTime();
+    if (rangeMs <= 0) return;
 
     container.innerHTML = timeline.map(block => {
-        const pct = (block.duration_secs / totalDuration * 100).toFixed(2);
-        const startTime = formatTime(block.timestamp);
-        const endTime = formatTime(block.end_timestamp);
+        const blockStart = new Date(block.timestamp).getTime();
+        const blockEnd = new Date(block.end_timestamp).getTime();
+
+        const left = ((blockStart - startTime.getTime()) / rangeMs * 100).toFixed(4);
+        const width = ((blockEnd - blockStart) / rangeMs * 100).toFixed(4);
+
+        const startLabel = formatTime(block.timestamp);
+        const endLabel = formatTime(block.end_timestamp);
         const durationMin = Math.round(block.duration_secs / 60);
         const isIdle = block.is_idle;
         const label = isIdle ? 'Idle' : block.wm_class;
 
         return `
             <div class="timeline-block ${isIdle ? 'idle' : ''}"
-                 style="width: ${pct}%; background: ${block.color || '#64748b'}"
+                 style="left: ${left}%; width: ${width}%; background: ${block.color || '#64748b'}"
                  title="${label}">
                 <div class="timeline-tooltip">
                     <div class="tt-app">${escapeHtml(label)}</div>
-                    <div class="tt-time">${startTime} — ${endTime} (${durationMin}m)</div>
+                    <div class="tt-time">${startLabel} — ${endLabel} (${durationMin}m)</div>
                 </div>
             </div>
         `;
     }).join('');
 
-    // Time labels
-    if (timeline.length > 0) {
-        const firstTime = formatTime(timeline[0].timestamp);
-        const lastTime = formatTime(timeline[timeline.length - 1].end_timestamp);
-        labelsContainer.innerHTML = `<span>${firstTime}</span><span>${lastTime}</span>`;
+    // Time labels (hourly)
+    let labelsHtml = '';
+    const startHour = startTime.getHours();
+    const endHour = endTime.getHours() + (endTime.getDate() > startTime.getDate() ? 24 : 0);
+
+    for (let h = startHour; h <= endHour; h++) {
+        const pos = ((h - startHour) * 3600000 / rangeMs * 100).toFixed(2);
+        if (pos > 100) break;
+        const displayHour = h % 24;
+        labelsHtml += `<span style="position: absolute; left: ${pos}%; transform: translateX(-50%);">${displayHour}:00</span>`;
     }
+    labelsContainer.style.position = 'relative';
+    labelsContainer.style.height = '20px';
+    labelsContainer.innerHTML = labelsHtml;
 }
 
 function updateTotalTracked(summary) {
@@ -403,7 +486,7 @@ function renderCategories(categories) {
             <div class="category-name">${escapeHtml(cat.name)}</div>
             <div class="category-pattern">${escapeHtml(cat.wm_class_pattern)}</div>
             <div class="category-actions">
-                <button class="btn btn-secondary" style="padding: 4px 8px; font-size: 11px;" onclick="editCategory('${cat.id}', '${escapeHtml(cat.name).replace(/'/g, "\\'")}', '${escapeHtml(cat.wm_class_pattern).replace(/'/g, "\\'")}', '${cat.color}')">Edit</button>
+                <button class="btn btn-secondary" style="padding: 4px 8px; font-size: 11px;" onclick="editCategory('${cat.id}', '${escapeHtml(cat.name).replace(/'/g, "\\'")}', '${escapeHtml(cat.wm_class_pattern).replace(/'/g, "\\'")}', '${cat.color}', ${cat.daily_goal_secs}, ${cat.daily_limit_secs})">Edit</button>
                 <button class="btn btn-danger" style="padding: 4px 8px; font-size: 11px;" onclick="deleteCategory('${cat.id}')">Delete</button>
             </div>
         </div>
@@ -426,6 +509,8 @@ function setupCategoryEvents() {
         document.getElementById('modal-title').textContent = 'Add Category';
         form.reset();
         document.getElementById('cat-id').value = '';
+        document.getElementById('cat-goal').value = '';
+        document.getElementById('cat-limit').value = '';
         colorHex.textContent = colorInput.value;
         modal.style.display = 'flex';
     });
@@ -443,7 +528,9 @@ function setupCategoryEvents() {
         const payload = {
             name: document.getElementById('cat-name').value,
             wm_class_pattern: document.getElementById('cat-pattern').value,
-            color: document.getElementById('cat-color').value
+            color: document.getElementById('cat-color').value,
+            daily_goal_secs: (parseInt(document.getElementById('cat-goal').value) || 0) * 60,
+            daily_limit_secs: (parseInt(document.getElementById('cat-limit').value) || 0) * 60
         };
 
         try {
@@ -530,13 +617,15 @@ function setupSettingsEvents() {
     });
 }
 
-window.editCategory = function (id, name, pattern, color) {
+window.editCategory = function (id, name, pattern, color, goalSecs, limitSecs) {
     document.getElementById('modal-title').textContent = 'Edit Category';
     document.getElementById('cat-id').value = id;
     document.getElementById('cat-name').value = name;
     document.getElementById('cat-pattern').value = pattern;
     document.getElementById('cat-color').value = color;
     document.getElementById('cat-color-hex').textContent = color;
+    document.getElementById('cat-goal').value = goalSecs ? Math.round(goalSecs / 60) : '';
+    document.getElementById('cat-limit').value = limitSecs ? Math.round(limitSecs / 60) : '';
     document.getElementById('category-modal').style.display = 'flex';
 };
 

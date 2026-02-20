@@ -31,7 +31,9 @@ CREATE TABLE IF NOT EXISTS categories (
     id TEXT PRIMARY KEY NOT NULL,
     name TEXT NOT NULL DEFAULT '',
     wm_class_pattern TEXT NOT NULL DEFAULT '',
-    color TEXT NOT NULL DEFAULT '#3b82f6'
+    color TEXT NOT NULL DEFAULT '#3b82f6',
+    daily_goal_secs INTEGER NOT NULL DEFAULT 0,
+    daily_limit_secs INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS settings (
@@ -44,13 +46,13 @@ CREATE INDEX IF NOT EXISTS idx_events_wm_class ON events(wm_class);
 """
 
 DEFAULT_CATEGORIES = [
-    ("Browser", "firefox|chromium|google-chrome|brave|zen", "#3b82f6"),
-    ("Terminal", "gnome-terminal|kitty|alacritty|java", "#10b981"),
-    ("Editor", "code|Code|antigravity|DBeaver|jetbrains", "#8b5cf6"),
-    ("Communication", "slack|discord|telegram|signal|teams|zoom", "#f59e0b"),
-    ("Files", "nautilus|thunar|dolphin|nemo", "#6366f1"),
-    ("Media", "vlc|mpv|spotify|rhythmbox|totem", "#ec4899"),
-    ("Office", "libreoffice|soffice|evince|okular|obsidian", "#14b8a6"),
+    ("Browser", "firefox|chromium|google-chrome|brave|zen", "#3b82f6", 0, 3600),
+    ("Terminal", "gnome-terminal|kitty|alacritty|java", "#10b981", 0, 0),
+    ("Editor", "code|Code|antigravity|DBeaver|jetbrains", "#8b5cf6", 14400, 0),
+    ("Communication", "slack|discord|telegram|signal|teams|zoom", "#f59e0b", 0, 1800),
+    ("Files", "nautilus|thunar|dolphin|nemo", "#6366f1", 0, 0),
+    ("Media", "vlc|mpv|spotify|rhythmbox|totem", "#ec4899", 0, 0),
+    ("Office", "libreoffice|soffice|evince|okular|obsidian", "#14b8a6", 0, 0),
 ]
 
 
@@ -94,12 +96,19 @@ async def init_db() -> None:
         # Seed default categories if empty
         count = conn.execute("SELECT COUNT(*) FROM categories").fetchone()[0]
         if count == 0:
-            for name, pattern, color in DEFAULT_CATEGORIES:
+            for name, pattern, color, goal, limit in DEFAULT_CATEGORIES:
                 cat_id = str(uuid.uuid4())
                 conn.execute(
-                    "INSERT INTO categories (id, name, wm_class_pattern, color) VALUES (?, ?, ?, ?)",
-                    (cat_id, name, pattern, color),
+                    "INSERT INTO categories (id, name, wm_class_pattern, color, daily_goal_secs, daily_limit_secs) VALUES (?, ?, ?, ?, ?, ?)",
+                    (cat_id, name, pattern, color, goal, limit),
                 )
+        
+        # Migrations: Add columns if they don't exist
+        existing_cols = [r[1] for r in conn.execute("PRAGMA table_info(categories)").fetchall()]
+        if "daily_goal_secs" not in existing_cols:
+            conn.execute("ALTER TABLE categories ADD COLUMN daily_goal_secs INTEGER NOT NULL DEFAULT 0")
+        if "daily_limit_secs" not in existing_cols:
+            conn.execute("ALTER TABLE categories ADD COLUMN daily_limit_secs INTEGER NOT NULL DEFAULT 0")
         
         # Seed default settings if empty
         settings_defaults = [
@@ -281,24 +290,24 @@ async def get_categories() -> list[dict]:
         return [dict(r) for r in rows]
 
 
-async def add_category(name: str, wm_class_pattern: str, color: str) -> str:
+async def add_category(name: str, wm_class_pattern: str, color: str, daily_goal_secs: int = 0, daily_limit_secs: int = 0) -> str:
     """Add a new category and return its UUID."""
     cat_id = str(uuid.uuid4())
     async with _aconn() as db:
         await db.execute(
-            "INSERT INTO categories (id, name, wm_class_pattern, color) VALUES (?, ?, ?, ?)",
-            (cat_id, name, wm_class_pattern, color)
+            "INSERT INTO categories (id, name, wm_class_pattern, color, daily_goal_secs, daily_limit_secs) VALUES (?, ?, ?, ?, ?, ?)",
+            (cat_id, name, wm_class_pattern, color, daily_goal_secs, daily_limit_secs)
         )
         await db.commit()
     return cat_id
 
 
-async def update_category(cat_id: str, name: str, wm_class_pattern: str, color: str) -> None:
+async def update_category(cat_id: str, name: str, wm_class_pattern: str, color: str, daily_goal_secs: int = 0, daily_limit_secs: int = 0) -> None:
     """Update an existing category."""
     async with _aconn() as db:
         await db.execute(
-            "UPDATE categories SET name = ?, wm_class_pattern = ?, color = ? WHERE id = ?",
-            (name, wm_class_pattern, color, cat_id)
+            "UPDATE categories SET name = ?, wm_class_pattern = ?, color = ?, daily_goal_secs = ?, daily_limit_secs = ? WHERE id = ?",
+            (name, wm_class_pattern, color, daily_goal_secs, daily_limit_secs, cat_id)
         )
         await db.commit()
 

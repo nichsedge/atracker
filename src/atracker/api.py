@@ -23,6 +23,8 @@ class CategoryCreate(BaseModel):
     name: str
     wm_class_pattern: str
     color: str
+    daily_goal_secs: int = 0
+    daily_limit_secs: int = 0
 
 class CategoryImport(BaseModel):
     categories: list[dict]
@@ -263,6 +265,46 @@ async def export_data(start: str = Query(...), end: str = Query(...), format: st
     )
 
 
+@app.get("/api/metrics")
+async def get_metrics(target_date: str = Query(None, alias="date")):
+    """Get productivity metrics for a date."""
+    d = _parse_date(target_date)
+    timeline_rows = await db.get_timeline(d)
+    
+    # Calculate context switches and focus duration
+    # Transitions between different wm_classes (excluding idle)
+    switches = 0
+    last_app = None
+    focus_durations = []
+    current_focus_start = None
+    
+    active_secs = 0
+    
+    for row in timeline_rows:
+        if row["is_idle"]:
+            last_app = None
+            continue
+            
+        active_secs += row["duration_secs"]
+        
+        app = row["wm_class"]
+        if app != last_app:
+            if last_app is not None:
+                switches += 1
+            last_app = app
+            
+    # Simple Focus Score: 100 - (switches * 5). Min 0.
+    # This is a very basic heuristic.
+    focus_score = max(0, 100 - (switches * 2)) 
+    
+    return {
+        "date": d.isoformat(),
+        "context_switches": switches,
+        "focus_score": focus_score,
+        "active_secs": active_secs
+    }
+
+
 @app.get("/api/categories")
 async def categories():
     """Get all categories."""
@@ -273,14 +315,20 @@ async def categories():
 @app.post("/api/categories")
 async def create_category(cat: CategoryCreate):
     """Create a new category."""
-    cat_id = await db.add_category(cat.name, cat.wm_class_pattern, cat.color)
+    cat_id = await db.add_category(
+        cat.name, cat.wm_class_pattern, cat.color, 
+        cat.daily_goal_secs, cat.daily_limit_secs
+    )
     return {"id": cat_id, "message": "Category created"}
 
 
 @app.put("/api/categories/{cat_id}")
 async def update_category(cat_id: str, cat: CategoryCreate):
     """Update an existing category."""
-    await db.update_category(cat_id, cat.name, cat.wm_class_pattern, cat.color)
+    await db.update_category(
+        cat_id, cat.name, cat.wm_class_pattern, cat.color,
+        cat.daily_goal_secs, cat.daily_limit_secs
+    )
     return {"id": cat_id, "message": "Category updated"}
 
 
@@ -309,8 +357,10 @@ async def import_categories(data: CategoryImport, replace: bool = Query(False)):
         name = cat.get("name")
         pattern = cat.get("wm_class_pattern")
         color = cat.get("color", "#64748b")
+        goal = cat.get("daily_goal_secs", 0)
+        limit = cat.get("daily_limit_secs", 0)
         if name and pattern:
-            await db.add_category(name, pattern, color)
+            await db.add_category(name, pattern, color, goal, limit)
             imported += 1
             
     return {"message": f"Imported {imported} categories."}

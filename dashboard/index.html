@@ -71,6 +71,24 @@
                     <div class="header-meta">
                         <span class="current-date" id="current-date"></span>
                         <span class="total-tracked" id="total-tracked">—</span>
+                        <div class="header-metrics">
+                            <span class="metric-item" title="Focus Score (0-100)">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2">
+                                    <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+                                </svg>
+                                Focus: <span id="focus-score">—</span>
+                            </span>
+                            <span class="metric-item" title="Context Switches">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2">
+                                    <path d="M16 3h5v5" />
+                                    <path d="M8 21H3v-5" />
+                                    <path d="M21 3L3 21" />
+                                </svg>
+                                Switches: <span id="context-switches">—</span>
+                            </span>
+                        </div>
                     </div>
                 </div>
 
@@ -101,6 +119,13 @@
                     <div class="card-label">App Usage</div>
                     <div class="usage-list" id="usage-list">
                         <div class="usage-empty">No data yet — start tracking!</div>
+                    </div>
+                </div>
+
+                <!-- Goals & Budgets -->
+                <div class="card" id="goals-card" style="display: none;">
+                    <div class="card-label">Goals & Budgets</div>
+                    <div class="goals-list" id="goals-list">
                     </div>
                 </div>
             </section>
@@ -257,6 +282,16 @@
                             <input type="color" id="cat-color" value="#3b82f6"
                                 style="cursor: pointer; width: 40px; height: 40px; border: none; padding: 0; background: none;">
                             <span id="cat-color-hex">#3b82f6</span>
+                        </div>
+                    </div>
+                    <div class="form-row" style="display: flex; gap: 1rem; margin-top: 1rem;">
+                        <div class="form-group" style="flex: 1;">
+                            <label for="cat-goal">Daily Goal (mins)</label>
+                            <input type="number" id="cat-goal" placeholder="e.g. 120" min="0">
+                        </div>
+                        <div class="form-group" style="flex: 1;">
+                            <label for="cat-limit">Daily Limit (mins)</label>
+                            <input type="number" id="cat-limit" placeholder="e.g. 60" min="0">
                         </div>
                     </div>
                     <div class="modal-actions"

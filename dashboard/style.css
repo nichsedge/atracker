@@ -35,13 +35,16 @@
 }
 
 /* Reset & Base */
-*, *::before, *::after {
+*,
+*::before,
+*::after {
     box-sizing: border-box;
     margin: 0;
     padding: 0;
 }
 
-html, body {
+html,
+body {
     height: 100%;
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     background: var(--bg-primary);
@@ -188,8 +191,15 @@ html, body {
 }
 
 @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(8px); }
-    to { opacity: 1; transform: translateY(0); }
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 .view-header {
@@ -208,9 +218,33 @@ html, body {
 .header-meta {
     display: flex;
     align-items: center;
-    gap: 16px;
+    gap: 1.5rem;
     color: var(--text-secondary);
-    font-size: 14px;
+    font-size: 0.9rem;
+}
+
+.header-metrics {
+    display: flex;
+    gap: 1rem;
+    border-left: 1px solid var(--border-subtle);
+    padding-left: 1.5rem;
+    margin-left: 0.5rem;
+}
+
+.metric-item {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-weight: 500;
+}
+
+.metric-item svg {
+    opacity: 0.7;
+}
+
+#focus-score,
+#context-switches {
+    color: var(--text-primary);
 }
 
 .total-tracked {
@@ -270,7 +304,7 @@ html, body {
     width: 48px;
     height: 48px;
     border-radius: 12px;
-    background: linear-gradient(135deg, var(--accent-blue), var(--accent-violet));
+    background: linear-gradient(135deg, var(--accent-indigo), var(--accent-violet));
     display: flex;
     align-items: center;
     justify-content: center;
@@ -312,20 +346,21 @@ html, body {
 
 /* ============ Timeline ============ */
 .timeline-container {
-    display: flex;
-    height: 40px;
-    border-radius: 6px;
+    height: 60px;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: var(--radius-md);
+    position: relative;
     overflow: hidden;
-    background: rgba(255, 255, 255, 0.03);
-    gap: 1px;
+    margin-bottom: 0.5rem;
+    border: 1px solid var(--border-subtle);
 }
 
 .timeline-block {
     height: 100%;
-    min-width: 2px;
-    transition: opacity 0.2s, transform 0.2s;
+    position: absolute;
+    top: 0;
+    transition: transform 0.2s, width 0.2s;
     cursor: pointer;
-    position: relative;
 }
 
 .timeline-block:hover {
@@ -385,6 +420,56 @@ html, body {
 }
 
 /* ============ Usage List ============ */
+/* Goals Section */
+.goals-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1.5rem;
+    padding: 0.5rem 0;
+}
+
+.goal-row {
+    background: rgba(255, 255, 255, 0.03);
+    padding: 1rem;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-subtle);
+}
+
+.goal-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 0.8rem;
+    font-size: 0.9rem;
+}
+
+.goal-name {
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.goal-status {
+    color: var(--text-secondary);
+}
+
+.goal-bar-container {
+    height: 8px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.goal-bar {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.5s ease-out;
+}
+
+.goal-bar.over-limit {
+    box-shadow: 0 0 10px rgba(239, 68, 68, 0.5);
+}
+
 .usage-list {
     display: flex;
     flex-direction: column;
@@ -654,6 +739,7 @@ html, body {
     background: linear-gradient(135deg, var(--accent-blue), var(--accent-violet));
     color: white;
 }
+
 .btn-primary:hover {
     filter: brightness(1.1);
 }
@@ -663,6 +749,7 @@ html, body {
     color: var(--text-primary);
     border: 1px solid var(--border-subtle);
 }
+
 .btn-secondary:hover {
     background: rgba(255, 255, 255, 0.1);
 }
@@ -672,13 +759,17 @@ html, body {
     color: #ef4444;
     border: 1px solid rgba(239, 68, 68, 0.3);
 }
+
 .btn-danger:hover {
     background: rgba(239, 68, 68, 0.2);
 }
 
 .modal-backdrop {
     position: fixed;
-    top: 0; left: 0; right: 0; bottom: 0;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
     background: rgba(0, 0, 0, 0.6);
     backdrop-filter: blur(4px);
     display: flex;
@@ -720,6 +811,7 @@ html, body {
     cursor: pointer;
     line-height: 1;
 }
+
 .modal-close:hover {
     color: var(--text-primary);
 }
@@ -825,6 +917,7 @@ html, body {
     .comparison-container {
         flex-direction: column;
     }
+
     .comparison-divider {
         padding: 10px 0;
         justify-content: center;
