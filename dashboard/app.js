@@ -19,6 +19,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setCurrentDate();
     loadView('today');
     initWebSocket();
+    initPauseControls();
     checkNotificationPermission();
 });
 
@@ -80,6 +81,7 @@ function loadView(view) {
             break;
         case 'settings':
             loadSettings();
+            loadPrivacyRules();
             break;
     }
 }
@@ -103,6 +105,10 @@ async function loadToday() {
         updateNowTracking(timelineRes.timeline);
         renderMetrics(metricsRes);
         renderGoals(summaryRes.summary);
+
+        // Setup initial pause button visibility
+        const pauseRes = await fetchAPI('/api/pause_status');
+        updatePauseUI(pauseRes.is_paused);
     } catch (err) {
         console.error('Failed to load today:', err);
         updateDaemonStatus(false);
@@ -615,6 +621,32 @@ function setupSettingsEvents() {
             alert('Failed to save settings');
         }
     });
+
+    // Privacy Rules Modal Setup
+    const ruleModal = document.getElementById('rule-modal');
+    const ruleForm = document.getElementById('rule-form');
+    document.getElementById('btn-add-rule')?.addEventListener('click', () => {
+        ruleForm.reset();
+        ruleModal.style.display = 'flex';
+    });
+    document.getElementById('btn-close-rule-modal')?.addEventListener('click', () => ruleModal.style.display = 'none');
+    document.getElementById('btn-cancel-rule-modal')?.addEventListener('click', () => ruleModal.style.display = 'none');
+
+    ruleForm?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const payload = {
+            rule_type: document.getElementById('rule-type').value,
+            wm_class_pattern: document.getElementById('rule-class').value,
+            title_pattern: document.getElementById('rule-title').value
+        };
+        try {
+            await fetchAPI('/api/rules', { method: 'POST', body: JSON.stringify(payload) });
+            ruleModal.style.display = 'none';
+            loadPrivacyRules();
+        } catch (err) {
+            console.error('Failed to save rule', err);
+        }
+    });
 }
 
 window.editCategory = function (id, name, pattern, color, goalSecs, limitSecs) {
@@ -721,6 +753,9 @@ function handleWsMessage(data) {
     } else if (data.type === 'resume') {
         notify('Active Again', 'Welcome back! Activity tracking resumed.');
         if (currentView === 'today') loadToday();
+    } else if (data.type === 'pause_state') {
+        updatePauseUI(data.is_paused);
+        if (currentView === 'today') loadToday();
     }
 }
 
@@ -750,6 +785,103 @@ window.requestNotificationPermission = function () {
 function notify(title, body) {
     if (Notification.permission === 'granted') {
         new Notification(title, { body, icon: '/favicon.ico' });
+    }
+}
+
+
+// ============ Pause & Rules Logic ============
+
+function initPauseControls() {
+    const dropdown = document.getElementById('pause-dropdown');
+    const toggle = document.getElementById('btn-pause-toggle');
+    const resumeBtn = document.getElementById('btn-resume-tracking');
+
+    toggle?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        dropdown.classList.toggle('show');
+    });
+
+    document.addEventListener('click', () => dropdown?.classList.remove('show'));
+
+    dropdown?.querySelectorAll('.dropdown-menu a').forEach(link => {
+        link.addEventListener('click', async (e) => {
+            e.preventDefault();
+            const mins = parseInt(link.dataset.mins);
+            try {
+                await fetchAPI('/api/pause', {
+                    method: 'POST',
+                    body: JSON.stringify({ duration_mins: mins > 0 ? mins : null })
+                });
+                dropdown.classList.remove('show');
+            } catch (err) {
+                console.error('Failed to pause', err);
+            }
+        });
+    });
+
+    resumeBtn?.addEventListener('click', async () => {
+        try {
+            await fetchAPI('/api/resume', { method: 'POST' });
+        } catch (err) {
+            console.error('Failed to resume', err);
+        }
+    });
+}
+
+function updatePauseUI(isPaused) {
+    const dropdown = document.getElementById('pause-dropdown');
+    const resumeBtn = document.getElementById('btn-resume-tracking');
+    if (isPaused) {
+        if (dropdown) dropdown.style.display = 'none';
+        if (resumeBtn) resumeBtn.style.display = 'flex';
+        document.getElementById('daemon-status').querySelector('.status-text').textContent = 'Tracking Paused';
+        document.getElementById('daemon-status').querySelector('.status-dot').style.background = '#f59e0b';
+    } else {
+        if (dropdown) dropdown.style.display = 'block';
+        if (resumeBtn) resumeBtn.style.display = 'none';
+        document.getElementById('daemon-status').querySelector('.status-text').textContent = 'Tracking';
+        document.getElementById('daemon-status').querySelector('.status-dot').style.background = '';
+    }
+}
+
+async function loadPrivacyRules() {
+    try {
+        const res = await fetchAPI('/api/rules');
+        renderPrivacyRules(res);
+    } catch (err) {
+        console.error('Failed to load rules', err);
+    }
+}
+
+function renderPrivacyRules(rules) {
+    const container = document.getElementById('rules-list');
+    if (!container) return;
+
+    if (!rules || rules.length === 0) {
+        container.innerHTML = '<div class="usage-empty">No rules defined</div>';
+        return;
+    }
+
+    container.innerHTML = rules.map(rule => `
+        <div class="rule-row">
+            <span class="rule-type-tag ${rule.rule_type}">${rule.rule_type}</span>
+            <div class="rule-details">
+                <div class="rule-patterns">
+                    ${rule.wm_class_pattern ? `<span>Class: <b>${escapeHtml(rule.wm_class_pattern)}</b></span>` : ''}
+                    ${rule.title_pattern ? `<span>Title: <b>${escapeHtml(rule.title_pattern)}</b></span>` : ''}
+                </div>
+            </div>
+            <button class="btn btn-danger" style="padding: 4px 8px; font-size: 11px;" onclick="deleteRule('${rule.id}')">Delete</button>
+        </div>
+    `).join('');
+}
+
+window.deleteRule = async function (id) {
+    try {
+        await fetchAPI(`/api/rules/${id}`, { method: 'DELETE' });
+        loadPrivacyRules();
+    } catch (err) {
+        console.error('Failed to delete rule', err);
     }
 }
 

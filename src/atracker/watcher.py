@@ -5,6 +5,7 @@ import json
 import logging
 import signal
 import sys
+import re
 from datetime import datetime
 
 from dbus_next.aio import MessageBus
@@ -32,6 +33,7 @@ class Watcher:
         self._current_start: datetime | None = None
         self._last_poll_time: datetime | None = None
         self._is_idle = False
+        self._filter_rules = []
         
         # Configuration
         self._poll_interval = poll_interval or DEFAULT_POLL_INTERVAL
@@ -101,6 +103,9 @@ class Watcher:
                 if new_threshold != self._idle_threshold:
                     logger.info("Settings updated from DB: idle_threshold = %ds", new_threshold // 1000)
                     self._idle_threshold = new_threshold
+            
+            # Refresh filter rules
+            self._filter_rules = await db.get_filter_rules()
         except Exception as e:
             logger.error("Failed to refresh settings: %s", e)
         finally:
@@ -117,6 +122,23 @@ class Watcher:
 
     async def _poll(self):
         """Poll active window and idle state."""
+        # Check if paused
+        if db.get_paused():
+            # If we were tracking something, flush it
+            if self._current_wm_class != "__paused__":
+                await self._flush_current_event()
+                self._current_wm_class = "__paused__"
+                self._current_title = "Paused"
+                self._current_start = datetime.now()
+                db.set_current_state({
+                    "wm_class": "__paused__",
+                    "title": "Paused",
+                    "duration_secs": 0,
+                    "is_idle": False
+                })
+                broadcast_event({"type": "pause_state", "is_paused": True})
+            return
+
         # Check idle state via org.gnome.Mutter.IdleMonitor
         idle_ms = await self._get_idle_time()
         was_idle = self._is_idle
@@ -266,15 +288,38 @@ class Watcher:
 
         if duration < 1:
             return  # Skip sub-second events
+            
+        wm_class = self._current_wm_class
+        title = self._current_title
+
+        # Special cases (idle, paused) don't get filtered
+        if wm_class not in ("__idle__", "__paused__"):
+            for rule in self._filter_rules:
+                match_class = True
+                if rule["wm_class_pattern"]:
+                    match_class = bool(re.search(rule["wm_class_pattern"], wm_class, re.I))
+                
+                match_title = True
+                if rule["title_pattern"]:
+                    match_title = bool(re.search(rule["title_pattern"], title, re.I))
+                
+                if match_class and match_title:
+                    if rule["rule_type"] == "ignore":
+                        logger.debug("Ignoring event (matched rule %s)", rule["id"])
+                        self._current_start = now
+                        return
+                    elif rule["rule_type"] == "redact":
+                        logger.debug("Redacting event (matched rule %s)", rule["id"])
+                        title = "[Redacted]"
 
         await db.insert_event(
             timestamp=self._current_start.isoformat(),
             end_timestamp=now.isoformat(),
-            wm_class=self._current_wm_class,
-            title=self._current_title,
+            wm_class=wm_class,
+            title=title,
             pid=self._current_pid,
             duration_secs=round(duration, 1),
-            is_idle=self._current_wm_class == "__idle__",
+            is_idle=wm_class == "__idle__",
         )
         logger.debug(
             "Recorded: %s — %.1fs %s",

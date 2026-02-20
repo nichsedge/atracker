@@ -41,6 +41,13 @@ CREATE TABLE IF NOT EXISTS settings (
     value TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS filter_rules (
+    id TEXT PRIMARY KEY NOT NULL,
+    rule_type TEXT NOT NULL, -- 'ignore' or 'redact'
+    wm_class_pattern TEXT NOT NULL DEFAULT '',
+    title_pattern TEXT NOT NULL DEFAULT ''
+);
+
 CREATE INDEX IF NOT EXISTS idx_events_timestamp ON events(timestamp);
 CREATE INDEX IF NOT EXISTS idx_events_wm_class ON events(wm_class);
 """
@@ -77,6 +84,8 @@ def get_device_id() -> str:
     return DEVICE_ID
 
 _current_tracking_state = None
+_is_paused = False
+_pause_until = 0.0 # timestamp
 
 def set_current_state(state: dict | None):
     global _current_tracking_state
@@ -84,6 +93,19 @@ def set_current_state(state: dict | None):
 
 def get_current_state() -> dict | None:
     return _current_tracking_state
+
+def set_paused(paused: bool, until: float = 0.0):
+    global _is_paused, _pause_until
+    _is_paused = paused
+    _pause_until = until
+
+def get_paused() -> bool:
+    global _is_paused, _pause_until
+    if _is_paused and _pause_until > 0:
+        if datetime.now().timestamp() > _pause_until:
+            _is_paused = False
+            _pause_until = 0.0
+    return _is_paused
 
 async def init_db() -> None:
     """Initialize database and migrate if needed."""
@@ -358,3 +380,28 @@ def get_setting_sync(key: str, default: str = "") -> str:
         cursor = conn.execute("SELECT value FROM settings WHERE key = ?", (key,))
         row = cursor.fetchone()
         return row[0] if row else default
+
+async def get_filter_rules() -> list[dict]:
+    """Get all filter rules."""
+    async with _aconn() as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute("SELECT * FROM filter_rules")
+        rows = await cursor.fetchall()
+        return [dict(r) for r in rows]
+
+async def add_filter_rule(rule_type: str, wm_class_pattern: str = "", title_pattern: str = "") -> str:
+    """Add a new filter rule."""
+    rule_id = str(uuid.uuid4())
+    async with _aconn() as db:
+        await db.execute(
+            "INSERT INTO filter_rules (id, rule_type, wm_class_pattern, title_pattern) VALUES (?, ?, ?, ?)",
+            (rule_id, rule_type, wm_class_pattern, title_pattern)
+        )
+        await db.commit()
+    return rule_id
+
+async def delete_filter_rule(rule_id: str) -> None:
+    """Delete a filter rule."""
+    async with _aconn() as db:
+        await db.execute("DELETE FROM filter_rules WHERE id = ?", (rule_id,))
+        await db.commit()

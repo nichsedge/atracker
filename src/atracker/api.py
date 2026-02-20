@@ -34,6 +34,14 @@ class SettingsUpdate(BaseModel):
     poll_interval: str
     idle_threshold: str
 
+class PauseRequest(BaseModel):
+    duration_mins: int | None = None # None means indefinite
+
+class RuleCreate(BaseModel):
+    rule_type: str # 'ignore' or 'redact'
+    wm_class_pattern: str = ""
+    title_pattern: str = ""
+
 
 # --- Real-Time State ---
 _ws_clients: list[WebSocket] = []
@@ -373,14 +381,46 @@ async def get_settings():
     return settings
 
 
-@app.post("/api/settings")
+@app.post("/api/update_settings")
 async def update_settings(settings: SettingsUpdate):
-    """Update settings."""
     await db.set_setting("poll_interval", settings.poll_interval)
     await db.set_setting("idle_threshold", settings.idle_threshold)
-    return {"message": "Settings updated"}
+    return {"status": "ok"}
 
+# --- Privacy & Pause ---
 
+@app.get("/api/pause_status")
+async def get_pause_status():
+    return {"is_paused": db.get_paused()}
+
+@app.post("/api/pause")
+async def pause_tracking(req: PauseRequest):
+    until = 0.0
+    if req.duration_mins:
+        until = datetime.now().timestamp() + (req.duration_mins * 60)
+    db.set_paused(True, until)
+    manager.broadcast({"type": "pause_state", "is_paused": True, "until": until})
+    return {"status": "ok", "until": until}
+
+@app.post("/api/resume")
+async def resume_tracking():
+    db.set_paused(False)
+    manager.broadcast({"type": "pause_state", "is_paused": False})
+    return {"status": "ok"}
+
+@app.get("/api/rules")
+async def get_rules():
+    return await db.get_filter_rules()
+
+@app.post("/api/rules")
+async def add_rule(rule: RuleCreate):
+    rule_id = await db.add_filter_rule(rule.rule_type, rule.wm_class_pattern, rule.title_pattern)
+    return {"status": "ok", "id": rule_id}
+
+@app.delete("/api/rules/{rule_id}")
+async def delete_rule(rule_id: str):
+    await db.delete_filter_rule(rule_id)
+    return {"status": "ok"}
 
 
 # --- Static files for dashboard ---
