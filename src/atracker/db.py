@@ -4,7 +4,7 @@ import json
 import os
 import sqlite3
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 import aiosqlite
@@ -52,6 +52,7 @@ CREATE TABLE IF NOT EXISTS filter_rules (
 
 CREATE INDEX IF NOT EXISTS idx_events_timestamp ON events(timestamp);
 CREATE INDEX IF NOT EXISTS idx_events_wm_class ON events(wm_class);
+CREATE INDEX IF NOT EXISTS idx_events_time_idle ON events(timestamp, is_idle);
 """
 
 DEFAULT_CATEGORIES = [
@@ -133,15 +134,18 @@ async def init_db() -> None:
                 )
         
         # Migrations: Add columns if they don't exist
-        existing_cols = [r[1] for r in conn.execute("PRAGMA table_info(categories)").fetchall()]
-        if "title_pattern" not in existing_cols:
-            conn.execute("ALTER TABLE categories ADD COLUMN title_pattern TEXT NOT NULL DEFAULT ''")
-        if "daily_goal_secs" not in existing_cols:
-            conn.execute("ALTER TABLE categories ADD COLUMN daily_goal_secs INTEGER NOT NULL DEFAULT 0")
-        if "daily_limit_secs" not in existing_cols:
-            conn.execute("ALTER TABLE categories ADD COLUMN daily_limit_secs INTEGER NOT NULL DEFAULT 0")
-        if "is_case_sensitive" not in existing_cols:
-            conn.execute("ALTER TABLE categories ADD COLUMN is_case_sensitive INTEGER NOT NULL DEFAULT 0")
+        version = conn.execute("PRAGMA user_version").fetchone()[0]
+        if version < 1:
+            existing_cols = [r[1] for r in conn.execute("PRAGMA table_info(categories)").fetchall()]
+            if "title_pattern" not in existing_cols:
+                conn.execute("ALTER TABLE categories ADD COLUMN title_pattern TEXT NOT NULL DEFAULT ''")
+            if "daily_goal_secs" not in existing_cols:
+                conn.execute("ALTER TABLE categories ADD COLUMN daily_goal_secs INTEGER NOT NULL DEFAULT 0")
+            if "daily_limit_secs" not in existing_cols:
+                conn.execute("ALTER TABLE categories ADD COLUMN daily_limit_secs INTEGER NOT NULL DEFAULT 0")
+            if "is_case_sensitive" not in existing_cols:
+                conn.execute("ALTER TABLE categories ADD COLUMN is_case_sensitive INTEGER NOT NULL DEFAULT 0")
+            conn.execute("PRAGMA user_version = 1")
         
         # Seed default settings if empty
         settings_defaults = [
@@ -159,11 +163,16 @@ async def init_db() -> None:
         conn.close()
 
 
+_db_conn = None
+
+
 async def get_db() -> aiosqlite.Connection:
     """Get an async database connection."""
-    db = await aiosqlite.connect(str(DB_PATH), uri=True)
-    db.row_factory = aiosqlite.Row
-    return db
+    global _db_conn
+    if _db_conn is None:
+        _db_conn = await aiosqlite.connect(str(DB_PATH), uri=True)
+        _db_conn.row_factory = aiosqlite.Row
+    return _db_conn
 
 
 from contextlib import asynccontextmanager as _acm
@@ -172,12 +181,11 @@ from contextlib import asynccontextmanager as _acm
 @_acm
 async def _aconn():
     """Async context manager for an aiosqlite connection."""
-    db = await aiosqlite.connect(str(DB_PATH), uri=True)
-    db.row_factory = aiosqlite.Row
+    db = await get_db()
     try:
         yield db
     finally:
-        await db.close()
+        pass
 
 
 def get_sync_db() -> sqlite3.Connection:
@@ -224,14 +232,15 @@ async def prune_events(days_to_keep: int) -> int:
 async def get_events(target_date: date) -> list[dict]:
     """Get all events for a specific date."""
     day_start = f"{target_date.isoformat()}T00:00:00"
-    day_end = f"{target_date.isoformat()}T23:59:59"
+    next_day = target_date + timedelta(days=1)
+    next_day_start = f"{next_day.isoformat()}T00:00:00"
     async with _aconn() as db:
         db.row_factory = aiosqlite.Row
         cursor = await db.execute(
             """SELECT * FROM events
-               WHERE timestamp >= ? AND timestamp <= ?
+               WHERE timestamp >= ? AND timestamp < ?
                ORDER BY timestamp""",
-            (day_start, day_end),
+            (day_start, next_day_start),
         )
         rows = await cursor.fetchall()
         return [dict(r) for r in rows]
@@ -240,7 +249,8 @@ async def get_events(target_date: date) -> list[dict]:
 async def get_summary_range(start_date: date, end_date: date) -> list[dict]:
     """Get per-app usage summary for a date range (inclusive)."""
     range_start = f"{start_date.isoformat()}T00:00:00"
-    range_end = f"{end_date.isoformat()}T23:59:59"
+    next_day = end_date + timedelta(days=1)
+    range_end = f"{next_day.isoformat()}T00:00:00"
     async with _aconn() as db:
         db.row_factory = aiosqlite.Row
         cursor = await db.execute(
@@ -250,7 +260,7 @@ async def get_summary_range(start_date: date, end_date: date) -> list[dict]:
                       MIN(timestamp) as first_seen,
                       MAX(end_timestamp) as last_seen
                FROM events
-               WHERE timestamp >= ? AND timestamp <= ? AND is_idle = 0 AND wm_class != ''
+               WHERE timestamp >= ? AND timestamp < ? AND is_idle = 0 AND wm_class != ''
                GROUP BY wm_class, title
                ORDER BY total_secs DESC""",
             (range_start, range_end),
@@ -262,13 +272,14 @@ async def get_summary_range(start_date: date, end_date: date) -> list[dict]:
 async def get_timeline_range(start_date: date, end_date: date) -> list[dict]:
     """Get timeline blocks for a date range."""
     range_start = f"{start_date.isoformat()}T00:00:00"
-    range_end = f"{end_date.isoformat()}T23:59:59"
+    next_day = end_date + timedelta(days=1)
+    range_end = f"{next_day.isoformat()}T00:00:00"
     async with _aconn() as db:
         db.row_factory = aiosqlite.Row
         cursor = await db.execute(
             """SELECT timestamp, end_timestamp, wm_class, title, duration_secs, is_idle
                FROM events
-               WHERE timestamp >= ? AND timestamp <= ?
+               WHERE timestamp >= ? AND timestamp < ?
                ORDER BY timestamp""",
             (range_start, range_end),
         )
@@ -307,8 +318,9 @@ async def get_daily_totals(days: int = 7) -> list[dict]:
 
 async def get_daily_totals_range(start_date: date, end_date: date) -> list[dict]:
     """Get daily usage totals over a specific range."""
-    range_start = start_date.isoformat()
-    range_end = end_date.isoformat()
+    range_start = f"{start_date.isoformat()}T00:00:00"
+    next_day = end_date + timedelta(days=1)
+    range_end = f"{next_day.isoformat()}T00:00:00"
     async with _aconn() as db:
         db.row_factory = aiosqlite.Row
         cursor = await db.execute(
@@ -317,7 +329,7 @@ async def get_daily_totals_range(start_date: date, end_date: date) -> list[dict]
                       SUM(CASE WHEN is_idle = 1 THEN duration_secs ELSE 0 END) as idle_secs,
                       COUNT(*) as event_count
                FROM events
-               WHERE DATE(timestamp) >= ? AND DATE(timestamp) <= ?
+               WHERE timestamp >= ? AND timestamp < ?
                GROUP BY DATE(timestamp)
                ORDER BY day DESC""",
             (range_start, range_end),
