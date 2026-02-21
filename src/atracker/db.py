@@ -111,7 +111,7 @@ async def init_db() -> None:
     """Initialize database and migrate if needed."""
     DB_DIR.mkdir(parents=True, exist_ok=True)
 
-    conn = sqlite3.connect(str(DB_PATH))
+    conn = sqlite3.connect(str(DB_PATH), uri=True)
     try:
         conn.executescript(SCHEMA)
 
@@ -150,7 +150,7 @@ async def init_db() -> None:
 
 async def get_db() -> aiosqlite.Connection:
     """Get an async database connection."""
-    db = await aiosqlite.connect(str(DB_PATH))
+    db = await aiosqlite.connect(str(DB_PATH), uri=True)
     db.row_factory = aiosqlite.Row
     return db
 
@@ -161,7 +161,7 @@ from contextlib import asynccontextmanager as _acm
 @_acm
 async def _aconn():
     """Async context manager for an aiosqlite connection."""
-    db = await aiosqlite.connect(str(DB_PATH))
+    db = await aiosqlite.connect(str(DB_PATH), uri=True)
     db.row_factory = aiosqlite.Row
     try:
         yield db
@@ -171,7 +171,7 @@ async def _aconn():
 
 def get_sync_db() -> sqlite3.Connection:
     """Get a sync database connection."""
-    conn = sqlite3.connect(str(DB_PATH))
+    conn = sqlite3.connect(str(DB_PATH), uri=True)
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -196,6 +196,18 @@ async def insert_event(
         )
         await db.commit()
         return event_id
+
+
+async def prune_events(days_to_keep: int) -> int:
+    """Delete events older than a specific number of days."""
+    async with _aconn() as db:
+        cursor = await db.execute(
+            "DELETE FROM events WHERE timestamp < DATE('now', ?)",
+            (f"-{days_to_keep} days",)
+        )
+        deleted_count = cursor.rowcount
+        await db.commit()
+        return deleted_count
 
 
 async def get_events(target_date: date) -> list[dict]:
@@ -376,7 +388,7 @@ async def set_setting(key: str, value: str) -> None:
 
 def get_setting_sync(key: str, default: str = "") -> str:
     """Get a single setting synchronously."""
-    with sqlite3.connect(str(DB_PATH)) as conn:
+    with sqlite3.connect(str(DB_PATH), uri=True) as conn:
         cursor = conn.execute("SELECT value FROM settings WHERE key = ?", (key,))
         row = cursor.fetchone()
         return row[0] if row else default

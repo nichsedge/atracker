@@ -16,6 +16,7 @@ import asyncio
 import logging
 
 from atracker import db
+from atracker.config import config
 
 DASHBOARD_DIR = Path(__file__).parent.parent.parent / "dashboard"
 
@@ -94,11 +95,28 @@ app.add_middleware(
 )
 
 
+async def prune_loop():
+    """Background task to periodically prune old events."""
+    while True:
+        try:
+            days = config.retention_days
+            if days > 0:
+                deleted = await db.prune_events(days)
+                if deleted > 0:
+                    logger.info(f"Pruned {deleted} events older than {days} days.")
+        except Exception as e:
+            logger.error(f"Error in prune_loop: {e}")
+        
+        # Run once a day
+        await asyncio.sleep(86400)
+
+
 @app.on_event("startup")
 async def startup():
     global api_loop
     api_loop = asyncio.get_running_loop()
     await db.init_db()
+    asyncio.create_task(prune_loop())
 
 
 @app.websocket("/ws")

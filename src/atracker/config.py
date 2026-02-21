@@ -10,6 +10,7 @@ DEFAULT_CONFIG = {
     },
     "database": {
         "path": str(Path.home() / ".local" / "share" / "atracker" / "atracker.db"),
+        "retention_days": 90,
     },
     "tracking": {
         "poll_interval": 5,
@@ -56,6 +57,10 @@ class Config:
     @property
     def db_path(self) -> Path:
         return Path(os.path.expanduser(self._config["database"]["path"]))
+
+    @property
+    def retention_days(self) -> int:
+        return self._config["database"]["retention_days"]
 
     @property
     def poll_interval(self) -> int:
