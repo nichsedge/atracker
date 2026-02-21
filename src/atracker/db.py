@@ -31,9 +31,11 @@ CREATE TABLE IF NOT EXISTS categories (
     id TEXT PRIMARY KEY NOT NULL,
     name TEXT NOT NULL DEFAULT '',
     wm_class_pattern TEXT NOT NULL DEFAULT '',
+    title_pattern TEXT NOT NULL DEFAULT '',
     color TEXT NOT NULL DEFAULT '#3b82f6',
     daily_goal_secs INTEGER NOT NULL DEFAULT 0,
-    daily_limit_secs INTEGER NOT NULL DEFAULT 0
+    daily_limit_secs INTEGER NOT NULL DEFAULT 0,
+    is_case_sensitive INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS settings (
@@ -53,13 +55,18 @@ CREATE INDEX IF NOT EXISTS idx_events_wm_class ON events(wm_class);
 """
 
 DEFAULT_CATEGORIES = [
-    ("Browser", "firefox|chromium|google-chrome|brave|zen", "#3b82f6", 0, 3600),
-    ("Terminal", "gnome-terminal|kitty|alacritty|java", "#10b981", 0, 0),
-    ("Editor", "code|Code|antigravity|DBeaver|jetbrains", "#8b5cf6", 14400, 0),
-    ("Communication", "slack|discord|telegram|signal|teams|zoom", "#f59e0b", 0, 1800),
-    ("Files", "nautilus|thunar|dolphin|nemo", "#6366f1", 0, 0),
-    ("Media", "vlc|mpv|spotify|rhythmbox|totem", "#ec4899", 0, 0),
-    ("Office", "libreoffice|soffice|evince|okular|obsidian", "#14b8a6", 0, 0),
+    ("Browser", "firefox|chromium|google-chrome|brave|zen", "", "#3b82f6", 0, 0, 0),
+    ("Terminal", "gnome-terminal|kitty|alacritty|java", "", "#10b981", 0, 0, 0),
+    ("Editor", "code|Code|antigravity|DBeaver|jetbrains", "", "#8b5cf6", 0, 0, 0),
+    ("Communication", "slack|discord|telegram|signal|teams|zoom", "", "#f59e0b", 0, 0, 0),
+    ("Files", "nautilus|thunar|dolphin|nemo", "", "#6366f1", 0, 0, 0),
+    ("Media", "vlc|mpv|spotify|rhythmbox|totem", "YouTube|TikTok|Netflix|Disney\+|Spotify|hanime|pahe|twitch", "#ec4899", 0, 0, 0),
+    ("Office", "libreoffice|soffice|evince|okular|obsidian|Google Sheets", "", "#14b8a6", 0, 0, 0),
+    ("Social Media", "", "Facebook|Reddit|Instagram|Twitter|\\bX\\b|X\\.com|LinkedIn", "#ef4444", 0, 0, 1),
+    ("Research & AI", "", "\\bGemini\\b|ChatGPT|Stack Overflow|GitHub|Arxiv|Claude|Perplexity|DeepSeek", "#818cf8", 0, 0, 0),
+    ("Shopping", "", "Tokopedia|Shopee|Amazon|eBay|Lazada|Indomaret|Alfagit|Aliexpress", "#fb923c", 0, 0, 0),
+    ("Learning", "", "Duolingo|Coursera|Udemy|Khan Academy", "#a855f7", 0, 0, 0),
+    ("Database", "DBeaver|Postgres|MySQL|MongoDB|Redis", "", "#0ea5e9", 0, 0, 0),
 ]
 
 
@@ -118,19 +125,23 @@ async def init_db() -> None:
         # Seed default categories if empty
         count = conn.execute("SELECT COUNT(*) FROM categories").fetchone()[0]
         if count == 0:
-            for name, pattern, color, goal, limit in DEFAULT_CATEGORIES:
+            for name, pattern, title_pattern, color, goal, limit, is_case_sensitive in DEFAULT_CATEGORIES:
                 cat_id = str(uuid.uuid4())
                 conn.execute(
-                    "INSERT INTO categories (id, name, wm_class_pattern, color, daily_goal_secs, daily_limit_secs) VALUES (?, ?, ?, ?, ?, ?)",
-                    (cat_id, name, pattern, color, goal, limit),
+                    "INSERT INTO categories (id, name, wm_class_pattern, title_pattern, color, daily_goal_secs, daily_limit_secs, is_case_sensitive) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    (cat_id, name, pattern, title_pattern, color, goal, limit, is_case_sensitive),
                 )
         
         # Migrations: Add columns if they don't exist
         existing_cols = [r[1] for r in conn.execute("PRAGMA table_info(categories)").fetchall()]
+        if "title_pattern" not in existing_cols:
+            conn.execute("ALTER TABLE categories ADD COLUMN title_pattern TEXT NOT NULL DEFAULT ''")
         if "daily_goal_secs" not in existing_cols:
             conn.execute("ALTER TABLE categories ADD COLUMN daily_goal_secs INTEGER NOT NULL DEFAULT 0")
         if "daily_limit_secs" not in existing_cols:
             conn.execute("ALTER TABLE categories ADD COLUMN daily_limit_secs INTEGER NOT NULL DEFAULT 0")
+        if "is_case_sensitive" not in existing_cols:
+            conn.execute("ALTER TABLE categories ADD COLUMN is_case_sensitive INTEGER NOT NULL DEFAULT 0")
         
         # Seed default settings if empty
         settings_defaults = [
@@ -233,14 +244,14 @@ async def get_summary_range(start_date: date, end_date: date) -> list[dict]:
     async with _aconn() as db:
         db.row_factory = aiosqlite.Row
         cursor = await db.execute(
-            """SELECT wm_class,
+            """SELECT wm_class, title,
                       SUM(duration_secs) as total_secs,
                       COUNT(*) as event_count,
                       MIN(timestamp) as first_seen,
                       MAX(end_timestamp) as last_seen
                FROM events
                WHERE timestamp >= ? AND timestamp <= ? AND is_idle = 0 AND wm_class != ''
-               GROUP BY wm_class
+               GROUP BY wm_class, title
                ORDER BY total_secs DESC""",
             (range_start, range_end),
         )
@@ -324,24 +335,24 @@ async def get_categories() -> list[dict]:
         return [dict(r) for r in rows]
 
 
-async def add_category(name: str, wm_class_pattern: str, color: str, daily_goal_secs: int = 0, daily_limit_secs: int = 0) -> str:
+async def add_category(name: str, wm_class_pattern: str, color: str, daily_goal_secs: int = 0, daily_limit_secs: int = 0, title_pattern: str = "", is_case_sensitive: bool = False) -> str:
     """Add a new category and return its UUID."""
     cat_id = str(uuid.uuid4())
     async with _aconn() as db:
         await db.execute(
-            "INSERT INTO categories (id, name, wm_class_pattern, color, daily_goal_secs, daily_limit_secs) VALUES (?, ?, ?, ?, ?, ?)",
-            (cat_id, name, wm_class_pattern, color, daily_goal_secs, daily_limit_secs)
+            "INSERT INTO categories (id, name, wm_class_pattern, title_pattern, color, daily_goal_secs, daily_limit_secs, is_case_sensitive) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (cat_id, name, wm_class_pattern, title_pattern, color, daily_goal_secs, daily_limit_secs, 1 if is_case_sensitive else 0),
         )
         await db.commit()
     return cat_id
 
 
-async def update_category(cat_id: str, name: str, wm_class_pattern: str, color: str, daily_goal_secs: int = 0, daily_limit_secs: int = 0) -> None:
+async def update_category(cat_id: str, name: str, wm_class_pattern: str, color: str, daily_goal_secs: int = 0, daily_limit_secs: int = 0, title_pattern: str = "", is_case_sensitive: bool = False):
     """Update an existing category."""
     async with _aconn() as db:
         await db.execute(
-            "UPDATE categories SET name = ?, wm_class_pattern = ?, color = ?, daily_goal_secs = ?, daily_limit_secs = ? WHERE id = ?",
-            (name, wm_class_pattern, color, daily_goal_secs, daily_limit_secs, cat_id)
+            "UPDATE categories SET name = ?, wm_class_pattern = ?, title_pattern = ?, color = ?, daily_goal_secs = ?, daily_limit_secs = ?, is_case_sensitive = ? WHERE id = ?",
+            (name, wm_class_pattern, title_pattern, color, daily_goal_secs, daily_limit_secs, 1 if is_case_sensitive else 0, cat_id),
         )
         await db.commit()
 

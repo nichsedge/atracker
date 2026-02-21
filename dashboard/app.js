@@ -122,6 +122,17 @@ function renderMetrics(metrics) {
     if (switchEl) switchEl.textContent = metrics.context_switches;
 }
 
+window.toggleCategory = function (header) {
+    const items = header.nextElementSibling;
+    const chevron = header.querySelector('.chevron-icon');
+    const isCollapsed = items.style.display === 'none';
+
+    items.style.display = isCollapsed ? 'block' : 'none';
+    if (chevron) {
+        chevron.style.transform = isCollapsed ? 'rotate(90deg)' : 'rotate(0deg)';
+    }
+};
+
 function renderGoals(summary) {
     const container = document.getElementById('goals-list');
     const goalsCard = document.getElementById('goals-card');
@@ -138,8 +149,8 @@ function renderGoals(summary) {
 
         goalsCard.style.display = 'block';
         container.innerHTML = goalCats.map(cat => {
-            const usage = summary.find(s => s.wm_class.toLowerCase().match(new RegExp(cat.wm_class_pattern, 'i')));
-            const usageSecs = usage ? usage.total_secs : 0;
+            const usageItems = summary.filter(s => s.category_name === cat.name);
+            const usageSecs = usageItems.reduce((acc, curr) => acc + curr.total_secs, 0);
 
             let html = `<div class="goal-row">
                 <div class="goal-header">
@@ -171,6 +182,61 @@ function renderGoals(summary) {
     });
 }
 
+function generateGroupedSummaryHtml(summary) {
+    const grouped = {};
+    let maxCategorySecs = 0;
+
+    summary.forEach(app => {
+        const cat = app.category_name || 'Uncategorized';
+        if (!grouped[cat]) {
+            grouped[cat] = {
+                name: cat,
+                color: app.color,
+                total_secs: 0,
+                items: []
+            };
+        }
+        grouped[cat].total_secs += app.total_secs;
+        grouped[cat].items.push(app);
+    });
+
+    const categories = Object.values(grouped).sort((a, b) => b.total_secs - a.total_secs);
+    if (categories.length > 0) {
+        maxCategorySecs = categories[0].total_secs;
+    }
+
+    return categories.map(cat => `
+        <div class="category-group" style="margin-bottom: 8px; border-bottom: 1px solid var(--border-subtle); padding-bottom: 8px;">
+            <div class="usage-row category-header" style="padding: 8px; cursor: pointer; border-radius: var(--radius-sm); transition: background 0.2s;" onclick="toggleCategory(this)">
+                <div class="chevron-icon" style="transition: transform 0.2s; display: flex; align-items: center; justify-content: center; width: 16px;">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="9 18 15 12 9 6"></polyline>
+                    </svg>
+                </div>
+                <div class="usage-color" style="background: ${cat.color}; width: 12px; height: 12px; border-radius: 50%;"></div>
+                <div class="usage-info">
+                    <div class="usage-app-name" style="font-weight: 600;">${escapeHtml(cat.name)}</div>
+                    <div class="usage-bar-container" style="background: rgba(255,255,255,0.03);">
+                        <div class="usage-bar" style="width: ${(cat.total_secs / Math.max(1, maxCategorySecs) * 100).toFixed(1)}%; background: ${cat.color}; height: 4px;"></div>
+                    </div>
+                </div>
+                <div class="usage-time" style="font-weight: 600;">${formatDuration(cat.total_secs)}</div>
+            </div>
+            <div class="category-items" style="padding-left: 32px; display: none;">
+                ${cat.items.sort((a, b) => b.total_secs - a.total_secs).map(app => `
+                    <div class="usage-row usage-sub-row" style="margin-bottom: 2px; padding: 4px 0; border-left: 1px solid rgba(255,255,255,0.05); padding-left: 12px;">
+                        <div class="usage-info">
+                            <div class="usage-app-name" style="font-size: 13px; color: var(--text-primary);">${escapeHtml(app.wm_class)}</div>
+                            ${app.title ? `<div class="usage-app-title" style="font-size: 11px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 300px;">${escapeHtml(app.title)}</div>` : ''}
+                        </div>
+                        <div class="usage-time" style="font-size: 12px; opacity: 0.7;">${app.total_formatted || formatDuration(app.total_secs)}</div>
+                    </div>
+                `).join('')}
+            </div>
+        </div>
+    `).join('');
+}
+
 function renderSummary(summary) {
     const container = document.getElementById('usage-list');
     if (!summary || summary.length === 0) {
@@ -178,20 +244,7 @@ function renderSummary(summary) {
         return;
     }
 
-    const maxSecs = Math.max(...summary.map(s => s.total_secs));
-
-    container.innerHTML = summary.map(app => `
-        <div class="usage-row">
-            <div class="usage-color" style="background: ${app.color}"></div>
-            <div class="usage-info">
-                <div class="usage-app-name">${escapeHtml(app.wm_class)}</div>
-                <div class="usage-bar-container">
-                    <div class="usage-bar" style="width: ${(app.total_secs / maxSecs * 100).toFixed(1)}%; background: ${app.color}"></div>
-                </div>
-            </div>
-            <div class="usage-time">${app.total_formatted}</div>
-        </div>
-    `).join('');
+    container.innerHTML = generateGroupedSummaryHtml(summary);
 }
 
 function renderTimeline(timeline) {
@@ -393,20 +446,7 @@ function renderSummaryTo(summary, containerId) {
         return;
     }
 
-    const maxSecs = Math.max(...summary.map(s => s.total_secs));
-
-    container.innerHTML = summary.map(app => `
-        <div class="usage-row">
-            <div class="usage-color" style="background: ${app.color}"></div>
-            <div class="usage-info">
-                <div class="usage-app-name">${escapeHtml(app.wm_class)}</div>
-                <div class="usage-bar-container">
-                    <div class="usage-bar" style="width: ${(app.total_secs / maxSecs * 100).toFixed(1)}%; background: ${app.color}"></div>
-                </div>
-            </div>
-            <div class="usage-time">${app.total_formatted}</div>
-        </div>
-    `).join('');
+    container.innerHTML = generateGroupedSummaryHtml(summary);
 }
 
 function renderHistoryChart(history) {
@@ -486,13 +526,21 @@ function renderCategories(categories) {
         return;
     }
 
+    // Save for edit lookup to avoid HTML escaping issues with regex (like \b)
+    window.lastCategories = categories;
+
     container.innerHTML = categories.map(cat => `
         <div class="category-row">
             <div class="category-color" style="background: ${cat.color}"></div>
-            <div class="category-name">${escapeHtml(cat.name)}</div>
-            <div class="category-pattern">${escapeHtml(cat.wm_class_pattern)}</div>
+            <div class="category-info" style="flex: 1; min-width: 0;">
+                <div class="category-name">${escapeHtml(cat.name)} ${cat.is_case_sensitive ? '<span style="font-size: 10px; background: var(--border-active); color: var(--text-accent); padding: 1px 4px; border-radius: 4px; margin-left: 6px;">CS</span>' : ''}</div>
+                <div class="category-patterns" style="font-size: 11px; color: var(--text-secondary); opacity: 0.8;">
+                    ${cat.wm_class_pattern ? `<span>Class: <b>${escapeHtml(cat.wm_class_pattern)}</b></span>` : ''}
+                    ${cat.title_pattern ? `<span style="margin-left: 8px;">Title: <b>${escapeHtml(cat.title_pattern)}</b></span>` : ''}
+                </div>
+            </div>
             <div class="category-actions">
-                <button class="btn btn-secondary" style="padding: 4px 8px; font-size: 11px;" onclick="editCategory('${cat.id}', '${escapeHtml(cat.name).replace(/'/g, "\\'")}', '${escapeHtml(cat.wm_class_pattern).replace(/'/g, "\\'")}', '${cat.color}', ${cat.daily_goal_secs}, ${cat.daily_limit_secs})">Edit</button>
+                <button class="btn btn-secondary" style="padding: 4px 8px; font-size: 11px;" onclick="editCategory('${cat.id}')">Edit</button>
                 <button class="btn btn-danger" style="padding: 4px 8px; font-size: 11px;" onclick="deleteCategory('${cat.id}')">Delete</button>
             </div>
         </div>
@@ -515,6 +563,9 @@ function setupCategoryEvents() {
         document.getElementById('modal-title').textContent = 'Add Category';
         form.reset();
         document.getElementById('cat-id').value = '';
+        document.getElementById('cat-pattern').value = '';
+        document.getElementById('cat-title-pattern').value = '';
+        document.getElementById('cat-case-sensitive').checked = false;
         document.getElementById('cat-goal').value = '';
         document.getElementById('cat-limit').value = '';
         colorHex.textContent = colorInput.value;
@@ -534,6 +585,8 @@ function setupCategoryEvents() {
         const payload = {
             name: document.getElementById('cat-name').value,
             wm_class_pattern: document.getElementById('cat-pattern').value,
+            title_pattern: document.getElementById('cat-title-pattern').value,
+            is_case_sensitive: document.getElementById('cat-case-sensitive').checked,
             color: document.getElementById('cat-color').value,
             daily_goal_secs: (parseInt(document.getElementById('cat-goal').value) || 0) * 60,
             daily_limit_secs: (parseInt(document.getElementById('cat-limit').value) || 0) * 60
@@ -649,15 +702,20 @@ function setupSettingsEvents() {
     });
 }
 
-window.editCategory = function (id, name, pattern, color, goalSecs, limitSecs) {
+window.editCategory = function (id) {
+    const cat = (window.lastCategories || []).find(c => c.id === id);
+    if (!cat) return;
+
     document.getElementById('modal-title').textContent = 'Edit Category';
     document.getElementById('cat-id').value = id;
-    document.getElementById('cat-name').value = name;
-    document.getElementById('cat-pattern').value = pattern;
-    document.getElementById('cat-color').value = color;
-    document.getElementById('cat-color-hex').textContent = color;
-    document.getElementById('cat-goal').value = goalSecs ? Math.round(goalSecs / 60) : '';
-    document.getElementById('cat-limit').value = limitSecs ? Math.round(limitSecs / 60) : '';
+    document.getElementById('cat-name').value = cat.name;
+    document.getElementById('cat-pattern').value = cat.wm_class_pattern || '';
+    document.getElementById('cat-title-pattern').value = cat.title_pattern || '';
+    document.getElementById('cat-case-sensitive').checked = !!cat.is_case_sensitive;
+    document.getElementById('cat-color').value = cat.color;
+    document.getElementById('cat-color-hex').textContent = cat.color;
+    document.getElementById('cat-goal').value = cat.daily_goal_secs ? Math.round(cat.daily_goal_secs / 60) : '';
+    document.getElementById('cat-limit').value = cat.daily_limit_secs ? Math.round(cat.daily_limit_secs / 60) : '';
     document.getElementById('category-modal').style.display = 'flex';
 };
 

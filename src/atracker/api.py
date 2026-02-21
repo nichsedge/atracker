@@ -23,9 +23,11 @@ DASHBOARD_DIR = Path(__file__).parent.parent.parent / "dashboard"
 class CategoryCreate(BaseModel):
     name: str
     wm_class_pattern: str
+    title_pattern: str = ""
     color: str
     daily_goal_secs: int = 0
     daily_limit_secs: int = 0
+    is_case_sensitive: bool = False
 
 class CategoryImport(BaseModel):
     categories: list[dict]
@@ -166,7 +168,7 @@ async def summary(target_date: str = Query(None, alias="date")):
                 
                 found = False
                 for r in rows:
-                    if r["wm_class"] == curr["wm_class"]:
+                    if r["wm_class"] == curr["wm_class"] and r.get("title", "") == curr.get("title", ""):
                         r["total_secs"] += duration
                         r["event_count"] += 1
                         r["last_seen"] = datetime.now().isoformat()
@@ -176,6 +178,7 @@ async def summary(target_date: str = Query(None, alias="date")):
                 if not found:
                     rows.append({
                         "wm_class": curr["wm_class"],
+                        "title": curr.get("title", ""),
                         "total_secs": duration,
                         "event_count": 1,
                         "first_seen": curr["timestamp"],
@@ -187,9 +190,11 @@ async def summary(target_date: str = Query(None, alias="date")):
                 logger.error(f"Error appending current state to summary: {e}")
 
     categories = await db.get_categories()
-    # Enrich with category color
+    # Enrich with category info
     for row in rows:
-        row["color"] = _match_category_color(row["wm_class"], categories)
+        matched_cat = _get_matched_category(row["wm_class"], row.get("title", ""), categories)
+        row["category_name"] = matched_cat["name"]
+        row["color"] = matched_cat.get("color", "#64748b")
         row["total_formatted"] = _format_duration(row["total_secs"])
     return {"date": d.isoformat(), "summary": rows}
 
@@ -215,7 +220,7 @@ async def timeline(target_date: str = Query(None, alias="date")):
 
     categories = await db.get_categories()
     for row in rows:
-        row["color"] = _match_category_color(row["wm_class"], categories)
+        row["color"] = _get_matched_category(row["wm_class"], row.get("title", ""), categories).get("color", "#64748b")
     return {"date": d.isoformat(), "timeline": rows}
 
 
@@ -239,7 +244,9 @@ async def range_summary(start: str = Query(...), end: str = Query(...)):
     # We don't append "Now Tracking" for ranges as it's usually historical
     categories = await db.get_categories()
     for row in rows:
-        row["color"] = _match_category_color(row["wm_class"], categories)
+        matched_cat = _get_matched_category(row["wm_class"], row.get("title", ""), categories)
+        row["category_name"] = matched_cat["name"]
+        row["color"] = matched_cat.get("color", "#64748b")
         row["total_formatted"] = _format_duration(row["total_secs"])
     return {"start": s.isoformat(), "end": e.isoformat(), "summary": rows}
 
@@ -342,8 +349,13 @@ async def categories():
 async def create_category(cat: CategoryCreate):
     """Create a new category."""
     cat_id = await db.add_category(
-        cat.name, cat.wm_class_pattern, cat.color, 
-        cat.daily_goal_secs, cat.daily_limit_secs
+        name=cat.name,
+        wm_class_pattern=cat.wm_class_pattern,
+        color=cat.color,
+        title_pattern=cat.title_pattern,
+        daily_goal_secs=cat.daily_goal_secs,
+        daily_limit_secs=cat.daily_limit_secs,
+        is_case_sensitive=cat.is_case_sensitive
     )
     return {"id": cat_id, "message": "Category created"}
 
@@ -352,8 +364,14 @@ async def create_category(cat: CategoryCreate):
 async def update_category(cat_id: str, cat: CategoryCreate):
     """Update an existing category."""
     await db.update_category(
-        cat_id, cat.name, cat.wm_class_pattern, cat.color,
-        cat.daily_goal_secs, cat.daily_limit_secs
+        cat_id=cat_id,
+        name=cat.name,
+        wm_class_pattern=cat.wm_class_pattern,
+        color=cat.color,
+        title_pattern=cat.title_pattern,
+        daily_goal_secs=cat.daily_goal_secs,
+        daily_limit_secs=cat.daily_limit_secs,
+        is_case_sensitive=cat.is_case_sensitive
     )
     return {"id": cat_id, "message": "Category updated"}
 
@@ -381,12 +399,23 @@ async def import_categories(data: CategoryImport, replace: bool = Query(False)):
     imported = 0
     for cat in data.categories:
         name = cat.get("name")
-        pattern = cat.get("wm_class_pattern")
+        pattern = cat.get("wm_class_pattern", "")
+        title_pattern = cat.get("title_pattern", "")
         color = cat.get("color", "#64748b")
         goal = cat.get("daily_goal_secs", 0)
         limit = cat.get("daily_limit_secs", 0)
-        if name and pattern:
-            await db.add_category(name, pattern, color, goal, limit)
+        is_cs = cat.get("is_case_sensitive", False)
+        
+        if name and (pattern or title_pattern):
+            await db.add_category(
+                name=name,
+                wm_class_pattern=pattern,
+                color=color,
+                title_pattern=title_pattern,
+                daily_goal_secs=goal,
+                daily_limit_secs=limit,
+                is_case_sensitive=is_cs
+            )
             imported += 1
             
     return {"message": f"Imported {imported} categories."}
@@ -467,11 +496,40 @@ def _format_duration(secs: float) -> str:
     return f"{minutes}m"
 
 
-def _match_category_color(wm_class: str, categories: list[dict]) -> str:
-    """Match a wm_class against category patterns and return the color."""
+def _get_matched_category(wm_class: str, title: str, categories: list[dict]) -> dict:
+    """Match a wm_class or title against category patterns and return the category dict.
+    Title patterns are checked first for all categories to allow more granular matching
+    (e.g. YouTube in a Browser should match Media, not Browser).
+    """
     wm_lower = wm_class.lower()
+    title_lower = title.lower()
+    
+    # First pass: Check all title patterns
     for cat in categories:
-        pattern = cat["wm_class_pattern"]
-        if re.search(pattern, wm_lower, re.IGNORECASE):
-            return cat["color"]
-    return "#64748b"  # Default slate color
+        title_pattern = cat.get("title_pattern", "")
+        if not title_pattern:
+            continue
+            
+        is_cs = bool(cat.get("is_case_sensitive"))
+        if is_cs:
+            if re.search(title_pattern, title):
+                return cat
+        else:
+            if re.search(title_pattern, title_lower, re.IGNORECASE):
+                return cat
+            
+    # Second pass: Check all wm_class patterns
+    for cat in categories:
+        wm_pattern = cat.get("wm_class_pattern", "")
+        if not wm_pattern:
+            continue
+            
+        is_cs = bool(cat.get("is_case_sensitive"))
+        if is_cs:
+            if re.search(wm_pattern, wm_class):
+                return cat
+        else:
+            if re.search(wm_pattern, wm_lower, re.IGNORECASE):
+                return cat
+            
+    return {"name": "Uncategorized", "color": "#64748b"}

@@ -523,6 +523,10 @@ body {
     text-align: right;
 }
 
+.category-header:hover {
+    background: rgba(255, 255, 255, 0.04);
+}
+
 /* ============ History ============ */
 .select-period {
     background: var(--bg-card);
