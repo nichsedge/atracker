@@ -40,6 +40,9 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
+        // Ensure watchdog is always scheduled
+        WatchdogWorker.schedule(this)
+
         tvSyncStatus = findViewById(R.id.tvSyncStatus)
         btnSync = findViewById(R.id.btnSync)
         etBackendUrl = findViewById(R.id.etBackendUrl)

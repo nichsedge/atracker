@@ -14,9 +14,14 @@ import android.content.pm.PackageManager
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.*
-import java.util.UUID
 
 class TrackerService : Service() {
+
+    companion object {
+        /** Checked by WatchdogWorker to decide whether to restart. */
+        @Volatile
+        var isRunning = false
+    }
 
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var pollingJob: Job? = null
@@ -36,6 +41,7 @@ class TrackerService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        isRunning = true
         createNotificationChannel()
         startForeground(1, createNotification())
 
@@ -44,7 +50,6 @@ class TrackerService : Service() {
             addAction(Intent.ACTION_SCREEN_ON)
         }
         registerReceiver(screenReceiver, filter)
-
         startPolling()
     }
 
@@ -65,7 +70,7 @@ class TrackerService : Service() {
     private fun getForegroundApp(): String? {
         val usageStatsManager = getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
         val endTime = System.currentTimeMillis()
-        val startTime = endTime - 10000 // Last 10 seconds
+        val startTime = endTime - 10000
 
         val usageEvents = usageStatsManager.queryEvents(startTime, endTime)
         val event = UsageEvents.Event()
@@ -82,9 +87,8 @@ class TrackerService : Service() {
 
     private fun getAppLabel(packageName: String): String {
         return try {
-            val pm = packageManager
-            val appInfo = pm.getApplicationInfo(packageName, 0)
-            pm.getApplicationLabel(appInfo).toString()
+            val appInfo = packageManager.getApplicationInfo(packageName, 0)
+            packageManager.getApplicationLabel(appInfo).toString()
         } catch (e: PackageManager.NameNotFoundException) {
             packageName
         }
@@ -125,28 +129,41 @@ class TrackerService : Service() {
     }
 
     private fun createNotificationChannel() {
+        // IMPORTANCE_MIN = no sound, no status bar icon — appears only if shade pulled down.
+        // This is the least intrusive channel Android allows for a foreground service.
         val channel = NotificationChannel(
             "tracker_channel",
-            "App Tracker Service",
-            NotificationManager.IMPORTANCE_LOW
-        )
-        val manager = getSystemService(NotificationManager::class.java)
-        manager.createNotificationChannel(channel)
+            "Activity Tracker",
+            NotificationManager.IMPORTANCE_MIN
+        ).apply {
+            description = "Background activity tracking"
+            setShowBadge(false)
+        }
+        getSystemService(NotificationManager::class.java)
+            .createNotificationChannel(channel)
     }
 
     private fun createNotification(): Notification {
         return NotificationCompat.Builder(this, "tracker_channel")
-            .setContentTitle("Tracker is running")
-            .setContentText("Monitoring app usage...")
-            .setSmallIcon(android.R.drawable.ic_menu_info_details)
+            .setContentTitle("atracker")
+            .setContentText("Running in background")
+            .setSmallIcon(android.R.drawable.ic_menu_recent_history)
+            .setPriority(NotificationCompat.PRIORITY_MIN)
             .setOngoing(true)
+            .setSilent(true)
             .build()
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // START_STICKY: restart the service if killed, without re-delivering the intent
+        return START_STICKY
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
         super.onDestroy()
+        isRunning = false
         unregisterReceiver(screenReceiver)
         serviceScope.cancel()
     }
