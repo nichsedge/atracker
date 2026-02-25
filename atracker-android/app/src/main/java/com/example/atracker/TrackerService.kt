@@ -10,6 +10,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.*
@@ -37,13 +38,13 @@ class TrackerService : Service() {
         super.onCreate()
         createNotificationChannel()
         startForeground(1, createNotification())
-        
+
         val filter = IntentFilter().apply {
             addAction(Intent.ACTION_SCREEN_OFF)
             addAction(Intent.ACTION_SCREEN_ON)
         }
         registerReceiver(screenReceiver, filter)
-        
+
         startPolling()
     }
 
@@ -79,13 +80,23 @@ class TrackerService : Service() {
         return lastResumedApp
     }
 
+    private fun getAppLabel(packageName: String): String {
+        return try {
+            val pm = packageManager
+            val appInfo = pm.getApplicationInfo(packageName, 0)
+            pm.getApplicationLabel(appInfo).toString()
+        } catch (e: PackageManager.NameNotFoundException) {
+            packageName
+        }
+    }
+
     private fun handleScreenOff() {
         flushPreviousEvent("__idle__")
         isIdle = true
     }
 
     private fun handleScreenOn() {
-        flushPreviousEvent(null) // Reset and let polling pick up the new app
+        flushPreviousEvent(null)
         isIdle = false
     }
 
@@ -94,12 +105,15 @@ class TrackerService : Service() {
         if (currentPackage != null && currentStartTime > 0) {
             val duration = (endTime - currentStartTime) / 1000.0
             if (duration > 1.0) {
+                val pkg = currentPackage!!
+                val label = if (pkg == "__idle__") "" else getAppLabel(pkg)
                 val event = Event(
-                    packageName = currentPackage!!,
+                    packageName = pkg,
+                    appLabel = label,
                     startTimestamp = currentStartTime,
                     endTimestamp = endTime,
                     durationSecs = duration,
-                    isIdle = currentPackage == "__idle__"
+                    isIdle = pkg == "__idle__"
                 )
                 serviceScope.launch {
                     AppDatabase.getDatabase(applicationContext).eventDao().insertEvent(event)

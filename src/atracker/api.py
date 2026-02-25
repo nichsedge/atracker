@@ -46,6 +46,23 @@ class RuleCreate(BaseModel):
     title_pattern: str = ""
 
 
+class AndroidEvent(BaseModel):
+    id: str
+    device_id: str
+    timestamp: str       # ISO 8601, e.g. '2026-02-25T08:30:00'
+    end_timestamp: str
+    package_name: str
+    app_label: str = ""
+    duration_secs: float
+    is_idle: bool = False
+
+
+class AndroidSyncPayload(BaseModel):
+    # Map of ISO date -> list of events for that day
+    # e.g. {"2026-02-25": [...], "2026-02-24": [...]}
+    days: dict[str, list[AndroidEvent]]
+
+
 # --- Real-Time State ---
 _ws_clients: list[WebSocket] = []
 api_loop: asyncio.AbstractEventLoop | None = None
@@ -468,6 +485,28 @@ async def add_rule(rule: RuleCreate):
 async def delete_rule(rule_id: str):
     await db.delete_filter_rule(rule_id)
     return {"status": "ok"}
+
+
+# --- Android sync ---
+
+@app.post("/api/sync/android")
+async def sync_android(payload: AndroidSyncPayload):
+    """Full daily refresh: for each date in the payload, delete existing android_events
+    for that day and insert the provided events. Safe to call repeatedly.
+    """
+    total = 0
+    for day, events in payload.days.items():
+        count = await db.sync_android_day(day, [e.model_dump() for e in events])
+        total += count
+    return {"status": "ok", "synced_days": len(payload.days), "synced_events": total}
+
+
+@app.get("/api/android/events")
+async def android_events(target_date: str = Query(None, alias="date")):
+    """Get raw android events for a date (defaults to today)."""
+    d = _parse_date(target_date)
+    rows = await db.get_android_events(d)
+    return {"date": d.isoformat(), "events": rows}
 
 
 # --- Static files for dashboard ---

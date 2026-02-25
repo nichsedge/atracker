@@ -8,8 +8,10 @@ import java.util.UUID
 data class Event(
     @PrimaryKey val id: String = UUID.randomUUID().toString(),
     val packageName: String,
+    val appLabel: String = "",
     val startTimestamp: Long,
     val endTimestamp: Long,
     val durationSecs: Double,
-    val isIdle: Boolean
+    val isIdle: Boolean,
+    val synced: Boolean = false
 )

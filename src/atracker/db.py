@@ -50,9 +50,21 @@ CREATE TABLE IF NOT EXISTS filter_rules (
     title_pattern TEXT NOT NULL DEFAULT ''
 );
 
+CREATE TABLE IF NOT EXISTS android_events (
+    id TEXT PRIMARY KEY NOT NULL,
+    device_id TEXT NOT NULL DEFAULT '',
+    timestamp TEXT NOT NULL DEFAULT '',
+    end_timestamp TEXT NOT NULL DEFAULT '',
+    package_name TEXT NOT NULL DEFAULT '',
+    app_label TEXT NOT NULL DEFAULT '',
+    duration_secs REAL NOT NULL DEFAULT 0,
+    is_idle INTEGER NOT NULL DEFAULT 0
+);
+
 CREATE INDEX IF NOT EXISTS idx_events_timestamp ON events(timestamp);
 CREATE INDEX IF NOT EXISTS idx_events_wm_class ON events(wm_class);
 CREATE INDEX IF NOT EXISTS idx_events_time_idle ON events(timestamp, is_idle);
+CREATE INDEX IF NOT EXISTS idx_android_events_timestamp ON android_events(timestamp);
 """
 
 DEFAULT_CATEGORIES = [
@@ -440,3 +452,56 @@ async def delete_filter_rule(rule_id: str) -> None:
     async with _aconn() as db:
         await db.execute("DELETE FROM filter_rules WHERE id = ?", (rule_id,))
         await db.commit()
+
+
+# --- Android sync ---
+
+async def sync_android_day(day: str, events: list[dict]) -> int:
+    """Delete all android_events for a given date, then insert the provided events.
+    `day` is an ISO date string like '2026-02-25'.
+    Returns the number of rows inserted.
+    """
+    day_start = f"{day}T00:00:00"
+    next_day_dt = date.fromisoformat(day) + timedelta(days=1)
+    day_end = f"{next_day_dt.isoformat()}T00:00:00"
+
+    async with _aconn() as db:
+        await db.execute(
+            "DELETE FROM android_events WHERE timestamp >= ? AND timestamp < ?",
+            (day_start, day_end),
+        )
+        for e in events:
+            await db.execute(
+                """INSERT INTO android_events
+                   (id, device_id, timestamp, end_timestamp, package_name, app_label, duration_secs, is_idle)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    e["id"],
+                    e.get("device_id", ""),
+                    e["timestamp"],
+                    e["end_timestamp"],
+                    e["package_name"],
+                    e.get("app_label", ""),
+                    e["duration_secs"],
+                    int(e.get("is_idle", False)),
+                ),
+            )
+        await db.commit()
+    return len(events)
+
+
+async def get_android_events(target_date: date) -> list[dict]:
+    """Get android events for a specific date."""
+    day_start = f"{target_date.isoformat()}T00:00:00"
+    next_day = target_date + timedelta(days=1)
+    day_end = f"{next_day.isoformat()}T00:00:00"
+    async with _aconn() as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            """SELECT * FROM android_events
+               WHERE timestamp >= ? AND timestamp < ?
+               ORDER BY timestamp""",
+            (day_start, day_end),
+        )
+        rows = await cursor.fetchall()
+        return [dict(r) for r in rows]
