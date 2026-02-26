@@ -28,6 +28,7 @@ data class AndroidEventPayload(
 
 @Serializable
 data class AndroidSyncPayload(
+    val device_name: String,
     val days: Map<String, List<AndroidEventPayload>>
 )
 
@@ -90,7 +91,10 @@ object SyncManager {
         return try {
             val response: HttpResponse = httpClient.post("$baseUrl/api/sync/android") {
                 contentType(ContentType.Application.Json)
-                setBody(AndroidSyncPayload(days = payloadDays))
+                setBody(AndroidSyncPayload(
+                    device_name = android.os.Build.MODEL,
+                    days = payloadDays
+                ))
             }
 
             if (response.status.isSuccess()) {

@@ -60,6 +60,7 @@ class AndroidEvent(BaseModel):
 class AndroidSyncPayload(BaseModel):
     # Map of ISO date -> list of events for that day
     # e.g. {"2026-02-25": [...], "2026-02-24": [...]}
+    device_name: str = ""
     days: dict[str, list[AndroidEvent]]
 
 
@@ -506,6 +507,14 @@ async def sync_android(payload: AndroidSyncPayload):
     for that day and insert the provided events. Safe to call repeatedly.
     """
     total = 0
+    # Register/update device info
+    if payload.days:
+        # Get device_id from the first event of the first day
+        first_day = next(iter(payload.days.values()), [])
+        if first_day:
+            device_id = first_day[0].device_id
+            await db.update_device(device_id, payload.device_name, "Android")
+
     for day, events in payload.days.items():
         count = await db.sync_android_day(day, [e.model_dump() for e in events])
         total += count

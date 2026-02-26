@@ -61,6 +61,13 @@ CREATE TABLE IF NOT EXISTS android_events (
     is_idle INTEGER NOT NULL DEFAULT 0
 );
 
+CREATE TABLE IF NOT EXISTS devices (
+    id TEXT PRIMARY KEY NOT NULL,
+    name TEXT NOT NULL DEFAULT '',
+    platform TEXT NOT NULL DEFAULT '',
+    last_seen TEXT NOT NULL DEFAULT ''
+);
+
 CREATE INDEX IF NOT EXISTS idx_events_timestamp ON events(timestamp);
 CREATE INDEX IF NOT EXISTS idx_events_wm_class ON events(wm_class);
 CREATE INDEX IF NOT EXISTS idx_events_time_idle ON events(timestamp, is_idle);
@@ -169,6 +176,13 @@ async def init_db() -> None:
                 "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)",
                 (key, value)
             )
+
+        # Register local device in devices table
+        local_id = _get_device_id()
+        conn.execute(
+            "INSERT OR IGNORE INTO devices (id, name, platform, last_seen) VALUES (?, ?, ?, ?)",
+            (local_id, "Local Desktop", "Local", datetime.now().isoformat())
+        )
 
         conn.commit()
     finally:
@@ -533,10 +547,18 @@ async def sync_android_day(day: str, events: list[dict]) -> int:
     day_end = f"{next_day_dt.isoformat()}T00:00:00"
 
     async with _aconn() as db:
-        await db.execute(
-            "DELETE FROM android_events WHERE timestamp >= ? AND timestamp < ?",
-            (day_start, day_end),
-        )
+        # We should only delete existing events for the specific device being synced
+        device_id = events[0].get("device_id", "") if events else ""
+        if device_id:
+            await db.execute(
+                "DELETE FROM android_events WHERE timestamp >= ? AND timestamp < ? AND device_id = ?",
+                (day_start, day_end, device_id),
+            )
+        else:
+             await db.execute(
+                "DELETE FROM android_events WHERE timestamp >= ? AND timestamp < ?",
+                (day_start, day_end),
+            )
         for e in events:
             await db.execute(
                 """INSERT INTO android_events
@@ -557,34 +579,61 @@ async def sync_android_day(day: str, events: list[dict]) -> int:
     return len(events)
 
 
+async def update_device(device_id: str, name: str, platform: str):
+    """Register or update a device info."""
+    async with _aconn() as db:
+        await db.execute(
+            """INSERT INTO devices (id, name, platform, last_seen)
+               VALUES (?, ?, ?, ?)
+               ON CONFLICT(id) DO UPDATE SET
+               name = CASE WHEN ? != '' THEN ? ELSE name END,
+               platform = ?,
+               last_seen = ?""",
+            (device_id, name, platform, datetime.now().isoformat(), name, name, platform, datetime.now().isoformat())
+        )
+        await db.commit()
+
+
 async def get_devices() -> list[dict]:
     """Get all unique devices tracked."""
     async with _aconn() as db:
         db.row_factory = aiosqlite.Row
-        # Local device
         local_id = get_device_id()
         
-        # We UNION distinct device_ids from both tables
+        # Prefer names from 'devices' table, fallback to platform, then hardcoded defaults
         cursor = await db.execute(
             """
-            SELECT DISTINCT device_id, 'Local' as platform FROM events
-            UNION
-            SELECT DISTINCT device_id, 'Android' as platform FROM android_events
-            """
+            SELECT ids.device_id, 
+                   COALESCE(NULLIF(d.name, ''), d.platform, 
+                            CASE WHEN ids.device_id LIKE 'android-%' THEN 'Android Device' 
+                                 ELSE 'Local Device' END) as name,
+                   d.platform
+            FROM (
+                SELECT device_id FROM events
+                UNION
+                SELECT device_id FROM android_events
+                UNION
+                SELECT ? -- ensure local device is always included
+            ) ids
+            LEFT JOIN devices d ON ids.device_id = d.id
+            """,
+            (local_id,)
         )
         rows = await cursor.fetchall()
         devices = []
-        seen_ids = set()
         for r in rows:
             d = dict(r)
-            if d["device_id"] == local_id:
-                d["platform"] += " (this device)"
-            devices.append(d)
-            seen_ids.add(d["device_id"])
+            if not d["device_id"]: continue # skip empty IDs if any
             
-        # Ensure local device is always there even if no events yet
-        if local_id not in seen_ids:
-            devices.append({"device_id": local_id, "platform": "Local (this device)"})
+            # Final touch-ups for the UI
+            label = d["name"]
+            if d["device_id"] == local_id:
+                label += " (this device)"
+            
+            devices.append({
+                "device_id": d["device_id"],
+                "platform": label
+            })
             
         return devices
 
