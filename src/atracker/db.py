@@ -73,7 +73,7 @@ DEFAULT_CATEGORIES = [
     ("Editor", "code|Code|antigravity|DBeaver|jetbrains", "", "#8b5cf6", 0, 0, 0),
     ("Communication", "slack|discord|telegram|signal|teams|zoom", "", "#f59e0b", 0, 0, 0),
     ("Files", "nautilus|thunar|dolphin|nemo", "", "#6366f1", 0, 0, 0),
-    ("Media", "vlc|mpv|spotify|rhythmbox|totem", "YouTube|TikTok|Netflix|Disney\+|Spotify|hanime|pahe|twitch", "#ec4899", 0, 0, 0),
+    ("Media", "vlc|mpv|spotify|rhythmbox|totem", "YouTube|TikTok|Netflix|pahe", "#ec4899", 0, 0, 0),
     ("Office", "libreoffice|soffice|evince|okular|obsidian|Google Sheets", "", "#14b8a6", 0, 0, 0),
     ("Social Media", "", "Facebook|Reddit|Instagram|Twitter|\\bX\\b|X\\.com|LinkedIn", "#ef4444", 0, 0, 1),
     ("Research & AI", "", "\\bGemini\\b|ChatGPT|Stack Overflow|GitHub|Arxiv|Claude|Perplexity|DeepSeek", "#818cf8", 0, 0, 0),
