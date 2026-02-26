@@ -163,20 +163,24 @@ async def status():
 
 
 @app.get("/api/events")
-async def events(target_date: str = Query(None, alias="date")):
+async def events(target_date: str = Query(None, alias="date"), devices: str = Query(None)):
     """Get raw events for a date (defaults to today)."""
     d = _parse_date(target_date)
-    rows = await db.get_events(d)
+    device_ids = devices.split(",") if devices else None
+    rows = await db.get_events(d, device_ids=device_ids)
     return {"date": d.isoformat(), "events": rows}
 
 
 @app.get("/api/summary")
-async def summary(target_date: str = Query(None, alias="date")):
+async def summary(target_date: str = Query(None, alias="date"), devices: str = Query(None)):
     """Get per-app usage summary for a date."""
     d = _parse_date(target_date)
-    rows = await db.get_summary(d)
+    device_ids = devices.split(",") if devices else None
+    rows = await db.get_summary(d, device_ids=device_ids)
     
-    if d == date.today():
+    # Only append local "Now Tracking" if local device is in device_ids or no filter
+    local_id = db.get_device_id()
+    if d == date.today() and (not device_ids or local_id in device_ids):
         curr = db.get_current_state()
         if curr and not curr.get("is_idle") and curr.get("wm_class") and curr.get("wm_class") != "__idle__":
             try:
@@ -217,12 +221,15 @@ async def summary(target_date: str = Query(None, alias="date")):
 
 
 @app.get("/api/timeline")
-async def timeline(target_date: str = Query(None, alias="date")):
+async def timeline(target_date: str = Query(None, alias="date"), devices: str = Query(None)):
     """Get timeline blocks for a date."""
     d = _parse_date(target_date)
-    rows = await db.get_timeline(d)
+    device_ids = devices.split(",") if devices else None
+    rows = await db.get_timeline(d, device_ids=device_ids)
     
-    if d == date.today():
+    # Only append local current state if local device is in device_ids or no filter
+    local_id = db.get_device_id()
+    if d == date.today() and (not device_ids or local_id in device_ids):
         curr = db.get_current_state()
         if curr:
             try:
@@ -242,9 +249,10 @@ async def timeline(target_date: str = Query(None, alias="date")):
 
 
 @app.get("/api/history")
-async def history(days: int = Query(7)):
+async def history(days: int = Query(7), devices: str = Query(None)):
     """Get daily totals over N days."""
-    rows = await db.get_daily_totals(days)
+    device_ids = devices.split(",") if devices else None
+    rows = await db.get_daily_totals(days, device_ids=device_ids)
     for row in rows:
         row["active_formatted"] = _format_duration(row["active_secs"])
         row["idle_formatted"] = _format_duration(row["idle_secs"])
@@ -252,11 +260,12 @@ async def history(days: int = Query(7)):
 
 
 @app.get("/api/range/summary")
-async def range_summary(start: str = Query(...), end: str = Query(...)):
+async def range_summary(start: str = Query(...), end: str = Query(...), devices: str = Query(None)):
     """Get per-app usage summary for a date range."""
     s = _parse_date(start)
     e = _parse_date(end)
-    rows = await db.get_summary_range(s, e)
+    device_ids = devices.split(",") if devices else None
+    rows = await db.get_summary_range(s, e, device_ids=device_ids)
     
     # We don't append "Now Tracking" for ranges as it's usually historical
     categories = await db.get_categories()
@@ -269,15 +278,17 @@ async def range_summary(start: str = Query(...), end: str = Query(...)):
 
 
 @app.get("/api/range/history")
-async def range_history(start: str = Query(...), end: str = Query(...)):
+async def range_history(start: str = Query(...), end: str = Query(...), devices: str = Query(None)):
     """Get daily totals for a date range."""
     s = _parse_date(start)
     e = _parse_date(end)
-    rows = await db.get_daily_totals_range(s, e)
+    device_ids = devices.split(",") if devices else None
+    rows = await db.get_daily_totals_range(s, e, device_ids=device_ids)
     for row in rows:
         row["active_formatted"] = _format_duration(row["active_secs"])
         row["idle_formatted"] = _format_duration(row["idle_secs"])
     return {"start": s.isoformat(), "end": e.isoformat(), "history": rows}
+
 
 
 @app.get("/api/export")
@@ -501,12 +512,11 @@ async def sync_android(payload: AndroidSyncPayload):
     return {"status": "ok", "synced_days": len(payload.days), "synced_events": total}
 
 
-@app.get("/api/android/events")
-async def android_events(target_date: str = Query(None, alias="date")):
-    """Get raw android events for a date (defaults to today)."""
-    d = _parse_date(target_date)
-    rows = await db.get_android_events(d)
-    return {"date": d.isoformat(), "events": rows}
+@app.get("/api/devices")
+async def get_devices():
+    """Get all unique devices tracked."""
+    return await db.get_devices()
+
 
 
 # --- Static files for dashboard ---

@@ -123,6 +123,25 @@ body {
     color: var(--text-primary);
 }
 
+.device-filter-item {
+    transition: background 0.2s, transform 0.1s;
+    padding: 6px 10px;
+    border-radius: var(--radius-sm);
+}
+
+.device-filter-item:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.device-filter-item:active {
+    transform: scale(0.98);
+}
+
+.device-filter-item input:checked + div span:first-child {
+    font-weight: 600;
+    color: var(--accent-indigo);
+}
+
 .nav-link.active {
     background: linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(139, 92, 246, 0.08));
     color: var(--text-accent);

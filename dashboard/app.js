@@ -7,6 +7,7 @@ const API = '';  // Same origin
 
 // State
 let currentView = 'today';
+let selectedDevices = [];
 let ws = null;
 let reconnectTimer = null;
 
@@ -20,6 +21,7 @@ document.addEventListener('DOMContentLoaded', () => {
     loadView('today');
     initWebSocket();
     initPauseControls();
+    initDevices();
     checkNotificationPermission();
 });
 
@@ -57,6 +59,14 @@ function setupNavigation() {
     document.getElementById('btn-close-comparison')?.addEventListener('click', () => {
         document.getElementById('comparison-card').style.display = 'none';
     });
+
+    // Device filters event delegation
+    document.getElementById('device-filters')?.addEventListener('change', (e) => {
+        if (e.target.type === 'checkbox') {
+            updateSelectedDevices();
+            loadView(currentView);
+        }
+    });
 }
 
 function switchView(view) {
@@ -90,10 +100,11 @@ function loadView(view) {
 // ============ Today View ============
 
 async function loadToday() {
+    const devicesParam = selectedDevices.length > 0 ? `?devices=${selectedDevices.join(',')}` : '';
     try {
         const [summaryRes, timelineRes, statusRes, metricsRes] = await Promise.all([
-            fetchAPI('/api/summary'),
-            fetchAPI('/api/timeline'),
+            fetchAPI(`/api/summary${devicesParam}`),
+            fetchAPI(`/api/timeline${devicesParam}`),
             fetchAPI('/api/status'),
             fetchAPI('/api/metrics'),
         ]);
@@ -350,6 +361,7 @@ function updateNowTracking(timeline) {
 // ============ History View ============
 
 async function loadHistory() {
+    const devicesParam = selectedDevices.length > 0 ? `&devices=${selectedDevices.join(',')}` : '';
     try {
         const period = document.getElementById('history-period')?.value || '7';
         let res;
@@ -358,10 +370,10 @@ async function loadHistory() {
             const start = document.getElementById('range-start').value;
             const end = document.getElementById('range-end').value;
             if (!start || !end) return;
-            res = await fetchAPI(`/api/range/history?start=${start}&end=${end}`);
+            res = await fetchAPI(`/api/range/history?start=${start}&end=${end}${devicesParam}`);
         } else {
             const days = parseInt(period);
-            res = await fetchAPI(`/api/history?days=${days}`);
+            res = await fetchAPI(`/api/history?days=${days}${devicesParam}`);
         }
 
         renderHistoryChart(res.history);
@@ -491,6 +503,49 @@ function renderHistoryTable(history) {
             </div>
         </div>
     `).join('');
+}
+
+
+// ============ Device Management ============
+
+async function initDevices() {
+    try {
+        const devices = await fetchAPI('/api/devices');
+        renderDeviceFilters(devices);
+        // Initially select all devices
+        selectedDevices = devices.map(d => d.device_id);
+    } catch (err) {
+        console.error('Failed to load devices:', err);
+    }
+}
+
+function renderDeviceFilters(devices) {
+    const container = document.getElementById('device-filters');
+    if (!container) return;
+
+    if (!devices || devices.length === 0) {
+        container.innerHTML = '<div class="usage-empty">No devices found</div>';
+        return;
+    }
+
+    container.innerHTML = devices.map(d => `
+        <label class="device-filter-item" style="display: flex; align-items: center; gap: 0.5rem; font-size: 13px; color: var(--text-primary); cursor: pointer; user-select: none;">
+            <input type="checkbox" value="${d.device_id}" checked style="width: 14px; height: 14px; accent-color: var(--accent);">
+            <div style="display: flex; flex-direction: column;">
+                <span>${d.platform}</span>
+                <span style="font-size: 10px; color: var(--text-secondary);">${d.device_id.substring(0, 8)}...</span>
+            </div>
+        </label>
+    `).join('');
+}
+
+function updateSelectedDevices() {
+    const container = document.getElementById('device-filters');
+    if (!container) return;
+    const checkboxes = container.querySelectorAll('input[type="checkbox"]');
+    selectedDevices = Array.from(checkboxes)
+        .filter(cb => cb.checked)
+        .map(cb => cb.value);
 }
 
 

@@ -241,110 +241,179 @@ async def prune_events(days_to_keep: int) -> int:
         return deleted_count
 
 
-async def get_events(target_date: date) -> list[dict]:
-    """Get all events for a specific date."""
+async def get_events(target_date: date, device_ids: list[str] | None = None) -> list[dict]:
+    """Get all events for a specific date (unified)."""
     day_start = f"{target_date.isoformat()}T00:00:00"
     next_day = target_date + timedelta(days=1)
     next_day_start = f"{next_day.isoformat()}T00:00:00"
+
+    where_clause = "WHERE timestamp >= ? AND timestamp < ?"
+    params = [day_start, next_day_start]
+
+    if device_ids:
+        placeholders = ",".join(["?"] * len(device_ids))
+        where_clause += f" AND device_id IN ({placeholders})"
+        params.extend(device_ids)
+
     async with _aconn() as db:
         db.row_factory = aiosqlite.Row
         cursor = await db.execute(
-            """SELECT * FROM events
-               WHERE timestamp >= ? AND timestamp < ?
-               ORDER BY timestamp""",
-            (day_start, next_day_start),
+            f"""WITH combined_events AS (
+                SELECT id, device_id, 'local' as platform, timestamp, end_timestamp, wm_class, title, pid, duration_secs, is_idle FROM events
+                UNION ALL
+                SELECT id, device_id, 'android' as platform, timestamp, end_timestamp, package_name as wm_class, app_label as title, 0 as pid, duration_secs, is_idle FROM android_events
+            )
+            SELECT * FROM combined_events
+            {where_clause}
+            ORDER BY timestamp""",
+            params,
         )
         rows = await cursor.fetchall()
         return [dict(r) for r in rows]
 
 
-async def get_summary_range(start_date: date, end_date: date) -> list[dict]:
-    """Get per-app usage summary for a date range (inclusive)."""
+async def get_summary_range(start_date: date, end_date: date, device_ids: list[str] | None = None) -> list[dict]:
+    """Get per-app usage summary for a date range (unified)."""
     range_start = f"{start_date.isoformat()}T00:00:00"
     next_day = end_date + timedelta(days=1)
     range_end = f"{next_day.isoformat()}T00:00:00"
+
+    where_clause = "WHERE timestamp >= ? AND timestamp < ? AND is_idle = 0 AND wm_class != ''"
+    params = [range_start, range_end]
+
+    if device_ids:
+        placeholders = ",".join(["?"] * len(device_ids))
+        where_clause += f" AND device_id IN ({placeholders})"
+        params.extend(device_ids)
+
     async with _aconn() as db:
         db.row_factory = aiosqlite.Row
         cursor = await db.execute(
-            """SELECT wm_class, title,
-                      SUM(duration_secs) as total_secs,
-                      COUNT(*) as event_count,
-                      MIN(timestamp) as first_seen,
-                      MAX(end_timestamp) as last_seen
-               FROM events
-               WHERE timestamp >= ? AND timestamp < ? AND is_idle = 0 AND wm_class != ''
-               GROUP BY wm_class, title
-               ORDER BY total_secs DESC""",
-            (range_start, range_end),
+            f"""WITH combined_events AS (
+                SELECT device_id, timestamp, end_timestamp, wm_class, title, duration_secs, is_idle FROM events
+                UNION ALL
+                SELECT device_id, timestamp, end_timestamp, package_name as wm_class, app_label as title, duration_secs, is_idle FROM android_events
+            )
+            SELECT wm_class, title,
+                   SUM(duration_secs) as total_secs,
+                   COUNT(*) as event_count,
+                   MIN(timestamp) as first_seen,
+                   MAX(end_timestamp) as last_seen
+            FROM combined_events
+            {where_clause}
+            GROUP BY wm_class, title
+            ORDER BY total_secs DESC""",
+            params,
         )
         rows = await cursor.fetchall()
         return [dict(r) for r in rows]
 
 
-async def get_timeline_range(start_date: date, end_date: date) -> list[dict]:
-    """Get timeline blocks for a date range."""
+async def get_timeline_range(start_date: date, end_date: date, device_ids: list[str] | None = None) -> list[dict]:
+    """Get timeline blocks for a date range (unified)."""
     range_start = f"{start_date.isoformat()}T00:00:00"
     next_day = end_date + timedelta(days=1)
     range_end = f"{next_day.isoformat()}T00:00:00"
+
+    where_clause = "WHERE timestamp >= ? AND timestamp < ?"
+    params = [range_start, range_end]
+
+    if device_ids:
+        placeholders = ",".join(["?"] * len(device_ids))
+        where_clause += f" AND device_id IN ({placeholders})"
+        params.extend(device_ids)
+
     async with _aconn() as db:
         db.row_factory = aiosqlite.Row
         cursor = await db.execute(
-            """SELECT timestamp, end_timestamp, wm_class, title, duration_secs, is_idle
-               FROM events
-               WHERE timestamp >= ? AND timestamp < ?
-               ORDER BY timestamp""",
-            (range_start, range_end),
+            f"""WITH combined_events AS (
+                SELECT device_id, timestamp, end_timestamp, wm_class, title, duration_secs, is_idle FROM events
+                UNION ALL
+                SELECT device_id, timestamp, end_timestamp, package_name as wm_class, app_label as title, duration_secs, is_idle FROM android_events
+            )
+            SELECT timestamp, end_timestamp, wm_class, title, duration_secs, is_idle, device_id
+            FROM combined_events
+            {where_clause}
+            ORDER BY timestamp""",
+            params,
         )
         rows = await cursor.fetchall()
         return [dict(r) for r in rows]
 
 
-async def get_timeline(target_date: date) -> list[dict]:
-    """Get timeline blocks for visualization."""
-    return await get_timeline_range(target_date, target_date)
+async def get_timeline(target_date: date, device_ids: list[str] | None = None) -> list[dict]:
+    """Get timeline blocks for visualization (unified)."""
+    return await get_timeline_range(target_date, target_date, device_ids)
 
 
-async def get_summary(target_date: date) -> list[dict]:
-    """Get per-app usage summary for a specific date."""
-    return await get_summary_range(target_date, target_date)
+async def get_summary(target_date: date, device_ids: list[str] | None = None) -> list[dict]:
+    """Get per-app usage summary for a specific date (unified)."""
+    return await get_summary_range(target_date, target_date, device_ids)
 
 
-async def get_daily_totals(days: int = 7) -> list[dict]:
-    """Get daily usage totals over last N days."""
+async def get_daily_totals(days: int = 7, device_ids: list[str] | None = None) -> list[dict]:
+    """Get daily usage totals over last N days (unified)."""
+    where_clause = "WHERE timestamp >= DATE('now', ?)"
+    params = [f"-{days} days"]
+
+    if device_ids:
+        placeholders = ",".join(["?"] * len(device_ids))
+        where_clause += f" AND device_id IN ({placeholders})"
+        params.extend(device_ids)
+
     async with _aconn() as db:
         db.row_factory = aiosqlite.Row
         cursor = await db.execute(
-            """SELECT DATE(timestamp) as day,
-                      SUM(CASE WHEN is_idle = 0 THEN duration_secs ELSE 0 END) as active_secs,
-                      SUM(CASE WHEN is_idle = 1 THEN duration_secs ELSE 0 END) as idle_secs,
-                      COUNT(*) as event_count
-               FROM events
-               WHERE timestamp >= DATE('now', ?)
-               GROUP BY DATE(timestamp)
-               ORDER BY day DESC""",
-            (f"-{days} days",),
+            f"""WITH combined_events AS (
+                SELECT device_id, timestamp, duration_secs, is_idle FROM events
+                UNION ALL
+                SELECT device_id, timestamp, duration_secs, is_idle FROM android_events
+            )
+            SELECT DATE(timestamp) as day,
+                   SUM(CASE WHEN is_idle = 0 THEN duration_secs ELSE 0 END) as active_secs,
+                   SUM(CASE WHEN is_idle = 1 THEN duration_secs ELSE 0 END) as idle_secs,
+                   COUNT(*) as event_count
+            FROM combined_events
+            {where_clause}
+            GROUP BY DATE(timestamp)
+            ORDER BY day DESC""",
+            params,
         )
         rows = await cursor.fetchall()
         return [dict(r) for r in rows]
 
 
-async def get_daily_totals_range(start_date: date, end_date: date) -> list[dict]:
-    """Get daily usage totals over a specific range."""
+async def get_daily_totals_range(start_date: date, end_date: date, device_ids: list[str] | None = None) -> list[dict]:
+    """Get daily usage totals over a specific range (unified)."""
     range_start = f"{start_date.isoformat()}T00:00:00"
     next_day = end_date + timedelta(days=1)
     range_end = f"{next_day.isoformat()}T00:00:00"
+
+    where_clause = "WHERE timestamp >= ? AND timestamp < ?"
+    params = [range_start, range_end]
+
+    if device_ids:
+        placeholders = ",".join(["?"] * len(device_ids))
+        where_clause += f" AND device_id IN ({placeholders})"
+        params.extend(device_ids)
+
     async with _aconn() as db:
         db.row_factory = aiosqlite.Row
         cursor = await db.execute(
-            """SELECT DATE(timestamp) as day,
-                      SUM(CASE WHEN is_idle = 0 THEN duration_secs ELSE 0 END) as active_secs,
-                      SUM(CASE WHEN is_idle = 1 THEN duration_secs ELSE 0 END) as idle_secs,
-                      COUNT(*) as event_count
-               FROM events
-               WHERE timestamp >= ? AND timestamp < ?
-               GROUP BY DATE(timestamp)
-               ORDER BY day DESC""",
-            (range_start, range_end),
+            f"""WITH combined_events AS (
+                SELECT device_id, timestamp, duration_secs, is_idle FROM events
+                UNION ALL
+                SELECT device_id, timestamp, duration_secs, is_idle FROM android_events
+            )
+            SELECT DATE(timestamp) as day,
+                   SUM(CASE WHEN is_idle = 0 THEN duration_secs ELSE 0 END) as active_secs,
+                   SUM(CASE WHEN is_idle = 1 THEN duration_secs ELSE 0 END) as idle_secs,
+                   COUNT(*) as event_count
+            FROM combined_events
+            {where_clause}
+            GROUP BY DATE(timestamp)
+            ORDER BY day DESC""",
+            params,
         )
         rows = await cursor.fetchall()
         return [dict(r) for r in rows]
@@ -454,8 +523,6 @@ async def delete_filter_rule(rule_id: str) -> None:
         await db.commit()
 
 
-# --- Android sync ---
-
 async def sync_android_day(day: str, events: list[dict]) -> int:
     """Delete all android_events for a given date, then insert the provided events.
     `day` is an ISO date string like '2026-02-25'.
@@ -490,18 +557,34 @@ async def sync_android_day(day: str, events: list[dict]) -> int:
     return len(events)
 
 
-async def get_android_events(target_date: date) -> list[dict]:
-    """Get android events for a specific date."""
-    day_start = f"{target_date.isoformat()}T00:00:00"
-    next_day = target_date + timedelta(days=1)
-    day_end = f"{next_day.isoformat()}T00:00:00"
+async def get_devices() -> list[dict]:
+    """Get all unique devices tracked."""
     async with _aconn() as db:
         db.row_factory = aiosqlite.Row
+        # Local device
+        local_id = get_device_id()
+        
+        # We UNION distinct device_ids from both tables
         cursor = await db.execute(
-            """SELECT * FROM android_events
-               WHERE timestamp >= ? AND timestamp < ?
-               ORDER BY timestamp""",
-            (day_start, day_end),
+            """
+            SELECT DISTINCT device_id, 'Local' as platform FROM events
+            UNION
+            SELECT DISTINCT device_id, 'Android' as platform FROM android_events
+            """
         )
         rows = await cursor.fetchall()
-        return [dict(r) for r in rows]
+        devices = []
+        seen_ids = set()
+        for r in rows:
+            d = dict(r)
+            if d["device_id"] == local_id:
+                d["platform"] += " (this device)"
+            devices.append(d)
+            seen_ids.add(d["device_id"])
+            
+        # Ensure local device is always there even if no events yet
+        if local_id not in seen_ids:
+            devices.append({"device_id": local_id, "platform": "Local (this device)"})
+            
+        return devices
+

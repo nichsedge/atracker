@@ -28,6 +28,17 @@
                 <span class="brand-text">atracker</span>
             </div>
 
+            <div class="sidebar-label"
+                style="margin: 2rem 1.5rem 0.5rem; font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--text-secondary); letter-spacing: 0.05em;">
+                Devices</div>
+            <div id="device-filters" class="device-filters-container"
+                style="padding: 0 1.5rem 1rem; display: flex; flex-direction: column; gap: 0.5rem;">
+                <!-- Dynamically populated -->
+            </div>
+
+            <div class="sidebar-label"
+                style="margin: 0.5rem 1.5rem; font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--text-secondary); letter-spacing: 0.05em;">
+                Views</div>
             <div class="nav-links">
                 <a href="#" class="nav-link active" data-view="today" id="nav-today">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -221,6 +232,8 @@
                     <button class="btn btn-secondary" id="btn-toggle-comparison" onclick="prepareComparison()">Compare
                         with another period</button>
                 </div>
+            </section>
+
             </section>
 
             <!-- Settings View -->
