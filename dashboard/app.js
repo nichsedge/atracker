@@ -587,16 +587,16 @@ function renderCategories(categories) {
     container.innerHTML = categories.map(cat => `
         <div class="category-row">
             <div class="category-color" style="background: ${cat.color}"></div>
-            <div class="category-info" style="flex: 1; min-width: 0;">
-                <div class="category-name">${escapeHtml(cat.name)} ${cat.is_case_sensitive ? '<span style="font-size: 10px; background: var(--border-active); color: var(--text-accent); padding: 1px 4px; border-radius: 4px; margin-left: 6px;">CS</span>' : ''}</div>
-                <div class="category-patterns" style="font-size: 11px; color: var(--text-secondary); opacity: 0.8;">
-                    ${cat.wm_class_pattern ? `<span>Class: <b>${escapeHtml(cat.wm_class_pattern)}</b></span>` : ''}
-                    ${cat.title_pattern ? `<span style="margin-left: 8px;">Title: <b>${escapeHtml(cat.title_pattern)}</b></span>` : ''}
+            <div class="category-info">
+                <div class="category-name">${escapeHtml(cat.name)} ${cat.is_case_sensitive ? '<span class="badge-cs">CS</span>' : ''}</div>
+                <div class="category-patterns">
+                    ${cat.wm_class_pattern ? `<div class="pattern-item"><span class="label">Class</span><b>${escapeHtml(cat.wm_class_pattern)}</b></div>` : ''}
+                    ${cat.title_pattern ? `<div class="pattern-item"><span class="label">Title</span><b>${escapeHtml(cat.title_pattern)}</b></div>` : ''}
                 </div>
             </div>
             <div class="category-actions">
-                <button class="btn btn-secondary" style="padding: 4px 8px; font-size: 11px;" onclick="editCategory('${cat.id}')">Edit</button>
-                <button class="btn btn-danger" style="padding: 4px 8px; font-size: 11px;" onclick="deleteCategory('${cat.id}')">Delete</button>
+                <button class="btn btn-secondary" onclick="editCategory('${cat.id}')">Edit</button>
+                <button class="btn btn-danger" onclick="deleteCategory('${cat.id}')">Delete</button>
             </div>
         </div>
     `).join('');
@@ -617,6 +617,7 @@ function setupCategoryEvents() {
     btnAdd?.addEventListener('click', () => {
         document.getElementById('modal-title').textContent = 'Add Category';
         form.reset();
+        clearRegexErrors();
         document.getElementById('cat-id').value = '';
         document.getElementById('cat-pattern').value = '';
         document.getElementById('cat-title-pattern').value = '';
@@ -633,6 +634,35 @@ function setupCategoryEvents() {
     colorInput?.addEventListener('input', (e) => {
         colorHex.textContent = e.target.value;
     });
+
+    // Real-time Regex Validation
+    const validateRegexInputs = (inputIds) => {
+        inputIds.forEach(id => {
+            const input = document.getElementById(id);
+            const error = document.getElementById(`${id}-error`);
+            input?.addEventListener('input', () => {
+                const val = input.value;
+                if (!val) {
+                    input.classList.remove('invalid');
+                    if (error) error.style.display = 'none';
+                    return;
+                }
+                try {
+                    new RegExp(val);
+                    input.classList.remove('invalid');
+                    if (error) error.style.display = 'none';
+                } catch (e) {
+                    input.classList.add('invalid');
+                    if (error) {
+                        error.style.display = 'block';
+                        error.textContent = `Invalid regex: ${e.message}`;
+                    }
+                }
+            });
+        });
+    };
+
+    validateRegexInputs(['cat-pattern', 'cat-title-pattern', 'rule-class', 'rule-title']);
 
     form?.addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -735,6 +765,7 @@ function setupSettingsEvents() {
     const ruleForm = document.getElementById('rule-form');
     document.getElementById('btn-add-rule')?.addEventListener('click', () => {
         ruleForm.reset();
+        clearRegexErrors();
         ruleModal.style.display = 'flex';
     });
     document.getElementById('btn-close-rule-modal')?.addEventListener('click', () => ruleModal.style.display = 'none');
@@ -762,6 +793,7 @@ window.editCategory = function (id) {
     if (!cat) return;
 
     document.getElementById('modal-title').textContent = 'Edit Category';
+    clearRegexErrors();
     document.getElementById('cat-id').value = id;
     document.getElementById('cat-name').value = cat.name;
     document.getElementById('cat-pattern').value = cat.wm_class_pattern || '';
@@ -980,11 +1012,11 @@ function renderPrivacyRules(rules) {
             <span class="rule-type-tag ${rule.rule_type}">${rule.rule_type}</span>
             <div class="rule-details">
                 <div class="rule-patterns">
-                    ${rule.wm_class_pattern ? `<span>Class: <b>${escapeHtml(rule.wm_class_pattern)}</b></span>` : ''}
-                    ${rule.title_pattern ? `<span>Title: <b>${escapeHtml(rule.title_pattern)}</b></span>` : ''}
+                    ${rule.wm_class_pattern ? `<div class="pattern-item"><span class="label">Class</span><b>${escapeHtml(rule.wm_class_pattern)}</b></div>` : ''}
+                    ${rule.title_pattern ? `<div class="pattern-item"><span class="label">Title</span><b>${escapeHtml(rule.title_pattern)}</b></div>` : ''}
                 </div>
             </div>
-            <button class="btn btn-danger" style="padding: 4px 8px; font-size: 11px;" onclick="deleteRule('${rule.id}')">Delete</button>
+            <button class="btn btn-danger" onclick="deleteRule('${rule.id}')">Delete</button>
         </div>
     `).join('');
 }
@@ -1068,3 +1100,12 @@ function escapeHtml(str) {
     if (!str) return '';
     return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
+
+function clearRegexErrors() {
+    document.querySelectorAll('.regex-input').forEach(input => {
+        input.classList.remove('invalid');
+        const error = document.getElementById(`${input.id}-error`);
+        if (error) error.style.display = 'none';
+    });
+}
+

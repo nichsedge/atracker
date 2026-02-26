@@ -9,7 +9,9 @@
     <title>atracker — Activity Dashboard</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap"
+        rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
 
@@ -321,13 +323,34 @@
                         <label for="cat-name">Name</label>
                         <input type="text" id="cat-name" required placeholder="e.g. Browser">
                     </div>
+                    <div class="modal-divider"
+                        style="margin: 1.5rem 0 1rem; border-top: 1px solid var(--border-subtle); position: relative;">
+                        <span
+                            style="position: absolute; top: -10px; left: 10px; background: var(--bg-card); padding: 0 8px; font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Matching
+                            Rules</span>
+                    </div>
                     <div class="form-group">
-                        <label for="cat-pattern">Regex Pattern (wm_class)</label>
-                        <input type="text" id="cat-pattern" placeholder="e.g. firefox|chrome">
+                        <label for="cat-pattern">Application Pattern (WM Class Regex)</label>
+                        <p style="font-size: 11px; color: var(--text-muted); margin-top: -4px; margin-bottom: 4px;">
+                            Matches the application binary name. Examples: <code>firefox|chrome</code>,
+                            <code>code</code>, <code>spotify</code>
+                        </p>
+                        <div class="regex-wrapper">
+                            <input type="text" id="cat-pattern" class="regex-input" placeholder="e.g. firefox|chrome">
+                        </div>
+                        <div class="regex-error" id="cat-pattern-error">Invalid regular expression</div>
                     </div>
                     <div class="form-group">
                         <label for="cat-title-pattern">Window Title Pattern (Regex)</label>
-                        <input type="text" id="cat-title-pattern" placeholder="e.g. YouTube|Google Search">
+                        <p style="font-size: 11px; color: var(--text-muted); margin-top: -4px; margin-bottom: 4px;">
+                            Matches the window title text. Examples: <code>YouTube|Netflix</code>,
+                            <code>Google Search</code>
+                        </p>
+                        <div class="regex-wrapper">
+                            <input type="text" id="cat-title-pattern" class="regex-input"
+                                placeholder="e.g. YouTube|Google Search">
+                        </div>
+                        <div class="regex-error" id="cat-title-pattern-error">Invalid regular expression</div>
                     </div>
                     <div class="form-group" style="flex-direction: row; align-items: center; gap: 8px;">
                         <input type="checkbox" id="cat-case-sensitive" style="width: auto;">
@@ -377,13 +400,32 @@
                             <option value="redact">Redact (Log as [Redacted])</option>
                         </select>
                     </div>
+                    <div class="modal-divider"
+                        style="margin: 1.5rem 0 1rem; border-top: 1px solid var(--border-subtle); position: relative;">
+                        <span
+                            style="position: absolute; top: -10px; left: 10px; background: var(--bg-card); padding: 0 8px; font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Matching
+                            Rules</span>
+                    </div>
                     <div class="form-group">
-                        <label for="rule-class">WM Class Pattern (Regex)</label>
-                        <input type="text" id="rule-class" placeholder="e.g. firefox|chrome">
+                        <label for="rule-class">Application Pattern (WM Class Regex)</label>
+                        <p style="font-size: 11px; color: var(--text-muted); margin-top: -4px; margin-bottom: 4px;">
+                            Matches the application binary name. Examples: <code>firefox|chrome</code>,
+                            <code>code</code>, <code>spotify</code></p>
+                        <div class="regex-wrapper">
+                            <input type="text" id="rule-class" class="regex-input" placeholder="e.g. firefox|chrome">
+                        </div>
+                        <div class="regex-error" id="rule-class-error">Invalid regular expression</div>
                     </div>
                     <div class="form-group">
                         <label for="rule-title">Window Title Pattern (Regex)</label>
-                        <input type="text" id="rule-title" placeholder="e.g. Private Browsing|Incognito">
+                        <p style="font-size: 11px; color: var(--text-muted); margin-top: -4px; margin-bottom: 4px;">
+                            Matches the window title text. Examples: <code>YouTube|Netflix</code>,
+                            <code>Google Search</code></p>
+                        <div class="regex-wrapper">
+                            <input type="text" id="rule-title" class="regex-input"
+                                placeholder="e.g. Private Browsing|Incognito">
+                        </div>
+                        <div class="regex-error" id="rule-title-error">Invalid regular expression</div>
                     </div>
                     <div class="modal-actions"
                         style="margin-top: 2rem; display: flex; justify-content: flex-end; gap: 1rem;">
