@@ -44,6 +44,9 @@ class TrackerService : Service() {
         isRunning = true
         createNotificationChannel()
         startForeground(1, createNotification())
+        // Schedule the AlarmManager watchdog. AlarmManager lives in the system process,
+        // so this alarm fires even after our process is killed by "Clear All".
+        ServiceRestartReceiver.schedule(this)
 
         val filter = IntentFilter().apply {
             addAction(Intent.ACTION_SCREEN_OFF)
@@ -129,34 +132,62 @@ class TrackerService : Service() {
     }
 
     private fun createNotificationChannel() {
-        // IMPORTANCE_MIN = no sound, no status bar icon — appears only if shade pulled down.
-        // This is the least intrusive channel Android allows for a foreground service.
+        // IMPORTANCE_LOW = silent, no sound, no banner, but notification persists in shade.
+        // IMPORTANCE_MIN gets dismissed by some OEMs when the task is removed from recents.
         val channel = NotificationChannel(
-            "tracker_channel",
+            "tracker_channel_v2",
             "Activity Tracker",
-            NotificationManager.IMPORTANCE_MIN
+            NotificationManager.IMPORTANCE_LOW
         ).apply {
             description = "Background activity tracking"
             setShowBadge(false)
+            setSound(null, null)
+            enableVibration(false)
         }
         getSystemService(NotificationManager::class.java)
             .createNotificationChannel(channel)
     }
 
     private fun createNotification(): Notification {
-        return NotificationCompat.Builder(this, "tracker_channel")
+        return NotificationCompat.Builder(this, "tracker_channel_v2")
             .setContentTitle("atracker")
             .setContentText("Running in background")
             .setSmallIcon(android.R.drawable.ic_menu_recent_history)
-            .setPriority(NotificationCompat.PRIORITY_MIN)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true)
             .setSilent(true)
+            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .build()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         // START_STICKY: restart the service if killed, without re-delivering the intent
         return START_STICKY
+    }
+
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        // Re-assert startForeground immediately so the notification is not dismissed
+        // by the OS when the task is removed from Recents.
+        startForeground(1, createNotification())
+
+        // Belt-and-suspenders: also schedule a restart via AlarmManager in case the
+        // service is killed by the OEM battery manager shortly after task removal.
+        val restartServiceIntent = Intent(applicationContext, TrackerService::class.java).apply {
+            setPackage(packageName)
+        }
+        val restartServicePendingIntent = android.app.PendingIntent.getForegroundService(
+            this,
+            1,
+            restartServiceIntent,
+            android.app.PendingIntent.FLAG_ONE_SHOT or android.app.PendingIntent.FLAG_IMMUTABLE
+        )
+        val alarmService = getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager
+        alarmService.set(
+            android.app.AlarmManager.ELAPSED_REALTIME,
+            android.os.SystemClock.elapsedRealtime() + 3000,
+            restartServicePendingIntent
+        )
+        super.onTaskRemoved(rootIntent)
     }
 
     override fun onBind(intent: Intent?): IBinder? = null

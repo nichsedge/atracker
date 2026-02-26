@@ -33,6 +33,7 @@
             android:name=".TrackerService"
             android:enabled="true"
             android:exported="false"
+            android:stopWithTask="false"
             android:foregroundServiceType="specialUse">
             <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Usage tracking for productivity and digital wellbeing" />
@@ -47,6 +48,10 @@
                 <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
             </intent-filter>
         </receiver>
+
+        <receiver
+            android:name=".ServiceRestartReceiver"
+            android:exported="false" />
 
     </application>
 

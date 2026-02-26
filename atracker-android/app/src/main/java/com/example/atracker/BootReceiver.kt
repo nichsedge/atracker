@@ -14,7 +14,10 @@ class BootReceiver : BroadcastReceiver() {
             val serviceIntent = Intent(context, TrackerService::class.java)
             ContextCompat.startForegroundService(context, serviceIntent)
 
-            // Also (re-)schedule the watchdog in case it was wiped
+            // Schedule the AlarmManager watchdog (60s interval)
+            ServiceRestartReceiver.schedule(context)
+
+            // Also (re-)schedule the WorkManager watchdog in case it was wiped
             WatchdogWorker.schedule(context)
         }
     }
