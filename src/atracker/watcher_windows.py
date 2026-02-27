@@ -247,3 +247,5 @@ async def run_watcher(poll_interval=None, idle_threshold=None):
         await watcher.start()
     except KeyboardInterrupt:
         await watcher.stop()
+    finally:
+        await db.close_db()

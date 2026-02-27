@@ -34,6 +34,7 @@ class Watcher:
         self._last_poll_time: datetime | None = None
         self._is_idle = False
         self._filter_rules = []
+        self._stop_event = asyncio.Event()
         
         # Configuration
         self._poll_interval = poll_interval or DEFAULT_POLL_INTERVAL
@@ -82,7 +83,11 @@ class Watcher:
                 self._last_poll_time = datetime.now()
             except Exception as e:
                 logger.exception("Poll error (will retry)")
-            await asyncio.sleep(self._poll_interval)
+            
+            try:
+                await asyncio.wait_for(self._stop_event.wait(), timeout=self._poll_interval)
+            except asyncio.TimeoutError:
+                pass
 
     async def _refresh_settings(self):
         """Refresh poll_interval and idle_threshold from database every 60s."""
@@ -115,6 +120,7 @@ class Watcher:
         """Stop the watcher and flush the current event."""
         logger.info("Stopping watcher...")
         self._running = False
+        self._stop_event.set()
         await self._flush_current_event()
         if self._bus:
             self._bus.disconnect()
@@ -338,4 +344,7 @@ async def run_watcher(poll_interval=None, idle_threshold=None):
         datefmt="%H:%M:%S",
     )
     watcher = Watcher(poll_interval=poll_interval, idle_threshold=idle_threshold)
-    await watcher.start()
+    try:
+        await watcher.start()
+    finally:
+        await db.close_db()

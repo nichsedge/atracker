@@ -192,6 +192,15 @@ async def init_db() -> None:
 _db_conn = None
 
 
+async def close_db():
+    """Close the async database connection."""
+    global _db_conn
+    if _db_conn is not None:
+        await _db_conn.close()
+        _db_conn = None
+
+
+
 async def get_db() -> aiosqlite.Connection:
     """Get an async database connection."""
     global _db_conn
