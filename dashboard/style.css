@@ -1215,3 +1215,91 @@ body {
     margin-left: auto;
     flex-shrink: 0;
 }
+
+/* ============ Flatpickr Custom Styles ============ */
+.flatpickr-calendar {
+    background: var(--bg-card) !important;
+    backdrop-filter: blur(20px) !important;
+    border: 1px solid var(--border-subtle) !important;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5) !important;
+    border-radius: var(--radius) !important;
+    font-family: inherit !important;
+}
+
+.flatpickr-calendar.arrowTop:before, 
+.flatpickr-calendar.arrowTop:after {
+    border-bottom-color: var(--border-subtle) !important;
+}
+
+.flatpickr-day.selected, 
+.flatpickr-day.startRange, 
+.flatpickr-day.endRange, 
+.flatpickr-day.selected.inRange, 
+.flatpickr-day.startRange.inRange, 
+.flatpickr-day.endRange.inRange, 
+.flatpickr-day.selected:focus, 
+.flatpickr-day.startRange:focus, 
+.flatpickr-day.endRange:focus, 
+.flatpickr-day.selected:hover, 
+.flatpickr-day.startRange:hover, 
+.flatpickr-day.endRange:hover, 
+.flatpickr-day.prevMonthDay.selected, 
+.flatpickr-day.prevMonthDay.startRange, 
+.flatpickr-day.prevMonthDay.endRange, 
+.flatpickr-day.prevMonthDay.selected.inRange, 
+.flatpickr-day.prevMonthDay.startRange.inRange, 
+.flatpickr-day.prevMonthDay.endRange.inRange, 
+.flatpickr-day.nextMonthDay.selected, 
+.flatpickr-day.nextMonthDay.startRange, 
+.flatpickr-day.nextMonthDay.endRange, 
+.flatpickr-day.nextMonthDay.selected.inRange, 
+.flatpickr-day.nextMonthDay.startRange.inRange, 
+.flatpickr-day.nextMonthDay.endRange.inRange {
+    background: linear-gradient(135deg, var(--accent-blue), var(--accent-violet)) !important;
+    border-color: transparent !important;
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3) !important;
+}
+
+.flatpickr-day.today {
+    border-color: var(--accent-indigo) !important;
+}
+
+.flatpickr-day.today:hover {
+    background: rgba(99, 102, 241, 0.1) !important;
+}
+
+.flatpickr-day:hover {
+    background: rgba(255, 255, 255, 0.05) !important;
+}
+
+.flatpickr-months .flatpickr-month {
+    color: var(--text-primary) !important;
+}
+
+.flatpickr-current-month .flatpickr-monthDropdown-months {
+    font-weight: 600 !important;
+}
+
+.flatpickr-weekday {
+    color: var(--text-muted) !important;
+}
+
+.flatpickr-day {
+    color: var(--text-secondary) !important;
+    border-radius: 8px !important;
+}
+
+.flatpickr-day.flatpickr-disabled, 
+.flatpickr-day.flatpickr-disabled:hover {
+    color: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* Fix for the hidden input that Flatpickr creates */
+.flatpickr-input[type="date"] {
+    display: none;
+}
+
+/* Styling the alternative visible input */
+.flatpickr-mobile {
+    background: transparent !important;
+}

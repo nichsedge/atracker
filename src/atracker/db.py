@@ -628,7 +628,7 @@ async def get_devices() -> list[dict]:
             # Final touch-ups for the UI
             label = d["name"]
             if d["device_id"] == local_id:
-                label += " (this device)"
+                label += " (*)"
             
             devices.append({
                 "device_id": d["device_id"],

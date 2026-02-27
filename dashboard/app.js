@@ -10,6 +10,7 @@ let currentView = 'today';
 let selectedDevices = [];
 let ws = null;
 let reconnectTimer = null;
+let datePicker = null;
 
 // ============ Init ============
 
@@ -67,6 +68,18 @@ function setupNavigation() {
             loadView(currentView);
         }
     });
+    // Today date filter
+    document.getElementById('today-date-filter')?.addEventListener('change', () => {
+        loadToday();
+    });
+
+    // Today date filter reset
+    document.getElementById('btn-today-reset')?.addEventListener('click', () => {
+        if (datePicker) {
+            datePicker.setDate(new Date());
+            loadToday();
+        }
+    });
 }
 
 function switchView(view) {
@@ -100,26 +113,41 @@ function loadView(view) {
 // ============ Today View ============
 
 async function loadToday() {
-    const devicesParam = selectedDevices.length > 0 ? `?devices=${selectedDevices.join(',')}` : '';
+    const filterDate = document.getElementById('today-date-filter')?.value;
+    const isToday = !filterDate || filterDate === new Date().toISOString().split('T')[0];
+    const dateParam = filterDate ? `date=${filterDate}` : '';
+    const devicesParam = selectedDevices.length > 0 ? `devices=${selectedDevices.join(',')}` : '';
+
+    // Combine params
+    const params = [dateParam, devicesParam].filter(p => p).join('&');
+    const query = params ? `?${params}` : '';
+
     try {
-        const [summaryRes, timelineRes, statusRes, metricsRes] = await Promise.all([
-            fetchAPI(`/api/summary${devicesParam}`),
-            fetchAPI(`/api/timeline${devicesParam}`),
-            fetchAPI('/api/status'),
-            fetchAPI('/api/metrics'),
+        const [summaryRes, timelineRes, metricsRes] = await Promise.all([
+            fetchAPI(`/api/summary${query}`),
+            fetchAPI(`/api/timeline${query}`),
+            fetchAPI(`/api/metrics${query}`),
         ]);
 
         updateDaemonStatus(true);
         renderSummary(summaryRes.summary);
         renderTimeline(timelineRes.timeline);
         updateTotalTracked(summaryRes.summary);
-        updateNowTracking(timelineRes.timeline);
         renderMetrics(metricsRes);
         renderGoals(summaryRes.summary);
 
-        // Setup initial pause button visibility
-        const pauseRes = await fetchAPI('/api/pause_status');
-        updatePauseUI(pauseRes.is_paused);
+        // Hide "Now Tracking" card if not today
+        const nowTrackingCard = document.getElementById('now-tracking-card');
+        if (isToday) {
+            if (nowTrackingCard) nowTrackingCard.style.display = 'block';
+            updateNowTracking(timelineRes.timeline);
+
+            // Setup initial pause button visibility (only for today)
+            const pauseRes = await fetchAPI('/api/pause_status');
+            updatePauseUI(pauseRes.is_paused);
+        } else {
+            if (nowTrackingCard) nowTrackingCard.style.display = 'none';
+        }
     } catch (err) {
         console.error('Failed to load today:', err);
         updateDaemonStatus(false);
@@ -1047,12 +1075,18 @@ async function fetchAPI(path, options = {}) {
 }
 
 function setCurrentDate() {
-    const el = document.getElementById('current-date');
-    if (el) {
-        el.textContent = new Date().toLocaleDateString('en-US', {
-            weekday: 'long',
-            month: 'long',
-            day: 'numeric',
+    const filter = document.getElementById('today-date-filter');
+    if (filter) {
+        datePicker = flatpickr(filter, {
+            defaultDate: "today",
+            altInput: true,
+            altFormat: "F j, Y",
+            dateFormat: "Y-m-d",
+            disableMobile: "true",
+            theme: "dark",
+            onChange: function (selectedDates, dateStr, instance) {
+                loadToday();
+            }
         });
     }
 }

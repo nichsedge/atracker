@@ -13,6 +13,8 @@
         href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap"
         rel="stylesheet">
     <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/themes/dark.css">
 </head>
 
 <body>
@@ -80,9 +82,15 @@
             <!-- Today View -->
             <section class="view active" id="view-today">
                 <div class="view-header">
-                    <h1>Today's Activity</h1>
+                    <h1>Activity</h1>
                     <div class="header-meta">
-                        <span class="current-date" id="current-date"></span>
+                        <div class="date-filter-group"
+                            style="display: flex; align-items: center; gap: 0.5rem; background: rgba(255,255,255,0.03); padding: 4px 8px; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+                            <input type="date" id="today-date-filter" class="input-date"
+                                style="background: transparent; border: none; padding: 2px 4px; font-size: 13px;">
+                            <button class="btn btn-secondary" id="btn-today-reset"
+                                style="padding: 2px 8px; font-size: 11px; height: 24px;">Today</button>
+                        </div>
                         <span class="total-tracked" id="total-tracked">—</span>
                         <div class="header-metrics">
                             <span class="metric-item" title="Focus Score (0-100)">
@@ -410,7 +418,8 @@
                         <label for="rule-class">Application Pattern (WM Class Regex)</label>
                         <p style="font-size: 11px; color: var(--text-muted); margin-top: -4px; margin-bottom: 4px;">
                             Matches the application binary name. Examples: <code>firefox|chrome</code>,
-                            <code>code</code>, <code>spotify</code></p>
+                            <code>code</code>, <code>spotify</code>
+                        </p>
                         <div class="regex-wrapper">
                             <input type="text" id="rule-class" class="regex-input" placeholder="e.g. firefox|chrome">
                         </div>
@@ -420,7 +429,8 @@
                         <label for="rule-title">Window Title Pattern (Regex)</label>
                         <p style="font-size: 11px; color: var(--text-muted); margin-top: -4px; margin-bottom: 4px;">
                             Matches the window title text. Examples: <code>YouTube|Netflix</code>,
-                            <code>Google Search</code></p>
+                            <code>Google Search</code>
+                        </p>
                         <div class="regex-wrapper">
                             <input type="text" id="rule-title" class="regex-input"
                                 placeholder="e.g. Private Browsing|Incognito">
@@ -437,6 +447,7 @@
         </div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
     <script src="app.js"></script>
 </body>
 
