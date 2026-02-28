@@ -16,7 +16,7 @@ DB_DIR = DB_PATH.parent
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS events (
-    id TEXT PRIMARY KEY NOT NULL,
+    id TEXT NOT NULL,
     device_id TEXT NOT NULL DEFAULT '',
     timestamp TEXT NOT NULL DEFAULT '',
     end_timestamp TEXT NOT NULL DEFAULT '',
@@ -24,7 +24,8 @@ CREATE TABLE IF NOT EXISTS events (
     title TEXT NOT NULL DEFAULT '',
     pid INTEGER NOT NULL DEFAULT 0,
     duration_secs REAL NOT NULL DEFAULT 0,
-    is_idle INTEGER NOT NULL DEFAULT 0
+    is_idle INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY(device_id, id)
 );
 
 CREATE TABLE IF NOT EXISTS categories (
@@ -51,14 +52,15 @@ CREATE TABLE IF NOT EXISTS filter_rules (
 );
 
 CREATE TABLE IF NOT EXISTS android_events (
-    id TEXT PRIMARY KEY NOT NULL,
+    id TEXT NOT NULL,
     device_id TEXT NOT NULL DEFAULT '',
     timestamp TEXT NOT NULL DEFAULT '',
     end_timestamp TEXT NOT NULL DEFAULT '',
     package_name TEXT NOT NULL DEFAULT '',
     app_label TEXT NOT NULL DEFAULT '',
     duration_secs REAL NOT NULL DEFAULT 0,
-    is_idle INTEGER NOT NULL DEFAULT 0
+    is_idle INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY(device_id, id)
 );
 
 CREATE TABLE IF NOT EXISTS devices (
@@ -165,6 +167,47 @@ async def init_db() -> None:
             if "is_case_sensitive" not in existing_cols:
                 conn.execute("ALTER TABLE categories ADD COLUMN is_case_sensitive INTEGER NOT NULL DEFAULT 0")
             conn.execute("PRAGMA user_version = 1")
+            
+        if version < 2:
+            conn.executescript("""
+                CREATE TABLE IF NOT EXISTS events_new (
+                    id TEXT NOT NULL,
+                    device_id TEXT NOT NULL DEFAULT '',
+                    timestamp TEXT NOT NULL DEFAULT '',
+                    end_timestamp TEXT NOT NULL DEFAULT '',
+                    wm_class TEXT NOT NULL DEFAULT '',
+                    title TEXT NOT NULL DEFAULT '',
+                    pid INTEGER NOT NULL DEFAULT 0,
+                    duration_secs REAL NOT NULL DEFAULT 0,
+                    is_idle INTEGER NOT NULL DEFAULT 0,
+                    PRIMARY KEY(device_id, id)
+                );
+                INSERT INTO events_new SELECT * FROM events;
+                DROP TABLE events;
+                ALTER TABLE events_new RENAME TO events;
+
+                CREATE TABLE IF NOT EXISTS android_events_new (
+                    id TEXT NOT NULL,
+                    device_id TEXT NOT NULL DEFAULT '',
+                    timestamp TEXT NOT NULL DEFAULT '',
+                    end_timestamp TEXT NOT NULL DEFAULT '',
+                    package_name TEXT NOT NULL DEFAULT '',
+                    app_label TEXT NOT NULL DEFAULT '',
+                    duration_secs REAL NOT NULL DEFAULT 0,
+                    is_idle INTEGER NOT NULL DEFAULT 0,
+                    PRIMARY KEY(device_id, id)
+                );
+                INSERT INTO android_events_new SELECT * FROM android_events;
+                DROP TABLE android_events;
+                ALTER TABLE android_events_new RENAME TO android_events;
+                
+                CREATE INDEX IF NOT EXISTS idx_events_timestamp ON events(timestamp);
+                CREATE INDEX IF NOT EXISTS idx_events_wm_class ON events(wm_class);
+                CREATE INDEX IF NOT EXISTS idx_events_time_idle ON events(timestamp, is_idle);
+                CREATE INDEX IF NOT EXISTS idx_android_events_timestamp ON android_events(timestamp);
+
+                PRAGMA user_version = 2;
+            """)
         
         # Seed default settings if empty
         settings_defaults = [
