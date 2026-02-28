@@ -6,6 +6,7 @@ object SettingsManager {
     private const val PREFS_NAME = "atracker_prefs"
     private const val KEY_BACKEND_URL = "backend_url"
     private const val KEY_DEVICE_ID = "device_id"
+    private const val KEY_TRACKING_ENABLED = "tracking_enabled"
 
     private fun prefs(context: Context) =
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -15,6 +16,12 @@ object SettingsManager {
 
     fun setBackendUrl(context: Context, url: String) =
         prefs(context).edit().putString(KEY_BACKEND_URL, url).apply()
+
+    fun isTrackingEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_TRACKING_ENABLED, false)
+
+    fun setTrackingEnabled(context: Context, enabled: Boolean) =
+        prefs(context).edit().putBoolean(KEY_TRACKING_ENABLED, enabled).apply()
 
     fun getDeviceId(context: Context): String {
         val prefs = prefs(context)

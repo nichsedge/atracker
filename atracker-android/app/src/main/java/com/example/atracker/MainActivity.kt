@@ -26,6 +26,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tvSyncStatus: TextView
     private lateinit var btnSync: Button
     private lateinit var etBackendUrl: TextInputEditText
+    private lateinit var btnStartTracking: Button
 
     private val requestNotificationPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
@@ -46,6 +47,7 @@ class MainActivity : AppCompatActivity() {
         tvSyncStatus = findViewById(R.id.tvSyncStatus)
         btnSync = findViewById(R.id.btnSync)
         etBackendUrl = findViewById(R.id.etBackendUrl)
+        btnStartTracking = findViewById(R.id.btnStartTracking)
 
         // Restore saved URL
         etBackendUrl.setText(SettingsManager.getBackendUrl(this))
@@ -68,21 +70,38 @@ class MainActivity : AppCompatActivity() {
         }
 
         // Start tracking button
-        findViewById<Button>(R.id.btnStartTracking).setOnClickListener {
-            if (!hasUsageStatsPermission()) {
-                startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
-            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-                ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-            ) {
-                requestNotificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        btnStartTracking.setOnClickListener {
+            if (TrackerService.isRunning) {
+                stopTrackerService()
             } else {
-                startTrackerService()
+                if (!hasUsageStatsPermission()) {
+                    startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
+                } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                    ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+                ) {
+                    requestNotificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                } else {
+                    startTrackerService()
+                }
             }
         }
 
         // Sync button
         btnSync.setOnClickListener {
             performSync()
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        updateTrackingButtonState()
+    }
+
+    private fun updateTrackingButtonState() {
+        if (TrackerService.isRunning) {
+            btnStartTracking.text = "Stop Tracking"
+        } else {
+            btnStartTracking.text = "Start Tracking"
         }
     }
 
@@ -138,6 +157,18 @@ class MainActivity : AppCompatActivity() {
     private fun startTrackerService() {
         val intent = Intent(this, TrackerService::class.java)
         ContextCompat.startForegroundService(this, intent)
+        TrackerService.isRunning = true
+        SettingsManager.setTrackingEnabled(this, true)
+        updateTrackingButtonState()
         Toast.makeText(this, "Tracker Started", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun stopTrackerService() {
+        val intent = Intent(this, TrackerService::class.java)
+        stopService(intent)
+        TrackerService.isRunning = false
+        SettingsManager.setTrackingEnabled(this, false)
+        updateTrackingButtonState()
+        Toast.makeText(this, "Tracker Stopped", Toast.LENGTH_SHORT).show()
     }
 }

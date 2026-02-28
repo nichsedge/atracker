@@ -16,7 +16,8 @@ import androidx.core.content.ContextCompat
 class ServiceRestartReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
-        if (!TrackerService.isRunning) {
+        val shouldBeRunning = SettingsManager.isTrackingEnabled(context)
+        if (shouldBeRunning && !TrackerService.isRunning) {
             val serviceIntent = Intent(context, TrackerService::class.java)
             ContextCompat.startForegroundService(context, serviceIntent)
         }

@@ -10,9 +10,11 @@ class BootReceiver : BroadcastReceiver() {
         if (intent.action == Intent.ACTION_BOOT_COMPLETED ||
             intent.action == "android.intent.action.LOCKED_BOOT_COMPLETED"
         ) {
-            // Start the foreground service immediately
-            val serviceIntent = Intent(context, TrackerService::class.java)
-            ContextCompat.startForegroundService(context, serviceIntent)
+            if (SettingsManager.isTrackingEnabled(context)) {
+                // Start the foreground service immediately
+                val serviceIntent = Intent(context, TrackerService::class.java)
+                ContextCompat.startForegroundService(context, serviceIntent)
+            }
 
             // Schedule the AlarmManager watchdog (60s interval)
             ServiceRestartReceiver.schedule(context)
