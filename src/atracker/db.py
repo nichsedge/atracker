@@ -547,30 +547,14 @@ async def delete_filter_rule(rule_id: str) -> None:
 
 
 async def sync_android_day(day: str, events: list[dict]) -> int:
-    """Delete all android_events for a given date, then insert the provided events.
+    """Insert or update android_events for a given date.
     `day` is an ISO date string like '2026-02-25'.
     Returns the number of rows inserted.
     """
-    day_start = f"{day}T00:00:00"
-    next_day_dt = date.fromisoformat(day) + timedelta(days=1)
-    day_end = f"{next_day_dt.isoformat()}T00:00:00"
-
     async with _aconn() as db:
-        # We should only delete existing events for the specific device being synced
-        device_id = events[0].get("device_id", "") if events else ""
-        if device_id:
-            await db.execute(
-                "DELETE FROM android_events WHERE timestamp >= ? AND timestamp < ? AND device_id = ?",
-                (day_start, day_end, device_id),
-            )
-        else:
-             await db.execute(
-                "DELETE FROM android_events WHERE timestamp >= ? AND timestamp < ?",
-                (day_start, day_end),
-            )
         for e in events:
             await db.execute(
-                """INSERT INTO android_events
+                """INSERT OR REPLACE INTO android_events
                    (id, device_id, timestamp, end_timestamp, package_name, app_label, duration_secs, is_idle)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
                 (

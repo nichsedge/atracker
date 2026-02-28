@@ -90,6 +90,11 @@ class MainActivity : AppCompatActivity() {
         btnSync.setOnClickListener {
             performSync()
         }
+
+        // Auto click "start tracking" when opening app
+        if (!TrackerService.isRunning) {
+            btnStartTracking.performClick()
+        }
     }
 
     override fun onResume() {

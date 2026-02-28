@@ -3,6 +3,7 @@ package com.example.atracker
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.Service
 import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
@@ -149,6 +150,14 @@ class TrackerService : Service() {
     }
 
     private fun createNotification(): Notification {
+        val intent = Intent(this, MainActivity::class.java)
+        val pendingIntent = PendingIntent.getActivity(
+            this,
+            0,
+            intent,
+            PendingIntent.FLAG_IMMUTABLE
+        )
+
         return NotificationCompat.Builder(this, "tracker_channel_v2")
             .setContentTitle("atracker")
             .setContentText("Running in background")
@@ -156,6 +165,7 @@ class TrackerService : Service() {
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true)
             .setSilent(true)
+            .setContentIntent(pendingIntent)
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .build()
     }
@@ -175,11 +185,11 @@ class TrackerService : Service() {
         val restartServiceIntent = Intent(applicationContext, TrackerService::class.java).apply {
             setPackage(packageName)
         }
-        val restartServicePendingIntent = android.app.PendingIntent.getForegroundService(
+        val restartServicePendingIntent = PendingIntent.getForegroundService(
             this,
             1,
             restartServiceIntent,
-            android.app.PendingIntent.FLAG_ONE_SHOT or android.app.PendingIntent.FLAG_IMMUTABLE
+            PendingIntent.FLAG_ONE_SHOT or PendingIntent.FLAG_IMMUTABLE
         )
         val alarmService = getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager
         alarmService.set(
