@@ -867,11 +867,13 @@ body {
     background: var(--bg-card);
     border: 1px solid var(--border-subtle);
     border-radius: var(--radius);
-    width: 400px;
-    max-width: 90vw;
+    width: 600px;
+    /* Increased from 400px */
+    max-width: 95vw;
     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
     display: flex;
     flex-direction: column;
+    backdrop-filter: blur(20px);
 }
 
 .modal-header {
@@ -901,7 +903,9 @@ body {
 }
 
 .modal-body {
-    padding: 20px;
+    padding: 24px 28px;
+    overflow-y: auto;
+    max-height: 80vh;
 }
 
 .form-group {
@@ -916,19 +920,81 @@ body {
     color: var(--text-secondary);
 }
 
-.form-group input[type="text"] {
-    background: rgba(0, 0, 0, 0.2);
+.form-group input[type="text"],
+.form-group input[type="number"],
+.form-group select {
+    background: rgba(0, 0, 0, 0.3);
     border: 1px solid var(--border-subtle);
     border-radius: var(--radius-sm);
-    padding: 10px;
+    padding: 10px 14px;
     color: var(--text-primary);
     font-family: inherit;
     font-size: 14px;
+    transition: all 0.2s;
 }
 
-.form-group input[type="text"]:focus {
+.form-group input:focus,
+.form-group select:focus {
     outline: none;
     border-color: var(--accent-indigo);
+    background: rgba(0, 0, 0, 0.4);
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+}
+
+/* Regex specific input */
+.regex-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.regex-input {
+    width: 100%;
+    font-family: 'JetBrains Mono', 'Fira Code', monospace !important;
+    font-size: 13px !important;
+    letter-spacing: 0.02em;
+    padding-left: 32px !important;
+    padding-right: 32px !important;
+}
+
+.regex-wrapper::before {
+    content: '/';
+    position: absolute;
+    left: 14px;
+    color: var(--accent-indigo);
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    font-size: 16px;
+    pointer-events: none;
+}
+
+.regex-wrapper::after {
+    content: '/';
+    position: absolute;
+    right: 14px;
+    color: var(--accent-indigo);
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    font-size: 16px;
+    pointer-events: none;
+}
+
+.regex-input:placeholder-shown+.regex-wrapper::after,
+.regex-input:placeholder-shown+.regex-wrapper::before {
+    opacity: 0.5;
+}
+
+.regex-error {
+    color: #ef4444;
+    font-size: 11px;
+    margin-top: 4px;
+    display: none;
+    font-weight: 500;
+}
+
+.invalid {
+    border-color: #ef4444 !important;
+    background: rgba(239, 68, 68, 0.05) !important;
 }
 
 .category-actions {
@@ -1363,4 +1429,23 @@ body {
 /* Styling the alternative visible input */
 .flatpickr-mobile {
     background: transparent !important;
+}
+.modal-divider {
+    margin: 24px 0 16px;
+    height: 1px;
+    background: linear-gradient(to right, var(--border-subtle), transparent);
+    position: relative;
+}
+
+.modal-divider span {
+    position: absolute;
+    top: -10px;
+    left: 0;
+    background: var(--bg-card);
+    padding: 0 10px;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--accent-indigo);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
 }
