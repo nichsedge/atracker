@@ -24,11 +24,68 @@ document.addEventListener('DOMContentLoaded', () => {
     initPauseControls();
     initDevices();
     checkNotificationPermission();
+    initTimelineTooltip();
 });
 
 
 
 // ============ Navigation ============
+
+function initTimelineTooltip() {
+    const globalTooltip = document.createElement('div');
+    globalTooltip.className = 'timeline-tooltip';
+    globalTooltip.id = 'global-timeline-tooltip';
+    globalTooltip.innerHTML = `
+        <div class="tt-app" id="gtt-app" style="font-weight: 600; margin-bottom: 2px;"></div>
+        <div class="tt-time" id="gtt-time" style="color: var(--text-secondary);"></div>
+    `;
+    // We already styled .timeline-tooltip in CSS, let's override for fixed positioning
+    Object.assign(globalTooltip.style, {
+        position: 'fixed',
+        pointerEvents: 'none',
+        opacity: '0',
+        visibility: 'hidden',
+        transition: 'opacity 0.15s',
+        zIndex: '1000',
+        transform: 'translate(-50%, -100%)',
+        bottom: 'auto',
+        left: '0',
+        top: '0'
+    });
+    document.body.appendChild(globalTooltip);
+
+    const appEl = document.getElementById('gtt-app');
+    const timeEl = document.getElementById('gtt-time');
+    const container = document.getElementById('timeline-container');
+
+    if (!container) return;
+
+    container.addEventListener('mousemove', (e) => {
+        const block = e.target.closest('.timeline-block');
+        if (block) {
+            const app = block.getAttribute('data-app');
+            const time = block.getAttribute('data-time');
+            if (app && time) {
+                appEl.textContent = app;
+                timeEl.textContent = time;
+
+                globalTooltip.style.left = `${e.clientX}px`;
+                globalTooltip.style.top = `${e.clientY - 15}px`;
+                globalTooltip.style.opacity = '1';
+                globalTooltip.style.visibility = 'visible';
+                return;
+            }
+        }
+        globalTooltip.style.opacity = '0';
+        globalTooltip.style.visibility = 'hidden';
+    });
+
+    container.addEventListener('mouseleave', () => {
+        globalTooltip.style.opacity = '0';
+        globalTooltip.style.visibility = 'hidden';
+    });
+}
+
 
 function setupNavigation() {
     document.querySelectorAll('.nav-link').forEach(link => {
@@ -123,17 +180,15 @@ async function loadToday() {
     const query = params ? `?${params}` : '';
 
     try {
-        const [summaryRes, timelineRes, metricsRes] = await Promise.all([
+        const [summaryRes, timelineRes] = await Promise.all([
             fetchAPI(`/api/summary${query}`),
             fetchAPI(`/api/timeline${query}`),
-            fetchAPI(`/api/metrics${query}`),
         ]);
 
         updateDaemonStatus(true);
         renderSummary(summaryRes.summary);
         renderTimeline(timelineRes.timeline);
         updateTotalTracked(summaryRes.summary);
-        renderMetrics(metricsRes);
         renderGoals(summaryRes.summary);
 
         // Hide "Now Tracking" card if not today
@@ -154,21 +209,7 @@ async function loadToday() {
     }
 }
 
-function renderMetrics(metrics) {
-    const focusEl = document.getElementById('focus-score');
-    const switchEl = document.getElementById('context-switches');
-    if (focusEl) {
-        const score = metrics.focus_score;
-        focusEl.textContent = score !== null ? score : '—';
-        focusEl.className = 'metric-badge';
-        if (score !== null) {
-            if (score >= 80) focusEl.classList.add('score-good');
-            else if (score >= 50) focusEl.classList.add('score-warn');
-            else focusEl.classList.add('score-poor');
-        }
-    }
-    if (switchEl) switchEl.textContent = metrics.context_switches !== null ? metrics.context_switches : '—';
-}
+
 
 window.toggleCategory = function (header) {
     const items = header.nextElementSibling;
@@ -339,11 +380,8 @@ function renderTimeline(timeline) {
         return `
             <div class="timeline-block ${isIdle ? 'idle' : ''}"
                  style="left: ${left}%; width: ${width}%; background: ${block.color || '#64748b'}"
-                 title="${label}">
-                <div class="timeline-tooltip">
-                    <div class="tt-app">${escapeHtml(label)}</div>
-                    <div class="tt-time">${startLabel} — ${endLabel} (${durationMin}m)</div>
-                </div>
+                 data-app="${escapeHtml(label)}"
+                 data-time="${startLabel} — ${endLabel} (${durationMin}m)">
             </div>
         `;
     }).join('');
@@ -442,60 +480,6 @@ async function exportRange() {
     }
 
     window.location.href = `${API}/api/export?start=${start}&end=${end}&format=csv`;
-}
-
-window.prepareComparison = async function () {
-    const period = document.getElementById('history-period')?.value || '7';
-    let startA, endA;
-
-    if (period === 'custom') {
-        startA = document.getElementById('range-start').value;
-        endA = document.getElementById('range-end').value;
-    } else {
-        const days = parseInt(period);
-        const endDate = new Date();
-        const startDate = new Date();
-        startDate.setDate(endDate.getDate() - days);
-        startA = startDate.toISOString().split('T')[0];
-        endA = endDate.toISOString().split('T')[0];
-    }
-
-    if (!startA || !endA) {
-        alert('Please select a range for Period A first');
-        return;
-    }
-
-    const startB = prompt("Enter Start Date for Period B (YYYY-MM-DD)", "");
-    if (!startB) return;
-    const endB = prompt("Enter End Date for Period B (YYYY-MM-DD)", "");
-    if (!endB) return;
-
-    try {
-        const [resA, resB] = await Promise.all([
-            fetchAPI(`/api/range/summary?start=${startA}&end=${endA}`),
-            fetchAPI(`/api/range/summary?start=${startB}&end=${endB}`)
-        ]);
-
-        document.getElementById('comparison-card').style.display = 'block';
-        renderSummaryTo(resA.summary, 'comp-a-summary');
-        renderSummaryTo(resB.summary, 'comp-b-summary');
-
-        // Scroll to comparison
-        document.getElementById('comparison-card').scrollIntoView({ behavior: 'smooth' });
-    } catch (err) {
-        console.error('Comparison failed:', err);
-        alert('Failed to load comparison data');
-    }
-};
-
-function renderSummaryTo(summary, containerId) {
-    const container = document.getElementById(containerId);
-    if (!summary || summary.length === 0) {
-        container.innerHTML = '<div class="usage-empty">No data</div>';
-        return;
-    }
-
-    container.innerHTML = generateGroupedSummaryHtml(summary);
 }
 
 function renderHistoryChart(history) {

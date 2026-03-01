@@ -327,44 +327,7 @@ async def export_data(start: str = Query(...), end: str = Query(...), format: st
     )
 
 
-@app.get("/api/metrics")
-async def get_metrics(target_date: str = Query(None, alias="date")):
-    """Get productivity metrics for a date."""
-    d = _parse_date(target_date)
-    timeline_rows = await db.get_timeline(d)
-    
-    # Calculate context switches and focus duration
-    # Transitions between different wm_classes (excluding idle)
-    switches = 0
-    last_app = None
-    focus_durations = []
-    current_focus_start = None
-    
-    active_secs = 0
-    
-    for row in timeline_rows:
-        if row["is_idle"]:
-            last_app = None
-            continue
-            
-        active_secs += row["duration_secs"]
-        
-        app = row["wm_class"]
-        if app != last_app:
-            if last_app is not None:
-                switches += 1
-            last_app = app
-            
-    # Simple Focus Score: 100 - (switches * 5). Min 0.
-    # This is a very basic heuristic.
-    focus_score = max(0, 100 - (switches * 2)) 
-    
-    return {
-        "date": d.isoformat(),
-        "context_switches": switches,
-        "focus_score": focus_score,
-        "active_secs": active_secs
-    }
+
 
 
 @app.get("/api/categories")

@@ -51,7 +51,7 @@
                         <line x1="8" y1="2" x2="8" y2="6" />
                         <line x1="3" y1="10" x2="21" y2="10" />
                     </svg>
-                    <span>Today</span>
+                    <span>Activity</span>
                 </a>
                 <a href="#" class="nav-link" data-view="history" id="nav-history">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -92,24 +92,7 @@
                                 style="padding: 2px 8px; font-size: 11px; height: 24px;">Today</button>
                         </div>
                         <span class="total-tracked" id="total-tracked">—</span>
-                        <div class="header-metrics">
-                            <span class="metric-item" title="Focus Score (0-100)">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                    stroke-width="2">
-                                    <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
-                                </svg>
-                                Focus: <span id="focus-score" class="metric-badge">—</span>
-                            </span>
-                            <span class="metric-item" title="Context Switches">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                    stroke-width="2">
-                                    <path d="M16 3h5v5" />
-                                    <path d="M8 21H3v-5" />
-                                    <path d="M21 3L3 21" />
-                                </svg>
-                                Switched: <span id="context-switches">—</span>
-                            </span>
-                        </div>
+
                         <div class="header-actions">
                             <div class="dropdown" id="pause-dropdown">
                                 <button class="btn btn-secondary dropdown-toggle" id="btn-pause-toggle">
@@ -217,32 +200,6 @@
                     <div class="card-label">Daily Breakdown</div>
                     <div class="history-table" id="history-table"></div>
                 </div>
-
-                <!-- Comparison View (Hidden by default) -->
-                <div class="card" id="comparison-card" style="display: none;">
-                    <div class="card-header"
-                        style="display: flex; justify-content: space-between; align-items: center;">
-                        <div class="card-label">Comparison</div>
-                        <button class="btn btn-secondary" id="btn-close-comparison">Close</button>
-                    </div>
-                    <div class="comparison-container">
-                        <div class="comparison-period">
-                            <h4>Period A</h4>
-                            <div id="comp-a-summary" class="usage-list"></div>
-                        </div>
-                        <div class="comparison-divider">VS</div>
-                        <div class="comparison-period">
-                            <h4>Period B</h4>
-                            <div id="comp-b-summary" class="usage-list"></div>
-                        </div>
-                    </div>
-                </div>
-
-                <div style="margin-top: 1rem; display: flex; gap: 1rem;">
-                    <button class="btn btn-secondary" id="btn-toggle-comparison" onclick="prepareComparison()">Compare
-                        with another period</button>
-                </div>
-            </section>
 
             </section>
 

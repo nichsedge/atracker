@@ -278,30 +278,6 @@ body {
     font-size: 0.9rem;
 }
 
-.header-metrics {
-    display: flex;
-    gap: 1rem;
-    border-left: 1px solid var(--border-subtle);
-    padding-left: 1.5rem;
-    margin-left: 0.5rem;
-}
-
-.metric-item {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-    font-weight: 500;
-}
-
-.metric-item svg {
-    opacity: 0.7;
-}
-
-#focus-score,
-#context-switches {
-    color: var(--text-primary);
-}
-
 .total-tracked {
     background: rgba(99, 102, 241, 0.1);
     border: 1px solid rgba(99, 102, 241, 0.2);
@@ -313,30 +289,7 @@ body {
     box-shadow: 0 0 15px rgba(99, 102, 241, 0.1);
 }
 
-.metric-badge {
-    padding: 2px 8px;
-    border-radius: 6px;
-    font-weight: 700;
-    font-size: 12px;
-}
 
-.score-good {
-    color: var(--accent-green);
-    background: rgba(16, 185, 129, 0.1);
-    border: 1px solid rgba(16, 185, 129, 0.2);
-}
-
-.score-warn {
-    color: var(--accent-amber);
-    background: rgba(245, 158, 11, 0.1);
-    border: 1px solid rgba(245, 158, 11, 0.2);
-}
-
-.score-poor {
-    color: #ef4444;
-    background: rgba(239, 68, 68, 0.1);
-    border: 1px solid rgba(239, 68, 68, 0.2);
-}
 
 /* ============ Cards ============ */
 .card {
@@ -497,10 +450,6 @@ body {
     z-index: 100;
     backdrop-filter: blur(12px);
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
-}
-
-.timeline-block:hover .timeline-tooltip {
-    opacity: 1;
 }
 
 .timeline-tooltip .tt-app {
