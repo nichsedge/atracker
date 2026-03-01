@@ -157,8 +157,17 @@ async function loadToday() {
 function renderMetrics(metrics) {
     const focusEl = document.getElementById('focus-score');
     const switchEl = document.getElementById('context-switches');
-    if (focusEl) focusEl.textContent = metrics.focus_score;
-    if (switchEl) switchEl.textContent = metrics.context_switches;
+    if (focusEl) {
+        const score = metrics.focus_score;
+        focusEl.textContent = score !== null ? score : '—';
+        focusEl.className = 'metric-badge';
+        if (score !== null) {
+            if (score >= 80) focusEl.classList.add('score-good');
+            else if (score >= 50) focusEl.classList.add('score-warn');
+            else focusEl.classList.add('score-poor');
+        }
+    }
+    if (switchEl) switchEl.textContent = metrics.context_switches !== null ? metrics.context_switches : '—';
 }
 
 window.toggleCategory = function (header) {
