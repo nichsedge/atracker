@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Simple script to merge events from multiple source SQLite databases 
-into a master database using INSERT OR IGNORE.
+into a master database using an idempotent UPSERT (ON CONFLICT DO UPDATE).
 """
 
 import argparse
@@ -27,39 +27,65 @@ def merge_databases(master_path: str, source_paths: list[str]):
             print(f"\nMerging from source: {source}")
             
             try:
-                # Attach the source database
-                master_conn.execute("ATTACH DATABASE ? AS source_db", (str(source),))
-                
-                tables_to_sync = [
-                    "events"
-                ]
-                
-                for table in tables_to_sync:
-                    try:
-                        # Check if table exists in source
-                        cur = master_conn.execute(
-                            "SELECT name FROM source_db.sqlite_master WHERE type='table' AND name=?", 
-                            (table,)
-                        )
-                        if not cur.fetchone():
-                            print(f"  - Table '{table}' not found in source, skipping.")
-                            continue
-                            
-                        # Insert ignoring duplicates (based on PRIMARY KEY)
-                        cur = master_conn.execute(f"INSERT OR IGNORE INTO {table} SELECT * FROM source_db.{table}")
-                        inserted = cur.rowcount
-                        print(f"  - {table}: Inserted {inserted} new row(s)")
-                    except Exception as e:
-                        print(f"  - Error merging table '{table}': {e}")
-                        
-                master_conn.commit()
+                with sqlite3.connect(source) as src_conn:
+                    src_conn.row_factory = sqlite3.Row
+
+                    tables_to_sync = ["events"]
+
+                    for table in tables_to_sync:
+                        try:
+                            # Check if table exists in source
+                            cur = src_conn.execute(
+                                "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+                                (table,)
+                            )
+                            if not cur.fetchone():
+                                print(f"  - Table '{table}' not found in source, skipping.")
+                                continue
+
+                            # Get column info from master to build upsert query dynamically
+                            cur = master_conn.execute(f"PRAGMA table_info({table})")
+                            columns_info = cur.fetchall()
+                            if not columns_info:
+                                print(f"  - Table '{table}' not found in master.")
+                                continue
+
+                            # Sort by pk position to ensure composite PK order is correct
+                            columns = [col[1] for col in columns_info]
+                            pk_columns = [col[1] for col in sorted(columns_info, key=lambda c: c[5]) if col[5] > 0]
+
+                            col_names = ", ".join(columns)
+                            placeholders = ", ".join("?" * len(columns))
+
+                            if pk_columns:
+                                pk_names = ", ".join(pk_columns)
+                                update_cols = [col for col in columns if col not in pk_columns]
+
+                                if update_cols:
+                                    set_clause = ", ".join(f"{col} = excluded.{col}" for col in update_cols)
+                                    query = (
+                                        f"INSERT INTO {table} ({col_names}) VALUES ({placeholders}) "
+                                        f"ON CONFLICT({pk_names}) DO UPDATE SET {set_clause}"
+                                    )
+                                else:
+                                    query = (
+                                        f"INSERT INTO {table} ({col_names}) VALUES ({placeholders}) "
+                                        f"ON CONFLICT({pk_names}) DO NOTHING"
+                                    )
+                            else:
+                                query = f"INSERT OR IGNORE INTO {table} ({col_names}) VALUES ({placeholders})"
+
+                            # Fetch all rows from source and upsert into master
+                            rows = src_conn.execute(f"SELECT {col_names} FROM {table}").fetchall()
+                            master_conn.executemany(query, [tuple(row) for row in rows])
+                            master_conn.commit()
+                            print(f"  - {table}: Upserted {len(rows)} row(s)")
+
+                        except Exception as e:
+                            print(f"  - Error merging table '{table}': {e}")
+
             except Exception as e:
-                print(f"Error attaching or reading from database '{source}': {e}")
-            finally:
-                try:
-                    master_conn.execute("DETACH DATABASE source_db")
-                except sqlite3.OperationalError:
-                    pass
+                print(f"Error reading from database '{source}': {e}")
 
     print("\nMerge complete!")
 
