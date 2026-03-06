@@ -36,6 +36,7 @@ class CategoryImport(BaseModel):
 class SettingsUpdate(BaseModel):
     poll_interval: str
     idle_threshold: str
+    min_app_usage_secs: str
 
 class PauseRequest(BaseModel):
     duration_mins: int | None = None # None means indefinite
@@ -212,13 +213,19 @@ async def summary(target_date: str = Query(None, alias="date"), devices: str = Q
                 logger.error(f"Error appending current state to summary: {e}")
 
     categories = await db.get_categories()
+    min_secs = float(await db.get_setting("min_app_usage_secs", "120"))
+    
+    filtered_rows = []
     # Enrich with category info
     for row in rows:
+        if row["total_secs"] < min_secs:
+            continue
         matched_cat = _get_matched_category(row["wm_class"], row.get("title", ""), categories)
         row["category_name"] = matched_cat["name"]
         row["color"] = matched_cat.get("color", "#64748b")
         row["total_formatted"] = _format_duration(row["total_secs"])
-    return {"date": d.isoformat(), "summary": rows}
+        filtered_rows.append(row)
+    return {"date": d.isoformat(), "summary": filtered_rows}
 
 
 @app.get("/api/timeline")
@@ -270,12 +277,18 @@ async def range_summary(start: str = Query(...), end: str = Query(...), devices:
     
     # We don't append "Now Tracking" for ranges as it's usually historical
     categories = await db.get_categories()
+    min_secs = float(await db.get_setting("min_app_usage_secs", "120"))
+    
+    filtered_rows = []
     for row in rows:
+        if row["total_secs"] < min_secs:
+            continue
         matched_cat = _get_matched_category(row["wm_class"], row.get("title", ""), categories)
         row["category_name"] = matched_cat["name"]
         row["color"] = matched_cat.get("color", "#64748b")
         row["total_formatted"] = _format_duration(row["total_secs"])
-    return {"start": s.isoformat(), "end": e.isoformat(), "summary": rows}
+        filtered_rows.append(row)
+    return {"start": s.isoformat(), "end": e.isoformat(), "summary": filtered_rows}
 
 
 @app.get("/api/range/history")
@@ -424,6 +437,7 @@ async def get_settings():
 async def update_settings(settings: SettingsUpdate):
     await db.set_setting("poll_interval", settings.poll_interval)
     await db.set_setting("idle_threshold", settings.idle_threshold)
+    await db.set_setting("min_app_usage_secs", settings.min_app_usage_secs)
     return {"status": "ok"}
 
 # --- Privacy & Pause ---

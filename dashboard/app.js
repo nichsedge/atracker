@@ -590,6 +590,11 @@ async function loadSettings() {
         if (settingsRes.idle_threshold) {
             document.getElementById('set-idle-threshold').value = settingsRes.idle_threshold;
         }
+        if (settingsRes.min_app_usage_secs) {
+            document.getElementById('set-min-app-usage').value = settingsRes.min_app_usage_secs;
+        } else {
+            document.getElementById('set-min-app-usage').value = '120';
+        }
     } catch (err) {
         console.error('Failed to load settings:', err);
     }
@@ -766,7 +771,8 @@ function setupSettingsEvents() {
         e.preventDefault();
         const payload = {
             poll_interval: document.getElementById('set-poll-interval').value,
-            idle_threshold: document.getElementById('set-idle-threshold').value
+            idle_threshold: document.getElementById('set-idle-threshold').value,
+            min_app_usage_secs: document.getElementById('set-min-app-usage').value
         };
 
         try {

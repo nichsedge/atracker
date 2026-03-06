@@ -212,7 +212,8 @@ async def init_db() -> None:
         # Seed default settings if empty
         settings_defaults = [
             ("poll_interval", str(config.poll_interval)),
-            ("idle_threshold", str(config.idle_threshold)) # seconds (dashboard uses seconds)
+            ("idle_threshold", str(config.idle_threshold)), # seconds (dashboard uses seconds)
+            ("min_app_usage_secs", "120")
         ]
         for key, value in settings_defaults:
             conn.execute(
