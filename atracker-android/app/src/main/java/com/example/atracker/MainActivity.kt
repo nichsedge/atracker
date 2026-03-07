@@ -1,6 +1,7 @@
 package com.example.atracker
 
 import android.Manifest
+import android.accessibilityservice.AccessibilityServiceInfo
 import android.app.AppOpsManager
 import android.content.Context
 import android.content.Intent
@@ -11,6 +12,7 @@ import android.os.Bundle
 import android.os.Process
 import android.provider.Settings
 import android.view.inputmethod.EditorInfo
+import android.view.accessibility.AccessibilityManager
 import android.widget.Button
 import android.widget.TextView
 import android.widget.Toast
@@ -27,6 +29,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnSync: Button
     private lateinit var etBackendUrl: TextInputEditText
     private lateinit var btnStartTracking: Button
+    private lateinit var btnAccessibilitySettings: Button
+    private lateinit var tvAccessibilityStatus: TextView
 
     private val requestNotificationPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
@@ -48,6 +52,8 @@ class MainActivity : AppCompatActivity() {
         btnSync = findViewById(R.id.btnSync)
         etBackendUrl = findViewById(R.id.etBackendUrl)
         btnStartTracking = findViewById(R.id.btnStartTracking)
+        btnAccessibilitySettings = findViewById(R.id.btnAccessibilitySettings)
+        tvAccessibilityStatus = findViewById(R.id.tvAccessibilityStatus)
 
         // Restore saved URL
         etBackendUrl.setText(SettingsManager.getBackendUrl(this))
@@ -91,6 +97,10 @@ class MainActivity : AppCompatActivity() {
             performSync()
         }
 
+        btnAccessibilitySettings.setOnClickListener {
+            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+        }
+
         // Auto click "start tracking" when opening app
         if (!TrackerService.isRunning) {
             btnStartTracking.performClick()
@@ -100,13 +110,37 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         updateTrackingButtonState()
+        updateAccessibilityStatus()
     }
 
     private fun updateTrackingButtonState() {
-        if (TrackerService.isRunning) {
+        if (SettingsManager.isTrackingEnabled(this)) {
             btnStartTracking.text = "Stop Tracking"
         } else {
             btnStartTracking.text = "Start Tracking"
+        }
+    }
+
+    private fun updateAccessibilityStatus() {
+        if (isBrowserAccessibilityEnabled()) {
+            tvAccessibilityStatus.setTextColor(Color.parseColor("#2e7d32"))
+            tvAccessibilityStatus.text = "Browser tab tracking is enabled."
+            btnAccessibilitySettings.text = "Open Accessibility Settings"
+        } else {
+            tvAccessibilityStatus.setTextColor(Color.RED)
+            tvAccessibilityStatus.text = "Browser tab tracking is off. Enable Accessibility service."
+            btnAccessibilitySettings.text = "Enable Browser Tab Tracking"
+        }
+    }
+
+    private fun isBrowserAccessibilityEnabled(): Boolean {
+        val manager = getSystemService(Context.ACCESSIBILITY_SERVICE) as AccessibilityManager
+        val enabledServices = manager.getEnabledAccessibilityServiceList(
+            AccessibilityServiceInfo.FEEDBACK_ALL_MASK
+        )
+        return enabledServices.any { serviceInfo ->
+            serviceInfo.resolveInfo.serviceInfo.packageName == packageName &&
+                serviceInfo.resolveInfo.serviceInfo.name == BrowserAccessibilityService::class.java.name
         }
     }
 

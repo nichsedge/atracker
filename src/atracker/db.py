@@ -60,6 +60,10 @@ CREATE TABLE IF NOT EXISTS android_events (
     app_label TEXT NOT NULL DEFAULT '',
     duration_secs REAL NOT NULL DEFAULT 0,
     is_idle INTEGER NOT NULL DEFAULT 0,
+    source_type TEXT NOT NULL DEFAULT 'APP',
+    domain TEXT NOT NULL DEFAULT '',
+    page_title TEXT NOT NULL DEFAULT '',
+    browser_package TEXT NOT NULL DEFAULT '',
     PRIMARY KEY(device_id, id)
 );
 
@@ -182,7 +186,8 @@ async def init_db() -> None:
                     is_idle INTEGER NOT NULL DEFAULT 0,
                     PRIMARY KEY(device_id, id)
                 );
-                INSERT INTO events_new SELECT * FROM events;
+                INSERT INTO events_new (id, device_id, timestamp, end_timestamp, wm_class, title, pid, duration_secs, is_idle)
+                SELECT id, device_id, timestamp, end_timestamp, wm_class, title, pid, duration_secs, is_idle FROM events;
                 DROP TABLE events;
                 ALTER TABLE events_new RENAME TO events;
 
@@ -197,7 +202,8 @@ async def init_db() -> None:
                     is_idle INTEGER NOT NULL DEFAULT 0,
                     PRIMARY KEY(device_id, id)
                 );
-                INSERT INTO android_events_new SELECT * FROM android_events;
+                INSERT INTO android_events_new (id, device_id, timestamp, end_timestamp, package_name, app_label, duration_secs, is_idle)
+                SELECT id, device_id, timestamp, end_timestamp, package_name, app_label, duration_secs, is_idle FROM android_events;
                 DROP TABLE android_events;
                 ALTER TABLE android_events_new RENAME TO android_events;
                 
@@ -208,6 +214,18 @@ async def init_db() -> None:
 
                 PRAGMA user_version = 2;
             """)
+            
+        if version < 3:
+            existing_cols = [r[1] for r in conn.execute("PRAGMA table_info(android_events)").fetchall()]
+            if "source_type" not in existing_cols:
+                conn.execute("ALTER TABLE android_events ADD COLUMN source_type TEXT NOT NULL DEFAULT 'APP'")
+            if "domain" not in existing_cols:
+                conn.execute("ALTER TABLE android_events ADD COLUMN domain TEXT NOT NULL DEFAULT ''")
+            if "page_title" not in existing_cols:
+                conn.execute("ALTER TABLE android_events ADD COLUMN page_title TEXT NOT NULL DEFAULT ''")
+            if "browser_package" not in existing_cols:
+                conn.execute("ALTER TABLE android_events ADD COLUMN browser_package TEXT NOT NULL DEFAULT ''")
+            conn.execute("PRAGMA user_version = 3")
         
         # Seed default settings if empty
         settings_defaults = [
@@ -328,7 +346,7 @@ async def get_events(target_date: date, device_ids: list[str] | None = None) -> 
             f"""WITH combined_events AS (
                 SELECT id, device_id, 'local' as platform, timestamp, end_timestamp, wm_class, title, pid, duration_secs, is_idle FROM events
                 UNION ALL
-                SELECT id, device_id, 'android' as platform, timestamp, end_timestamp, package_name as wm_class, app_label as title, 0 as pid, duration_secs, is_idle FROM android_events
+                SELECT id, device_id, 'android' as platform, timestamp, end_timestamp, package_name as wm_class, CASE WHEN source_type = 'BROWSER_TAB' THEN COALESCE(NULLIF(page_title, ''), NULLIF(domain, ''), app_label) ELSE app_label END as title, 0 as pid, duration_secs, is_idle FROM android_events
             )
             SELECT * FROM combined_events
             {where_clause}
@@ -359,7 +377,7 @@ async def get_summary_range(start_date: date, end_date: date, device_ids: list[s
             f"""WITH combined_events AS (
                 SELECT device_id, timestamp, end_timestamp, wm_class, title, duration_secs, is_idle FROM events
                 UNION ALL
-                SELECT device_id, timestamp, end_timestamp, package_name as wm_class, app_label as title, duration_secs, is_idle FROM android_events
+                SELECT device_id, timestamp, end_timestamp, package_name as wm_class, CASE WHEN source_type = 'BROWSER_TAB' THEN COALESCE(NULLIF(page_title, ''), NULLIF(domain, ''), app_label) ELSE app_label END as title, duration_secs, is_idle FROM android_events
             )
             SELECT wm_class, title,
                    SUM(duration_secs) as total_secs,
@@ -396,7 +414,7 @@ async def get_timeline_range(start_date: date, end_date: date, device_ids: list[
             f"""WITH combined_events AS (
                 SELECT device_id, timestamp, end_timestamp, wm_class, title, duration_secs, is_idle FROM events
                 UNION ALL
-                SELECT device_id, timestamp, end_timestamp, package_name as wm_class, app_label as title, duration_secs, is_idle FROM android_events
+                SELECT device_id, timestamp, end_timestamp, package_name as wm_class, CASE WHEN source_type = 'BROWSER_TAB' THEN COALESCE(NULLIF(page_title, ''), NULLIF(domain, ''), app_label) ELSE app_label END as title, duration_secs, is_idle FROM android_events
             )
             SELECT timestamp, end_timestamp, wm_class, title, duration_secs, is_idle, device_id
             FROM combined_events
@@ -599,8 +617,8 @@ async def sync_android_day(day: str, events: list[dict]) -> int:
         for e in events:
             await db.execute(
                 """INSERT OR REPLACE INTO android_events
-                   (id, device_id, timestamp, end_timestamp, package_name, app_label, duration_secs, is_idle)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                   (id, device_id, timestamp, end_timestamp, package_name, app_label, duration_secs, is_idle, source_type, domain, page_title, browser_package)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     e["id"],
                     e.get("device_id", ""),
@@ -610,6 +628,10 @@ async def sync_android_day(day: str, events: list[dict]) -> int:
                     e.get("app_label", ""),
                     e["duration_secs"],
                     int(e.get("is_idle", False)),
+                    e.get("source_type", "APP"),
+                    e.get("domain", ""),
+                    e.get("page_title", ""),
+                    e.get("browser_package", "")
                 ),
             )
         await db.commit()

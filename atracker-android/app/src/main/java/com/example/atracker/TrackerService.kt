@@ -114,6 +114,12 @@ class TrackerService : Service() {
             val duration = (endTime - currentStartTime) / 1000.0
             if (duration > 1.0) {
                 val pkg = currentPackage!!
+                // Skip browsers — BrowserAccessibilityService records richer tab-level events
+                if (BrowserConfigs.isBrowser(pkg)) {
+                    currentPackage = nextPackage
+                    currentStartTime = endTime
+                    return
+                }
                 val label = if (pkg == "__idle__") "" else getAppLabel(pkg)
                 val event = Event(
                     packageName = pkg,
@@ -121,7 +127,8 @@ class TrackerService : Service() {
                     startTimestamp = currentStartTime,
                     endTimestamp = endTime,
                     durationSecs = duration,
-                    isIdle = pkg == "__idle__"
+                    isIdle = pkg == "__idle__",
+                    sourceType = Event.SOURCE_APP_USAGE
                 )
                 serviceScope.launch {
                     AppDatabase.getDatabase(applicationContext).eventDao().insertEvent(event)

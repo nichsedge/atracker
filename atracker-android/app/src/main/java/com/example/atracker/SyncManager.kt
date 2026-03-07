@@ -23,7 +23,11 @@ data class AndroidEventPayload(
     val package_name: String,
     val app_label: String,
     val duration_secs: Double,
-    val is_idle: Boolean
+    val is_idle: Boolean,
+    val source_type: String,
+    val domain: String? = null,
+    val page_title: String? = null,
+    val browser_package: String? = null
 )
 
 @Serializable
@@ -83,7 +87,11 @@ object SyncManager {
                     package_name = e.packageName,
                     app_label = e.appLabel,
                     duration_secs = e.durationSecs,
-                    is_idle = e.isIdle
+                    is_idle = e.isIdle,
+                    source_type = e.sourceType,
+                    domain = e.domain,
+                    page_title = e.pageTitle,
+                    browser_package = e.browserPackage
                 )
             }
         }

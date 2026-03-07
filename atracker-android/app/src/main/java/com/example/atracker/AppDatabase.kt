@@ -7,7 +7,7 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
-@Database(entities = [Event::class], version = 2, exportSchema = false)
+@Database(entities = [Event::class], version = 3, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun eventDao(): EventDao
 
@@ -23,6 +23,16 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        // Migration v2 -> v3: add browser/tab context columns.
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE events ADD COLUMN sourceType TEXT NOT NULL DEFAULT 'APP_USAGE'")
+                db.execSQL("ALTER TABLE events ADD COLUMN domain TEXT")
+                db.execSQL("ALTER TABLE events ADD COLUMN pageTitle TEXT")
+                db.execSQL("ALTER TABLE events ADD COLUMN browserPackage TEXT")
+            }
+        }
+
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -30,7 +40,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "tracker_database"
                 )
-                    .addMigrations(MIGRATION_1_2)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                     .build()
                 INSTANCE = instance
                 instance

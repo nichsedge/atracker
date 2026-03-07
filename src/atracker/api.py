@@ -56,6 +56,10 @@ class AndroidEvent(BaseModel):
     app_label: str = ""
     duration_secs: float
     is_idle: bool = False
+    source_type: str = "APP"
+    domain: str = ""
+    page_title: str = ""
+    browser_package: str = ""
 
 
 class AndroidSyncPayload(BaseModel):
