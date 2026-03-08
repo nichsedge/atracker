@@ -1449,3 +1449,254 @@ body {
     text-transform: uppercase;
     letter-spacing: 1.5px;
 }
+
+/* ============================================================
+   Light Theme Overrides
+   ============================================================ */
+
+:root {
+    --bg-primary: #f3f6fb;
+    --bg-secondary: #e9eef7;
+    --bg-card: #ffffff;
+    --bg-card-hover: #f8fbff;
+    --bg-sidebar: #f7f9fc;
+
+    --border-subtle: rgba(15, 23, 42, 0.1);
+    --border-active: rgba(37, 99, 235, 0.3);
+
+    --text-primary: #0f172a;
+    --text-secondary: #334155;
+    --text-muted: #64748b;
+    --text-accent: #1d4ed8;
+
+    --accent-blue: #2563eb;
+    --accent-violet: #0ea5e9;
+    --accent-indigo: #1e40af;
+    --accent-green: #059669;
+    --accent-amber: #d97706;
+
+    --glow-blue: rgba(37, 99, 235, 0.09);
+    --glow-violet: rgba(14, 165, 233, 0.08);
+}
+
+html,
+body {
+    background: linear-gradient(180deg, #f8fbff 0%, #edf3fb 100%);
+    color: var(--text-primary);
+}
+
+.app {
+    background:
+        radial-gradient(circle at 16% 12%, var(--glow-violet), transparent 45%),
+        radial-gradient(circle at 86% 8%, var(--glow-blue), transparent 42%),
+        linear-gradient(180deg, #f8fbff 0%, #edf3fb 100%);
+}
+
+.sidebar {
+    background: rgba(247, 249, 252, 0.88);
+    border-right: 1px solid var(--border-subtle);
+    box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.7);
+}
+
+.brand-text {
+    background: linear-gradient(135deg, #2563eb, #0ea5e9);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.nav-link {
+    color: #334155;
+}
+
+.nav-link:hover {
+    background: rgba(37, 99, 235, 0.08);
+    color: #0f172a;
+}
+
+.nav-link.active {
+    background: linear-gradient(135deg, rgba(37, 99, 235, 0.14), rgba(14, 165, 233, 0.11));
+    color: #0f172a;
+    box-shadow: 0 8px 16px rgba(15, 23, 42, 0.08);
+}
+
+.content {
+    scrollbar-color: rgba(15, 23, 42, 0.25) transparent;
+}
+
+.content::-webkit-scrollbar-thumb {
+    background: rgba(15, 23, 42, 0.2);
+}
+
+.view-header h1 {
+    background: linear-gradient(to right, #1d4ed8, #0284c7);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.total-tracked {
+    background: rgba(37, 99, 235, 0.08);
+    border-color: rgba(37, 99, 235, 0.2);
+    color: #1e40af;
+    box-shadow: none;
+}
+
+.card {
+    background: rgba(255, 255, 255, 0.92);
+    border: 1px solid rgba(15, 23, 42, 0.1);
+    backdrop-filter: blur(8px);
+    box-shadow: 0 12px 30px rgba(15, 23, 42, 0.06);
+}
+
+.card:hover {
+    border-color: rgba(37, 99, 235, 0.24);
+    box-shadow: 0 16px 32px rgba(15, 23, 42, 0.08);
+}
+
+.card-glow {
+    border-color: rgba(37, 99, 235, 0.28);
+    box-shadow: 0 12px 28px rgba(37, 99, 235, 0.12);
+}
+
+.now-app-icon {
+    background: linear-gradient(135deg, #1d4ed8, #0ea5e9);
+}
+
+.now-duration {
+    background: none;
+    color: #2563eb;
+    -webkit-text-fill-color: currentColor;
+}
+
+.timeline-container {
+    background: #f4f7fd;
+    border-color: rgba(15, 23, 42, 0.08);
+}
+
+.timeline-block.idle {
+    background: rgba(15, 23, 42, 0.08) !important;
+}
+
+.timeline-tooltip {
+    background: #ffffff;
+    border-color: rgba(15, 23, 42, 0.16);
+    color: #0f172a;
+    box-shadow: 0 12px 28px rgba(15, 23, 42, 0.16);
+}
+
+.timeline-tooltip .tt-time {
+    color: #475569;
+}
+
+.date-filter-group {
+    background: rgba(37, 99, 235, 0.06) !important;
+    border-color: rgba(15, 23, 42, 0.14) !important;
+}
+
+.date-filter-group .input-date,
+.date-filter-group .flatpickr-input,
+.date-filter-group input[type="text"] {
+    background: transparent !important;
+    color: #0f172a !important;
+    border: none !important;
+}
+
+.goal-row,
+.history-row,
+.category-row,
+.rule-row {
+    background: rgba(148, 163, 184, 0.1);
+}
+
+.usage-row:hover,
+.history-row:hover,
+.rule-row:hover,
+.category-header:hover {
+    background: rgba(37, 99, 235, 0.08);
+}
+
+.usage-bar-container,
+.goal-bar-container {
+    background: rgba(15, 23, 42, 0.08);
+}
+
+.select-period,
+.input-date,
+.form-group input[type="text"],
+.form-group input[type="number"],
+.form-group select,
+.regex-input {
+    background: #ffffff !important;
+    color: #0f172a !important;
+    border: 1px solid rgba(15, 23, 42, 0.14) !important;
+    box-shadow: none !important;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.regex-input:focus,
+.input-date:focus,
+.select-period:focus {
+    border-color: rgba(37, 99, 235, 0.45) !important;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.16) !important;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #2563eb, #0284c7);
+}
+
+.btn-secondary {
+    background: rgba(255, 255, 255, 0.85);
+    color: #0f172a;
+    border: 1px solid rgba(15, 23, 42, 0.12);
+}
+
+.btn-secondary:hover {
+    background: rgba(37, 99, 235, 0.08);
+}
+
+.dropdown-menu,
+.modal,
+.flatpickr-calendar {
+    background: #ffffff !important;
+    border: 1px solid rgba(15, 23, 42, 0.12) !important;
+    box-shadow: 0 16px 34px rgba(15, 23, 42, 0.16) !important;
+}
+
+.dropdown-menu a {
+    color: #334155;
+}
+
+.dropdown-menu a:hover {
+    background: rgba(37, 99, 235, 0.1);
+    color: #0f172a;
+}
+
+.modal-backdrop {
+    background: rgba(15, 23, 42, 0.42);
+}
+
+.pattern-item .label {
+    background: rgba(15, 23, 42, 0.08);
+}
+
+.category-patterns b,
+.rule-patterns b {
+    background: rgba(37, 99, 235, 0.08);
+    border-color: rgba(37, 99, 235, 0.16);
+}
+
+.flatpickr-months .flatpickr-month,
+.flatpickr-weekday,
+.flatpickr-day {
+    color: #334155 !important;
+}
+
+.flatpickr-day.today {
+    border-color: #1d4ed8 !important;
+}
+
+.flatpickr-day:hover {
+    background: rgba(37, 99, 235, 0.12) !important;
+}
