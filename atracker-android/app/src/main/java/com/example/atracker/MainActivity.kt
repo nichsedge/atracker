@@ -77,7 +77,7 @@ class MainActivity : AppCompatActivity() {
 
         // Start tracking button
         btnStartTracking.setOnClickListener {
-            if (TrackerService.isRunning) {
+            if (ServiceState.isTrackerServiceRunning(this)) {
                 stopTrackerService()
             } else {
                 if (!hasUsageStatsPermission()) {
@@ -102,7 +102,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         // Auto click "start tracking" when opening app
-        if (!TrackerService.isRunning) {
+        if (SettingsManager.isTrackingEnabled(this) && !ServiceState.isTrackerServiceRunning(this)) {
             btnStartTracking.performClick()
         }
     }

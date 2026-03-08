@@ -57,7 +57,13 @@ class BrowserAccessibilityService : AccessibilityService() {
 
         val root = rootInActiveWindow ?: return
         try {
-            val domain = extractDomain(root, browserConfig) ?: return
+            val domain = extractDomain(root, browserConfig)
+            if (domain == null) {
+                // URL bar can temporarily disappear during app restart/force-stop transitions.
+                // Flush current tab so we don't carry stale Chrome session data forward.
+                flushCurrentEvent(now)
+                return
+            }
             val title = extractTitle(root, event, browserConfig)
             debugLogEvent(event, domain, title, root)
 

@@ -20,7 +20,7 @@ class WatchdogWorker(appContext: Context, params: WorkerParameters) :
 
     override suspend fun doWork(): Result {
         val shouldBeRunning = SettingsManager.isTrackingEnabled(applicationContext)
-        if (shouldBeRunning && !TrackerService.isRunning) {
+        if (shouldBeRunning && !ServiceState.isTrackerServiceRunning(applicationContext)) {
             val intent = Intent(applicationContext, TrackerService::class.java)
             ContextCompat.startForegroundService(applicationContext, intent)
         }
