@@ -46,6 +46,14 @@ class BrowserAccessibilityService : AccessibilityService() {
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null) return
+        try {
+            processEvent(event)
+        } catch (e: Exception) {
+            Log.e(TAG, "onAccessibilityEvent failed", e)
+        }
+    }
+
+    private fun processEvent(event: AccessibilityEvent) {
         val packageName = event.packageName?.toString() ?: return
         val browserConfig = BrowserConfigs.getConfig(packageName) ?: return
         if (event.eventType !in WATCHED_EVENT_TYPES) return
@@ -56,30 +64,26 @@ class BrowserAccessibilityService : AccessibilityService() {
         lastProcessedTime = now
 
         val root = rootInActiveWindow ?: return
-        try {
-            val domain = extractDomain(root, browserConfig)
-            if (domain == null) {
-                // URL bar can temporarily disappear during app restart/force-stop transitions.
-                // Flush current tab so we don't carry stale Chrome session data forward.
-                flushCurrentEvent(now)
-                return
-            }
-            val title = extractTitle(root, event, browserConfig)
-            debugLogEvent(event, domain, title, root)
-
-            if (currentBrowserPackage == packageName &&
-                currentDomain == domain &&
-                currentTitle == title
-            ) return
-
+        val domain = extractDomain(root, browserConfig)
+        if (domain == null) {
+            // URL bar can temporarily disappear during app restart/force-stop transitions.
+            // Flush current tab so we don't carry stale Chrome session data forward.
             flushCurrentEvent(now)
-            currentBrowserPackage = packageName
-            currentDomain = domain
-            currentTitle = title
-            currentStartTime = now
-        } finally {
-            // No need to recycle: minSdk >= 33 auto-recycles AccessibilityNodeInfo
+            return
         }
+        val title = extractTitle(root, event, browserConfig)
+        debugLogEvent(event, domain, title, root)
+
+        if (currentBrowserPackage == packageName &&
+            currentDomain == domain &&
+            currentTitle == title
+        ) return
+
+        flushCurrentEvent(now)
+        currentBrowserPackage = packageName
+        currentDomain = domain
+        currentTitle = title
+        currentStartTime = now
     }
 
     override fun onInterrupt() = Unit
@@ -125,7 +129,11 @@ class BrowserAccessibilityService : AccessibilityService() {
         )
         // Use the class-level scope (properly cancelled in onDestroy)
         scope.launch {
-            AppDatabase.getDatabase(applicationContext).eventDao().insertEvent(event)
+            try {
+                AppDatabase.getDatabase(applicationContext).eventDao().insertEvent(event)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to insert browser event", e)
+            }
         }
         clearCurrentContext()
     }
@@ -144,7 +152,12 @@ class BrowserAccessibilityService : AccessibilityService() {
      */
     private fun extractDomain(root: AccessibilityNodeInfo, config: BrowserConfig): String? {
         for (viewId in config.urlViewIds) {
-            val nodes = root.findAccessibilityNodeInfosByViewId(viewId)
+            val nodes = try {
+                root.findAccessibilityNodeInfosByViewId(viewId)
+            } catch (e: Exception) {
+                Log.w(TAG, "findNodes failed for $viewId", e)
+                continue
+            }
             var match: String? = null
             for (node in nodes) {
                 if (match == null) {
@@ -153,7 +166,6 @@ class BrowserAccessibilityService : AccessibilityService() {
                         match = text
                     }
                 }
-
             }
             if (DEBUG_LOGS) {
                 Log.d(TAG, "URL viewId=$viewId nodes=${nodes.size} firstText=${match ?: "<none>"}")
@@ -171,7 +183,12 @@ class BrowserAccessibilityService : AccessibilityService() {
         config: BrowserConfig
     ): String? {
         for (viewId in config.titleViewIds) {
-            val nodes = root.findAccessibilityNodeInfosByViewId(viewId)
+            val nodes = try {
+                root.findAccessibilityNodeInfosByViewId(viewId)
+            } catch (e: Exception) {
+                Log.w(TAG, "findNodes failed for $viewId", e)
+                continue
+            }
             var match: String? = null
             for (node in nodes) {
                 if (match == null) {
@@ -249,7 +266,9 @@ class BrowserAccessibilityService : AccessibilityService() {
 
             if (depth < DEBUG_MAX_DEPTH) {
                 for (index in 0 until node.childCount) {
-                    node.getChild(index)?.let { queue.add(it to depth + 1) }
+                    try {
+                        node.getChild(index)?.let { queue.add(it to depth + 1) }
+                    } catch (_: Exception) { /* stale node */ }
                 }
             }
         }
