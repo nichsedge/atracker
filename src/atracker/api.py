@@ -62,6 +62,13 @@ class AndroidEvent(BaseModel):
     browser_package: str = ""
 
 
+class ManualEventCreate(BaseModel):
+    start_time: str
+    end_time: str
+    wm_class: str
+    title: str = ""
+
+
 class AndroidSyncPayload(BaseModel):
     # Map of ISO date -> list of events for that day
     # e.g. {"2026-02-25": [...], "2026-02-24": [...]}
@@ -500,6 +507,37 @@ async def sync_android(payload: AndroidSyncPayload):
         count = await db.sync_android_day(day, [e.model_dump() for e in events])
         total += count
     return {"status": "ok", "synced_days": len(payload.days), "synced_events": total}
+
+
+@app.post("/api/events/manual")
+async def add_manual_event(event: ManualEventCreate):
+    """Add a manual activity event."""
+    try:
+        # Replace Z with +00:00 for python fromisoformat compatibility if needed
+        start_ts = event.start_time.replace("Z", "+00:00")
+        end_ts = event.end_time.replace("Z", "+00:00")
+        start = datetime.fromisoformat(start_ts)
+        end = datetime.fromisoformat(end_ts)
+    except ValueError:
+        return JSONResponse(status_code=400, content={"error": "Invalid date format."})
+
+    if start >= end:
+        return JSONResponse(status_code=400, content={"error": "Start time must be before end time."})
+
+    duration_secs = (end - start).total_seconds()
+
+    await db.insert_event(
+        timestamp=event.start_time,
+        end_timestamp=event.end_time,
+        wm_class=event.wm_class,
+        title=event.title,
+        pid=0,
+        duration_secs=duration_secs,
+        is_idle=False
+    )
+    
+    broadcast_event({"type": "activity"})
+    return {"status": "ok"}
 
 
 @app.get("/api/devices")

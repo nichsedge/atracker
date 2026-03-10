@@ -18,6 +18,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setupNavigation();
     setupCategoryEvents();
     setupSettingsEvents();
+    setupManualActivityEvents();
     setCurrentDate();
     loadView('today');
     initWebSocket();
@@ -811,6 +812,49 @@ function setupSettingsEvents() {
             loadPrivacyRules();
         } catch (err) {
             console.error('Failed to save rule', err);
+        }
+    });
+}
+
+function setupManualActivityEvents() {
+    const manualForm = document.getElementById('manual-activity-form');
+    manualForm?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const start = document.getElementById('manual-start').value;
+        const end = document.getElementById('manual-end').value;
+        const app = document.getElementById('manual-app').value;
+        const title = document.getElementById('manual-title').value;
+
+        if (!start || !end || !app) return;
+
+        // Note: standard HTML datetime-local uses local time but we should convert to ISO string.
+        const startDate = new Date(start);
+        const endDate = new Date(end);
+        
+        if (startDate >= endDate) {
+            alert("Start time must be before end time.");
+            return;
+        }
+
+        const payload = {
+            start_time: startDate.toISOString(),
+            end_time: endDate.toISOString(),
+            wm_class: app,
+            title: title
+        };
+
+        try {
+            await fetchAPI('/api/events/manual', {
+                method: 'POST',
+                body: JSON.stringify(payload)
+            });
+            alert('Manual activity saved successfully!');
+            manualForm.reset();
+            switchView('today');
+        } catch (err) {
+            console.error('Failed to save manual activity', err);
+            alert('Failed to save manual activity: ' + err.message);
         }
     });
 }
