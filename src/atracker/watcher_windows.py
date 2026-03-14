@@ -16,6 +16,7 @@ logger = logging.getLogger("atracker.watcher_windows")
 
 DEFAULT_POLL_INTERVAL = config.poll_interval  # seconds
 DEFAULT_IDLE_THRESHOLD = config.idle_threshold * 1000  # milliseconds
+MAX_MISSING_WINDOW_SECS = 60
 
 # Windows API structures and functions
 user32 = ctypes.windll.user32
@@ -79,6 +80,7 @@ class WatcherWindows:
         self._current_start: datetime | None = None
         self._last_poll_time: datetime | None = None
         self._is_idle = False
+        self._missing_window_since: datetime | None = None
         
         # Configuration
         self._poll_interval = poll_interval or DEFAULT_POLL_INTERVAL
@@ -190,7 +192,19 @@ class WatcherWindows:
         # Call Windows API (sync but fast enough not to block async loop practically)
         win_info = get_active_window_info()
         if win_info is None:
+            if self._missing_window_since is None:
+                self._missing_window_since = datetime.now()
+            else:
+                missing_secs = (datetime.now() - self._missing_window_since).total_seconds()
+                if missing_secs >= MAX_MISSING_WINDOW_SECS:
+                    await self._flush_current_event()
+                    self._current_wm_class = ""
+                    self._current_title = ""
+                    self._current_pid = 0
+                    self._current_start = datetime.now()
             return
+        else:
+            self._missing_window_since = None
 
         wm_class = win_info.get("wm_class", "")
         title = win_info.get("title", "")

@@ -19,6 +19,7 @@ logger = logging.getLogger("atracker.watcher")
 
 DEFAULT_POLL_INTERVAL = config.poll_interval  # seconds
 DEFAULT_IDLE_THRESHOLD = config.idle_threshold * 1000  # milliseconds
+MAX_MISSING_WINDOW_SECS = 60
 
 
 class Watcher:
@@ -33,6 +34,7 @@ class Watcher:
         self._current_start: datetime | None = None
         self._last_poll_time: datetime | None = None
         self._is_idle = False
+        self._missing_window_since: datetime | None = None
         self._filter_rules = []
         self._stop_event = asyncio.Event()
         
@@ -180,7 +182,21 @@ class Watcher:
         # Get active window
         win_info = await self._get_active_window()
         if win_info is None:
+            if self._missing_window_since is None:
+                self._missing_window_since = datetime.now()
+            else:
+                missing_secs = (datetime.now() - self._missing_window_since).total_seconds()
+                if missing_secs >= MAX_MISSING_WINDOW_SECS:
+                    # Avoid extremely long events if window info disappears.
+                    await self._flush_current_event()
+                    self._current_wm_class = ""
+                    self._current_title = ""
+                    self._current_pid = 0
+                    self._current_start = datetime.now()
+                    db.set_current_state(None)
             return
+        else:
+            self._missing_window_since = None
 
         wm_class = win_info.get("wm_class", "")
         title = win_info.get("title", "")
