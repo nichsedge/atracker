@@ -14,6 +14,7 @@ else:
 
 
 from atracker.config import config
+from atracker.lock import acquire_watcher_lock, release_watcher_lock
 
 
 def main():
@@ -56,15 +57,22 @@ def main():
         logger.info("Starting atracker daemon...")
         logger.info(f"Dashboard will be available at http://localhost:{config.dashboard_port}")
 
-        # Run API server in a background thread
-        api_thread = threading.Thread(target=_run_api_server, daemon=True)
-        api_thread.start()
+        if not acquire_watcher_lock():
+            logger.error("Another atracker watcher is already running; exiting.")
+            sys.exit(1)
 
-        # Run the watcher in the main async loop
         try:
-            asyncio.run(run_watcher(poll_interval=poll_interval, idle_threshold=idle_threshold))
-        except KeyboardInterrupt:
-            logger.info("Shutting down...")
+            # Run API server in a background thread
+            api_thread = threading.Thread(target=_run_api_server, daemon=True)
+            api_thread.start()
+
+            # Run the watcher in the main async loop
+            try:
+                asyncio.run(run_watcher(poll_interval=poll_interval, idle_threshold=idle_threshold))
+            except KeyboardInterrupt:
+                logger.info("Shutting down...")
+        finally:
+            release_watcher_lock()
 
     elif command == "status":
         import urllib.request
