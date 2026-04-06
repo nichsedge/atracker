@@ -4,6 +4,7 @@ plugins {
     alias(libs.plugins.google.devtools.ksp)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.hilt.plugin)
+    alias(libs.plugins.compose.compiler)
 }
 
 android {
@@ -31,6 +32,7 @@ android {
     }
     buildFeatures {
         buildConfig = true
+        compose = true
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
@@ -45,7 +47,13 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
     implementation(libs.material)
-    implementation(libs.androidx.activity)
+    implementation(libs.androidx.activity.ktx)
+    implementation(libs.androidx.activity.compose)
+    implementation(platform(libs.compose.bom))
+    implementation(libs.compose.ui)
+    implementation(libs.compose.material3)
+    implementation(libs.compose.ui.tooling.preview)
+    debugImplementation(libs.compose.ui.tooling)
     implementation(libs.androidx.constraintlayout)
 
     // Room
