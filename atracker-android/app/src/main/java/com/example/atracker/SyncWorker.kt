@@ -19,8 +19,9 @@ import java.time.format.DateTimeFormatter
 class SyncWorker @AssistedInject constructor(
     @Assisted private val appContext: Context,
     @Assisted workerParams: WorkerParameters,
-    private val eventDao: EventDao,
-    private val httpClient: HttpClient
+    private val eventRepository: EventRepository,
+    private val httpClient: HttpClient,
+    private val settingsRepository: SettingsRepository
 ) : CoroutineWorker(appContext, workerParams) {
 
     private val isoFormatter: DateTimeFormatter =
@@ -32,13 +33,13 @@ class SyncWorker @AssistedInject constructor(
             .withZone(ZoneId.systemDefault())
 
     override suspend fun doWork(): Result {
-        val baseUrl = SettingsManager.getBackendUrl(appContext).trimEnd('/')
+        val baseUrl = settingsRepository.getBackendUrl().trimEnd('/')
         if (baseUrl.isBlank()) {
             return Result.failure()
         }
 
-        val deviceId = SettingsManager.getDeviceId(appContext)
-        val unsynced = eventDao.getUnsynced()
+        val deviceId = settingsRepository.getDeviceId()
+        val unsynced = eventRepository.getUnsynced()
 
         if (unsynced.isEmpty()) {
             return Result.success()
@@ -77,7 +78,7 @@ class SyncWorker @AssistedInject constructor(
             }
 
             if (response.status.isSuccess()) {
-                eventDao.markSynced(unsynced.map { it.id })
+                eventRepository.markSynced(unsynced.map { it.id })
                 Result.success(
                     Data.Builder()
                         .putInt("syncedEvents", unsynced.size)

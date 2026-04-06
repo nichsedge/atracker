@@ -44,8 +44,15 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
+import javax.inject.Inject
+
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+
+    @Inject
+    lateinit var settingsRepository: SettingsRepository
 
     private val viewModel: MainViewModel by viewModels()
 
@@ -62,10 +69,15 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
 
-        // Initial watchdog schedule
-        if (SettingsManager.isTrackingEnabled(this)) {
-            WatchdogWorker.schedule(this)
-            ServiceRestartReceiver.schedule(this)
+        lifecycleScope.launch {
+            if (settingsRepository.isTrackingEnabled()) {
+                WatchdogWorker.schedule(this@MainActivity)
+                ServiceRestartReceiver.schedule(this@MainActivity)
+                
+                if (!ServiceState.isTrackerServiceRunning(this@MainActivity)) {
+                    handleStartTracking()
+                }
+            }
         }
 
         setContent {
@@ -86,11 +98,6 @@ class MainActivity : ComponentActivity() {
                     )
                 }
             }
-        }
-
-        // Auto click "start tracking" when opening app
-        if (SettingsManager.isTrackingEnabled(this) && !ServiceState.isTrackerServiceRunning(this)) {
-            handleStartTracking()
         }
     }
 
@@ -142,36 +149,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun performSync() {
-        val url = viewModel.uiState.value.backendUrl
-        if (url.isBlank() || !isValidBackendUrl(url)) {
-            viewModel.syncFinished(false, "Please set a valid backend URL first.")
-            return
-        }
-
-        viewModel.syncStarted()
-        val workRequest = OneTimeWorkRequestBuilder<SyncWorker>().build()
-        WorkManager.getInstance(this).enqueue(workRequest)
-
-        WorkManager.getInstance(this).getWorkInfoByIdLiveData(workRequest.id)
-            .observe(this) { workInfo ->
-                if (workInfo != null && workInfo.state.isFinished) {
-                    if (workInfo.state == WorkInfo.State.SUCCEEDED) {
-                        SettingsManager.setLastSyncTime(this, System.currentTimeMillis())
-                        val syncedEvents = workInfo.outputData.getInt("syncedEvents", 0)
-                        val syncedDays = workInfo.outputData.getInt("syncedDays", 0)
-                        
-                        val msg = if (syncedEvents == 0) {
-                            "Already up to date."
-                        } else {
-                            "Synced ${syncedEvents} events across ${syncedDays} day(s). ✓"
-                        }
-                        viewModel.syncFinished(true, msg)
-                    } else {
-                        val error = workInfo.outputData.getString("error") ?: "Unknown error"
-                        viewModel.syncFinished(false, "Sync failed: $error")
-                    }
-                }
-            }
+        viewModel.performSync()
     }
 
     private fun openNotificationSettings() {

@@ -1,6 +1,9 @@
 package com.example.atracker
 
 import android.content.Context
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.work.WorkManager
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -19,6 +22,18 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun provideDataStore(@ApplicationContext context: Context): DataStore<Preferences> {
+        return context.dataStore
+    }
+
+    @Provides
+    @Singleton
+    fun provideSettingsRepository(dataStore: DataStore<Preferences>): SettingsRepository {
+        return SettingsRepositoryImpl(dataStore)
+    }
+
+    @Provides
+    @Singleton
     fun provideAppDatabase(@ApplicationContext context: Context): AppDatabase {
         return AppDatabase.getDatabase(context)
     }
@@ -31,11 +46,23 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun provideEventRepository(eventDao: EventDao): EventRepository {
+        return EventRepositoryImpl(eventDao)
+    }
+
+    @Provides
+    @Singleton
     fun provideHttpClient(): HttpClient {
         return HttpClient(OkHttp) {
             install(ContentNegotiation) {
                 json(Json { ignoreUnknownKeys = true })
             }
         }
+    }
+
+    @Provides
+    @Singleton
+    fun provideWorkManager(@ApplicationContext context: Context): WorkManager {
+        return WorkManager.getInstance(context)
     }
 }

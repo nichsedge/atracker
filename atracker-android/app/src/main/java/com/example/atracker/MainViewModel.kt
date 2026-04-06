@@ -1,13 +1,13 @@
 package com.example.atracker
 
-import android.app.Application
-import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkInfo
+import androidx.work.WorkManager
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 data class MainUiState(
@@ -24,21 +24,29 @@ data class MainUiState(
 
 @HiltViewModel
 class MainViewModel @Inject constructor(
-    application: Application
-) : AndroidViewModel(application) {
+    private val settingsRepository: SettingsRepository,
+    private val workManager: WorkManager
+) : ViewModel() {
 
     private val _uiState = MutableStateFlow(MainUiState())
     val uiState: StateFlow<MainUiState> = _uiState.asStateFlow()
 
     init {
-        // Initialize state from SettingsManager
-        val context = getApplication<Application>()
-        _uiState.update { current ->
-            current.copy(
-                backendUrl = SettingsManager.getBackendUrl(context),
-                isTrackingEnabled = SettingsManager.isTrackingEnabled(context),
-                lastSyncTime = SettingsManager.getLastSyncTime(context)
-            )
+        // Collect state from SettingsRepository and update UI State
+        viewModelScope.launch {
+            settingsRepository.backendUrlFlow.collect { url ->
+                _uiState.update { it.copy(backendUrl = url) }
+            }
+        }
+        viewModelScope.launch {
+            settingsRepository.isTrackingEnabledFlow.collect { enabled ->
+                _uiState.update { it.copy(isTrackingEnabled = enabled) }
+            }
+        }
+        viewModelScope.launch {
+            settingsRepository.lastSyncTimeFlow.collect { time ->
+                _uiState.update { it.copy(lastSyncTime = time) }
+            }
         }
     }
 
@@ -57,16 +65,59 @@ class MainViewModel @Inject constructor(
     }
 
     fun saveBackendUrl(url: String) {
-        SettingsManager.setBackendUrl(getApplication(), url)
-        _uiState.update { it.copy(backendUrl = url) }
+        viewModelScope.launch {
+            settingsRepository.setBackendUrl(url)
+        }
     }
 
     fun setTrackingEnabled(enabled: Boolean) {
-        SettingsManager.setTrackingEnabled(getApplication(), enabled)
-        _uiState.update { it.copy(isTrackingEnabled = enabled) }
+        viewModelScope.launch {
+            settingsRepository.setTrackingEnabled(enabled)
+        }
     }
 
-    fun syncStarted() {
+    fun performSync() {
+        val url = _uiState.value.backendUrl
+        if (url.isBlank() || !isValidBackendUrl(url)) {
+            syncFinished(false, "Please set a valid backend URL first.")
+            return
+        }
+
+        syncStarted()
+        val workRequest = OneTimeWorkRequestBuilder<SyncWorker>().build()
+        workManager.enqueue(workRequest)
+
+        viewModelScope.launch {
+            workManager.getWorkInfoByIdFlow(workRequest.id).collect { workInfo ->
+                if (workInfo != null && workInfo.state.isFinished) {
+                    if (workInfo.state == WorkInfo.State.SUCCEEDED) {
+                        settingsRepository.setLastSyncTime(System.currentTimeMillis())
+                        val syncedEvents = workInfo.outputData.getInt("syncedEvents", 0)
+                        val syncedDays = workInfo.outputData.getInt("syncedDays", 0)
+
+                        val msg = if (syncedEvents == 0) {
+                            "Already up to date."
+                        } else {
+                            "Synced $syncedEvents events across $syncedDays day(s). ✓"
+                        }
+                        syncFinished(true, msg)
+                    } else {
+                        val error = workInfo.outputData.getString("error") ?: "Unknown error"
+                        syncFinished(false, "Sync failed: $error")
+                    }
+                }
+            }
+        }
+    }
+
+    private fun isValidBackendUrl(url: String): Boolean {
+        // Simplified URL validation for ViewModel
+        if (url.isBlank()) return false
+        val lower = url.lowercase()
+        return lower.startsWith("http://") || lower.startsWith("https://")
+    }
+
+    private fun syncStarted() {
         _uiState.update {
             it.copy(
                 isSyncing = true,
@@ -76,13 +127,12 @@ class MainViewModel @Inject constructor(
         }
     }
 
-    fun syncFinished(success: Boolean, message: String) {
+    private fun syncFinished(success: Boolean, message: String) {
         _uiState.update { current ->
             current.copy(
                 isSyncing = false,
                 syncStatusMessage = message,
-                isSyncSuccess = success,
-                lastSyncTime = SettingsManager.getLastSyncTime(getApplication())
+                isSyncSuccess = success
             )
         }
     }

@@ -22,7 +22,7 @@ import javax.inject.Inject
 class TrackerService : Service() {
 
     @Inject
-    lateinit var eventDao: EventDao
+    lateinit var eventRepository: EventRepository
 
     companion object {
         /** Checked by WatchdogWorker to decide whether to restart. */
@@ -138,7 +138,7 @@ class TrackerService : Service() {
                     sourceType = Event.SOURCE_APP_USAGE
                 )
                 serviceScope.launch {
-                    AppDatabase.getDatabase(applicationContext).eventDao().insertEvent(event)
+                    eventRepository.insertEvent(event)
                 }
             }
         }

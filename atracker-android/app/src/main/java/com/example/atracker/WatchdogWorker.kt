@@ -3,11 +3,14 @@ package com.example.atracker
 import android.content.Context
 import android.content.Intent
 import androidx.core.content.ContextCompat
+import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import dagger.assisted.Assisted
+import dagger.assisted.AssistedInject
 import java.util.concurrent.TimeUnit
 
 /**
@@ -15,11 +18,15 @@ import java.util.concurrent.TimeUnit
  * is not running, it restarts it. This is the watchdog for cases where
  * Android's low-memory killer has stopped the service.
  */
-class WatchdogWorker(appContext: Context, params: WorkerParameters) :
-    CoroutineWorker(appContext, params) {
+@HiltWorker
+class WatchdogWorker @AssistedInject constructor(
+    @Assisted private val appContext: Context,
+    @Assisted params: WorkerParameters,
+    private val settingsRepository: SettingsRepository
+) : CoroutineWorker(appContext, params) {
 
     override suspend fun doWork(): Result {
-        val shouldBeRunning = SettingsManager.isTrackingEnabled(applicationContext)
+        val shouldBeRunning = settingsRepository.isTrackingEnabled()
         if (shouldBeRunning && !ServiceState.isTrackerServiceRunning(applicationContext)) {
             val intent = Intent(applicationContext, TrackerService::class.java)
             ContextCompat.startForegroundService(applicationContext, intent)

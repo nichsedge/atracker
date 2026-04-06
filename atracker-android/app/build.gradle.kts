@@ -70,6 +70,9 @@ dependencies {
 
     // WorkManager watchdog
     implementation(libs.androidx.work.runtime.ktx)
+    
+    // DataStore
+    implementation(libs.androidx.datastore.preferences)
 
     // Hilt
     implementation(libs.hilt.android)

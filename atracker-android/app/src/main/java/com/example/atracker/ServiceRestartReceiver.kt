@@ -7,19 +7,35 @@ import android.content.Context
 import android.content.Intent
 import android.os.SystemClock
 import androidx.core.content.ContextCompat
+import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 /**
  * Receives periodic AlarmManager pings and restarts TrackerService if it is not running.
  * AlarmManager alarms are owned by the system process, so they survive app process kills
  * (e.g. "Clear All" in the Recents screen).
  */
+@AndroidEntryPoint
 class ServiceRestartReceiver : BroadcastReceiver() {
 
+    @Inject
+    lateinit var settingsRepository: SettingsRepository
+
     override fun onReceive(context: Context, intent: Intent) {
-        val shouldBeRunning = SettingsManager.isTrackingEnabled(context)
-        if (shouldBeRunning && !ServiceState.isTrackerServiceRunning(context)) {
-            val serviceIntent = Intent(context, TrackerService::class.java)
-            ContextCompat.startForegroundService(context, serviceIntent)
+        val pendingResult = goAsync()
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val shouldBeRunning = settingsRepository.isTrackingEnabled()
+                if (shouldBeRunning && !ServiceState.isTrackerServiceRunning(context)) {
+                    val serviceIntent = Intent(context, TrackerService::class.java)
+                    ContextCompat.startForegroundService(context, serviceIntent)
+                }
+            } finally {
+                pendingResult.finish()
+            }
         }
     }
 
