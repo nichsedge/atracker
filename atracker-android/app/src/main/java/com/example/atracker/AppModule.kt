@@ -34,6 +34,12 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun provideServiceStateManager(): ServiceStateManager {
+        return ServiceStateManagerImpl()
+    }
+
+    @Provides
+    @Singleton
     fun provideAppDatabase(@ApplicationContext context: Context): AppDatabase {
         return AppDatabase.getDatabase(context)
     }

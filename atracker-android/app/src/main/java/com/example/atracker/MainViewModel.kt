@@ -25,6 +25,7 @@ data class MainUiState(
 @HiltViewModel
 class MainViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
+    private val serviceStateManager: ServiceStateManager,
     private val workManager: WorkManager
 ) : ViewModel() {
 
@@ -48,18 +49,21 @@ class MainViewModel @Inject constructor(
                 _uiState.update { it.copy(lastSyncTime = time) }
             }
         }
+        viewModelScope.launch {
+            serviceStateManager.isServiceRunningFlow.collect { isRunning ->
+                _uiState.update { it.copy(isTrackerRunning = isRunning) }
+            }
+        }
     }
 
-    fun updatePermissionsAndServiceState(
+    fun updatePermissions(
         hasUsage: Boolean,
-        hasNotif: Boolean,
-        isRunning: Boolean
+        hasNotif: Boolean
     ) {
         _uiState.update {
             it.copy(
                 hasUsagePermission = hasUsage,
-                hasNotificationPermission = hasNotif,
-                isTrackerRunning = isRunning
+                hasNotificationPermission = hasNotif
             )
         }
     }

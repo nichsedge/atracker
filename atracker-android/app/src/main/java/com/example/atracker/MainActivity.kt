@@ -54,6 +54,9 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var settingsRepository: SettingsRepository
 
+    @Inject
+    lateinit var serviceStateManager: ServiceStateManager
+
     private val viewModel: MainViewModel by viewModels()
 
     private val requestNotificationPermissionLauncher =
@@ -74,7 +77,7 @@ class MainActivity : ComponentActivity() {
                 WatchdogWorker.schedule(this@MainActivity)
                 ServiceRestartReceiver.schedule(this@MainActivity)
                 
-                if (!ServiceState.isTrackerServiceRunning(this@MainActivity)) {
+                if (!serviceStateManager.isServiceRunningFlow.value) {
                     handleStartTracking()
                 }
             }
@@ -107,10 +110,9 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun updatePermissions() {
-        viewModel.updatePermissionsAndServiceState(
+        viewModel.updatePermissions(
             hasUsage = hasUsageStatsPermission(),
-            hasNotif = hasNotificationPermission(),
-            isRunning = ServiceState.isTrackerServiceRunning(this)
+            hasNotif = hasNotificationPermission()
         )
     }
 
@@ -129,7 +131,6 @@ class MainActivity : ComponentActivity() {
     private fun startTrackerService() {
         val intent = Intent(this, TrackerService::class.java)
         ContextCompat.startForegroundService(this, intent)
-        TrackerService.isRunning = true
         viewModel.setTrackingEnabled(true)
         WatchdogWorker.schedule(this)
         ServiceRestartReceiver.schedule(this)
@@ -140,7 +141,6 @@ class MainActivity : ComponentActivity() {
     private fun stopTrackerService() {
         val intent = Intent(this, TrackerService::class.java)
         stopService(intent)
-        TrackerService.isRunning = false
         viewModel.setTrackingEnabled(false)
         WatchdogWorker.cancel(this)
         ServiceRestartReceiver.cancel(this)

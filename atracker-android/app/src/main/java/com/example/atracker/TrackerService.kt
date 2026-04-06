@@ -24,11 +24,8 @@ class TrackerService : Service() {
     @Inject
     lateinit var eventRepository: EventRepository
 
-    companion object {
-        /** Checked by WatchdogWorker to decide whether to restart. */
-        @Volatile
-        var isRunning = false
-    }
+    @Inject
+    lateinit var serviceStateManager: ServiceStateManager
 
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var pollingJob: Job? = null
@@ -49,7 +46,7 @@ class TrackerService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        isRunning = true
+        serviceStateManager.setServiceRunning(true)
         createNotificationChannel()
         startForeground(1, createNotification())
         // Schedule the AlarmManager watchdog. AlarmManager lives in the system process,
@@ -218,7 +215,7 @@ class TrackerService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
-        isRunning = false
+        serviceStateManager.setServiceRunning(false)
         unregisterReceiver(screenReceiver)
         serviceScope.cancel()
     }

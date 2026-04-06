@@ -24,12 +24,15 @@ class ServiceRestartReceiver : BroadcastReceiver() {
     @Inject
     lateinit var settingsRepository: SettingsRepository
 
+    @Inject
+    lateinit var serviceStateManager: ServiceStateManager
+
     override fun onReceive(context: Context, intent: Intent) {
         val pendingResult = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val shouldBeRunning = settingsRepository.isTrackingEnabled()
-                if (shouldBeRunning && !ServiceState.isTrackerServiceRunning(context)) {
+                if (shouldBeRunning && !serviceStateManager.isServiceRunningFlow.value) {
                     val serviceIntent = Intent(context, TrackerService::class.java)
                     ContextCompat.startForegroundService(context, serviceIntent)
                 }

@@ -22,12 +22,13 @@ import java.util.concurrent.TimeUnit
 class WatchdogWorker @AssistedInject constructor(
     @Assisted private val appContext: Context,
     @Assisted params: WorkerParameters,
-    private val settingsRepository: SettingsRepository
+    private val settingsRepository: SettingsRepository,
+    private val serviceStateManager: ServiceStateManager
 ) : CoroutineWorker(appContext, params) {
 
     override suspend fun doWork(): Result {
         val shouldBeRunning = settingsRepository.isTrackingEnabled()
-        if (shouldBeRunning && !ServiceState.isTrackerServiceRunning(applicationContext)) {
+        if (shouldBeRunning && !serviceStateManager.isServiceRunningFlow.value) {
             val intent = Intent(applicationContext, TrackerService::class.java)
             ContextCompat.startForegroundService(applicationContext, intent)
         }
