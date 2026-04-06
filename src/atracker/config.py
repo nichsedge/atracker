@@ -1,5 +1,6 @@
 import os
 import yaml
+import copy
 from pathlib import Path
 import logging
 
@@ -26,7 +27,7 @@ CONFIG_PATH = CONFIG_DIR / "config.yaml"
 
 class Config:
     def __init__(self):
-        self._config = DEFAULT_CONFIG.copy()
+        self._config = copy.deepcopy(DEFAULT_CONFIG)
         self.load()
 
     def load(self):
