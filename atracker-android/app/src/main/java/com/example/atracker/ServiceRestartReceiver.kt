@@ -25,7 +25,7 @@ class ServiceRestartReceiver : BroadcastReceiver() {
 
     companion object {
         private const val REQUEST_CODE = 9001
-        private const val INTERVAL_MS = 60_000L
+        private const val INTERVAL_MS = AlarmManager.INTERVAL_FIFTEEN_MINUTES
 
         fun schedule(context: Context) {
             val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
@@ -36,7 +36,7 @@ class ServiceRestartReceiver : BroadcastReceiver() {
                 intent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
-            alarmManager.setRepeating(
+            alarmManager.setInexactRepeating(
                 AlarmManager.ELAPSED_REALTIME,
                 SystemClock.elapsedRealtime() + INTERVAL_MS,
                 INTERVAL_MS,

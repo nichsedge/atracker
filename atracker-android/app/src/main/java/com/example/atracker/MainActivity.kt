@@ -59,8 +59,11 @@ class MainActivity : AppCompatActivity() {
             insets
         }
 
-        // Ensure watchdog is always scheduled
-        WatchdogWorker.schedule(this)
+        // Schedule watchdogs only if tracking is enabled
+        if (SettingsManager.isTrackingEnabled(this)) {
+            WatchdogWorker.schedule(this)
+            ServiceRestartReceiver.schedule(this)
+        }
 
         tvSyncStatus = findViewById(R.id.tvSyncStatus)
         btnSync = findViewById(R.id.btnSync)
@@ -184,6 +187,8 @@ class MainActivity : AppCompatActivity() {
         ContextCompat.startForegroundService(this, intent)
         TrackerService.isRunning = true
         SettingsManager.setTrackingEnabled(this, true)
+        WatchdogWorker.schedule(this)
+        ServiceRestartReceiver.schedule(this)
         updateTrackingButtonState()
         Toast.makeText(this, "Tracker Started", Toast.LENGTH_SHORT).show()
     }
@@ -193,6 +198,8 @@ class MainActivity : AppCompatActivity() {
         stopService(intent)
         TrackerService.isRunning = false
         SettingsManager.setTrackingEnabled(this, false)
+        WatchdogWorker.cancel(this)
+        ServiceRestartReceiver.cancel(this)
         updateTrackingButtonState()
         Toast.makeText(this, "Tracker Stopped", Toast.LENGTH_SHORT).show()
     }

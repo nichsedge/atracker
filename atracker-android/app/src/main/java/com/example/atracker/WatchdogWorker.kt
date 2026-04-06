@@ -41,5 +41,9 @@ class WatchdogWorker(appContext: Context, params: WorkerParameters) :
                 request
             )
         }
+
+        fun cancel(context: Context) {
+            WorkManager.getInstance(context).cancelUniqueWork(WORK_NAME)
+        }
     }
 }

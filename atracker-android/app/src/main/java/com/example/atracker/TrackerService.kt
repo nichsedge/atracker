@@ -30,6 +30,7 @@ class TrackerService : Service() {
     private var currentPackage: String? = null
     private var currentStartTime: Long = 0L
     private var isIdle: Boolean = false
+    private var lastQueryTime: Long = 0L
 
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -54,6 +55,7 @@ class TrackerService : Service() {
             addAction(Intent.ACTION_SCREEN_ON)
         }
         registerReceiver(screenReceiver, filter)
+        lastQueryTime = System.currentTimeMillis() - 10_000
         startPolling()
     }
 
@@ -61,29 +63,30 @@ class TrackerService : Service() {
         pollingJob = serviceScope.launch {
             while (isActive) {
                 if (!isIdle) {
-                    val foregroundApp = getForegroundApp()
-                    if (foregroundApp != null && foregroundApp != currentPackage) {
-                        flushPreviousEvent(foregroundApp)
+                    val now = System.currentTimeMillis()
+                    val foregroundEvent = getForegroundApp(lastQueryTime, now)
+                    lastQueryTime = now
+                    if (foregroundEvent != null && foregroundEvent.packageName != currentPackage) {
+                        flushPreviousEvent(foregroundEvent.packageName, foregroundEvent.timestamp)
                     }
                 }
-                delay(5000)
+                delay(15_000)
             }
         }
     }
 
-    private fun getForegroundApp(): String? {
-        val usageStatsManager = getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
-        val endTime = System.currentTimeMillis()
-        val startTime = endTime - 10000
+    private data class ForegroundEvent(val packageName: String, val timestamp: Long)
 
+    private fun getForegroundApp(startTime: Long, endTime: Long): ForegroundEvent? {
+        val usageStatsManager = getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
         val usageEvents = usageStatsManager.queryEvents(startTime, endTime)
         val event = UsageEvents.Event()
-        var lastResumedApp: String? = null
+        var lastResumedApp: ForegroundEvent? = null
 
         while (usageEvents.hasNextEvent()) {
             usageEvents.getNextEvent(event)
             if (event.eventType == UsageEvents.Event.ACTIVITY_RESUMED) {
-                lastResumedApp = event.packageName
+                lastResumedApp = ForegroundEvent(event.packageName, event.timeStamp)
             }
         }
         return lastResumedApp
@@ -99,17 +102,20 @@ class TrackerService : Service() {
     }
 
     private fun handleScreenOff() {
-        flushPreviousEvent("__idle__")
+        val now = System.currentTimeMillis()
+        flushPreviousEvent("__idle__", now)
+        lastQueryTime = now
         isIdle = true
     }
 
     private fun handleScreenOn() {
-        flushPreviousEvent(null)
+        val now = System.currentTimeMillis()
+        flushPreviousEvent(null, now)
+        lastQueryTime = now
         isIdle = false
     }
 
-    private fun flushPreviousEvent(nextPackage: String?) {
-        val endTime = System.currentTimeMillis()
+    private fun flushPreviousEvent(nextPackage: String?, endTime: Long) {
         if (currentPackage != null && currentStartTime > 0) {
             val duration = (endTime - currentStartTime) / 1000.0
             if (duration > 1.0) {
