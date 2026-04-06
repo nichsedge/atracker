@@ -244,7 +244,7 @@ function renderGoals(summary) {
 
             let html = `<div class="goal-row">
                 <div class="goal-header">
-                    <div class="goal-name"><span class="category-color-small" style="background: ${cat.color}; width: 10px; height: 10px; border-radius: 50%; display: inline-block;"></span> ${cat.name}</div>
+                    <div class="goal-name"><span class="category-color-small" style="background: ${cat.color}; width: 10px; height: 10px; border-radius: 50%; display: inline-block;"></span> ${escapeHtml(cat.name)}</div>
                     <div class="goal-status">`;
 
             if (cat.daily_goal_secs > 0) {
@@ -552,10 +552,10 @@ function renderDeviceFilters(devices) {
 
     container.innerHTML = devices.map(d => `
         <label class="device-filter-item" style="display: flex; align-items: center; gap: 0.5rem; font-size: 13px; color: var(--text-primary); cursor: pointer; user-select: none;">
-            <input type="checkbox" value="${d.device_id}" checked style="width: 14px; height: 14px; accent-color: var(--accent);">
+            <input type="checkbox" value="${escapeHtml(d.device_id)}" checked style="width: 14px; height: 14px; accent-color: var(--accent);">
             <div style="display: flex; flex-direction: column;">
-                <span>${d.platform}</span>
-                <span style="font-size: 10px; color: var(--text-secondary);">${d.device_id.substring(0, 8)}...</span>
+                <span>${escapeHtml(d.platform)}</span>
+                <span style="font-size: 10px; color: var(--text-secondary);">${escapeHtml(d.device_id.substring(0, 8))}...</span>
             </div>
         </label>
     `).join('');
