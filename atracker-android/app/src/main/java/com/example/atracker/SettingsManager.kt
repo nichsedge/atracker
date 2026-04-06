@@ -7,6 +7,7 @@ object SettingsManager {
     private const val KEY_BACKEND_URL = "backend_url"
     private const val KEY_DEVICE_ID = "device_id"
     private const val KEY_TRACKING_ENABLED = "tracking_enabled"
+    private const val KEY_LAST_SYNC_TIME = "last_sync_time"
 
     private fun prefs(context: Context) =
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -22,6 +23,12 @@ object SettingsManager {
 
     fun setTrackingEnabled(context: Context, enabled: Boolean) =
         prefs(context).edit().putBoolean(KEY_TRACKING_ENABLED, enabled).apply()
+
+    fun getLastSyncTime(context: Context): Long =
+        prefs(context).getLong(KEY_LAST_SYNC_TIME, 0L)
+
+    fun setLastSyncTime(context: Context, timeMillis: Long) =
+        prefs(context).edit().putLong(KEY_LAST_SYNC_TIME, timeMillis).apply()
 
     fun getDeviceId(context: Context): String {
         val prefs = prefs(context)

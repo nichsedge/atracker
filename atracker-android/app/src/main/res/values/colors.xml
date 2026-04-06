@@ -12,4 +12,10 @@
     <color name="surfaceVariant">#E0E2EC</color>
     <color name="outline">#74777F</color>
     <color name="error">#BA1A1A</color>
+    <color name="success">#1B5E20</color>
+    <color name="warning">#B26A00</color>
+    <color name="chipOn">#D7F4D9</color>
+    <color name="chipOff">#E8EAF1</color>
+    <color name="textMuted">#6B7280</color>
+    <color name="cardStroke">#E1E4EA</color>
 </resources>

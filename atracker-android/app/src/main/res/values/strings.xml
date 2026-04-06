@@ -1,3 +1,27 @@
 <resources>
     <string name="app_name">Atracker</string>
+    <string name="tracking_on">Tracking On</string>
+    <string name="tracking_off">Tracking Off</string>
+    <string name="tracking_subtitle_on">Monitoring app usage in the background</string>
+    <string name="tracking_subtitle_off">Start tracking to record app usage</string>
+    <string name="tracking_subtitle_needs_permission">Grant Usage Access to enable tracking</string>
+    <string name="tracking_chip_on">Active</string>
+    <string name="tracking_chip_off">Paused</string>
+    <string name="tracking_hint">Only app usage is recorded. No content is captured.</string>
+    <string name="setup_title">Setup Checklist</string>
+    <string name="setup_usage_access">Usage Access</string>
+    <string name="setup_notifications">Notifications</string>
+    <string name="action_grant">Grant</string>
+    <string name="action_granted">Granted</string>
+    <string name="backend_title">Backend Configuration</string>
+    <string name="backend_hint">Backend URL</string>
+    <string name="backend_helper">Example: http://192.xx.xx.xx:8932/</string>
+    <string name="backend_saved">Backend URL saved</string>
+    <string name="backend_invalid">Enter a valid https:// or http:// URL</string>
+    <string name="sync_now">Sync Data Now</string>
+    <string name="last_sync_never">Last sync: never</string>
+    <string name="last_sync_prefix">Last sync: %1$s</string>
+    <string name="save_url">Save URL</string>
+    <string name="start_tracking">Start Tracking</string>
+    <string name="stop_tracking">Stop Tracking</string>
 </resources>
