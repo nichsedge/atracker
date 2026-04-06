@@ -39,42 +39,46 @@ class SyncWorker @AssistedInject constructor(
             .withZone(ZoneId.systemDefault())
 
     override suspend fun doWork(): Result {
-        val baseUrl = settingsRepository.getBackendUrl().trimEnd('/')
-        if (baseUrl.isBlank()) {
-            return Result.failure()
-        }
-
-        val deviceId = settingsRepository.getDeviceId()
-        val unsynced = eventRepository.getUnsynced()
-
-        if (unsynced.isEmpty()) {
-            return Result.success()
-        }
-
-        val byDay = unsynced.groupBy { event ->
-            dayFormatter.format(Instant.ofEpochMilli(event.startTimestamp))
-        }
-
-        val payloadDays = byDay.mapValues { (_, events) ->
-            events.map { e ->
-                AndroidEventPayload(
-                    id = e.id,
-                    device_id = deviceId,
-                    timestamp = isoFormatter.format(Instant.ofEpochMilli(e.startTimestamp)),
-                    end_timestamp = isoFormatter.format(Instant.ofEpochMilli(e.endTimestamp)),
-                    package_name = e.packageName,
-                    app_label = e.appLabel,
-                    duration_secs = e.durationSecs,
-                    is_idle = e.isIdle,
-                    source_type = e.sourceType,
-                    domain = e.domain,
-                    page_title = e.pageTitle,
-                    browser_package = e.browserPackage
+        return try {
+            val baseUrl = settingsRepository.getBackendUrl().trimEnd('/')
+            if (baseUrl.isBlank()) {
+                return Result.failure(
+                    Data.Builder()
+                        .putString("error", "Backend URL is not set")
+                        .build()
                 )
             }
-        }
 
-        return try {
+            val deviceId = settingsRepository.getDeviceId()
+            val unsynced = eventRepository.getUnsynced()
+
+            if (unsynced.isEmpty()) {
+                return Result.success()
+            }
+
+            val byDay = unsynced.groupBy { event ->
+                dayFormatter.format(Instant.ofEpochMilli(event.startTimestamp))
+            }
+
+            val payloadDays = byDay.mapValues { (_, events) ->
+                events.map { e ->
+                    AndroidEventPayload(
+                        id = e.id,
+                        device_id = deviceId,
+                        timestamp = isoFormatter.format(Instant.ofEpochMilli(e.startTimestamp)),
+                        end_timestamp = isoFormatter.format(Instant.ofEpochMilli(e.endTimestamp)),
+                        package_name = e.packageName,
+                        app_label = e.appLabel,
+                        duration_secs = e.durationSecs,
+                        is_idle = e.isIdle,
+                        source_type = e.sourceType,
+                        domain = e.domain,
+                        page_title = e.pageTitle,
+                        browser_package = e.browserPackage
+                    )
+                }
+            }
+
             val response: HttpResponse = httpClient.post("$baseUrl/api/sync/android") {
                 contentType(ContentType.Application.Json)
                 setBody(AndroidSyncPayload(
@@ -100,8 +104,11 @@ class SyncWorker @AssistedInject constructor(
                 )
             }
         } catch (e: Exception) {
-            // Retry on transient network failures (important for periodic background sync)
-            Result.retry()
+            Result.failure(
+                Data.Builder()
+                    .putString("error", e.message ?: e.toString())
+                    .build()
+            )
         }
     }
 
