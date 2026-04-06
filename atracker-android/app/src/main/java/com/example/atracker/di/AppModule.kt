@@ -1,5 +1,15 @@
-package com.example.atracker
+package com.example.atracker.di
 
+import com.example.atracker.service.ServiceStateManagerImpl
+import com.example.atracker.service.ServiceStateManager
+import com.example.atracker.data.repository.SettingsRepositoryImpl
+import com.example.atracker.data.repository.dataStore
+import com.example.atracker.data.repository.SettingsRepository
+import com.example.atracker.data.repository.dataStore
+import com.example.atracker.data.repository.EventRepositoryImpl
+import com.example.atracker.data.repository.EventRepository
+import com.example.atracker.data.local.EventDao
+import com.example.atracker.data.local.AppDatabase
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences

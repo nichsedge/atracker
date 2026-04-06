@@ -1,5 +1,7 @@
-package com.example.atracker
+package com.example.atracker.data.repository
 
+import com.example.atracker.data.local.EventDao
+import com.example.atracker.data.local.Event
 import kotlinx.coroutines.flow.Flow
 import javax.inject.Inject
 

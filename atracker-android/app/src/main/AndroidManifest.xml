@@ -23,7 +23,7 @@
         android:usesCleartextTraffic="true">
 
         <activity
-            android:name=".MainActivity"
+            android:name=".ui.MainActivity"
             android:exported="true"
             android:launchMode="singleTop">
             <intent-filter>
@@ -33,7 +33,7 @@
         </activity>
 
         <service
-            android:name=".TrackerService"
+            android:name=".service.TrackerService"
             android:enabled="true"
             android:exported="false"
             android:stopWithTask="false"
@@ -45,7 +45,7 @@
 
 
         <receiver
-            android:name=".BootReceiver"
+            android:name=".receiver.BootReceiver"
             android:exported="false"
             android:directBootAware="true">
             <intent-filter>
@@ -55,7 +55,7 @@
         </receiver>
 
         <receiver
-            android:name=".ServiceRestartReceiver"
+            android:name=".receiver.ServiceRestartReceiver"
             android:exported="false" />
 
     </application>

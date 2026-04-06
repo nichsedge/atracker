@@ -1,4 +1,4 @@
-package com.example.atracker
+package com.example.atracker.data.local
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey

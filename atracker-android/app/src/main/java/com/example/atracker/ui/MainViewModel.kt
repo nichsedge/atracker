@@ -1,5 +1,9 @@
-package com.example.atracker
+package com.example.atracker.ui
 
+import com.example.atracker.worker.SyncWorker
+import com.example.atracker.service.ServiceStateManager
+import com.example.atracker.data.repository.SettingsRepository
+import com.example.atracker.data.repository.EventRepository
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.work.OneTimeWorkRequestBuilder

@@ -1,4 +1,4 @@
-package com.example.atracker
+package com.example.atracker.data.repository
 
 import android.content.Context
 import androidx.datastore.core.DataStore

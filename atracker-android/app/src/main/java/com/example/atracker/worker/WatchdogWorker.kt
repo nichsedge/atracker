@@ -1,5 +1,6 @@
-package com.example.atracker
+package com.example.atracker.worker
 
+import com.example.atracker.service.TrackerService
 import android.content.Context
 import android.content.Intent
 import androidx.core.content.ContextCompat
@@ -12,6 +13,8 @@ import androidx.work.WorkerParameters
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import java.util.concurrent.TimeUnit
+import com.example.atracker.service.ServiceStateManager
+import com.example.atracker.data.repository.SettingsRepository
 
 /**
  * Runs every 15 minutes (minimum WorkManager interval). If TrackerService
