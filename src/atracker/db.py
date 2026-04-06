@@ -285,13 +285,6 @@ async def _aconn():
         pass
 
 
-def get_sync_db() -> sqlite3.Connection:
-    """Get a sync database connection."""
-    conn = sqlite3.connect(str(DB_PATH), uri=True)
-    conn.row_factory = sqlite3.Row
-    return conn
-
-
 async def insert_event(
     timestamp: str,
     end_timestamp: str,
@@ -574,13 +567,6 @@ async def set_setting(key: str, value: str) -> None:
         )
         await db.commit()
 
-
-def get_setting_sync(key: str, default: str = "") -> str:
-    """Get a single setting synchronously."""
-    with sqlite3.connect(str(DB_PATH), uri=True) as conn:
-        cursor = conn.execute("SELECT value FROM settings WHERE key = ?", (key,))
-        row = cursor.fetchone()
-        return row[0] if row else default
 
 async def get_filter_rules() -> list[dict]:
     """Get all filter rules."""
