@@ -3,6 +3,7 @@ plugins {
     alias(libs.plugins.kotlin.android) // Re-added because we set android.builtInKotlin=false
     alias(libs.plugins.google.devtools.ksp)
     alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.hilt.plugin)
 }
 
 android {
@@ -61,6 +62,12 @@ dependencies {
 
     // WorkManager watchdog
     implementation(libs.androidx.work.runtime.ktx)
+
+    // Hilt
+    implementation(libs.hilt.android)
+    ksp(libs.hilt.compiler)
+    implementation(libs.androidx.hilt.work)
+    ksp(libs.androidx.hilt.compiler)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
