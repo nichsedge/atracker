@@ -264,23 +264,32 @@ class MainActivity : AppCompatActivity() {
         tvSyncStatus.setTextColor(ContextCompat.getColor(this, R.color.textMuted))
         tvSyncStatus.text = "Syncing…"
 
-        lifecycleScope.launch {
-            val result = SyncManager.sync(this@MainActivity)
-            btnSync.isEnabled = true
-            if (result.success) {
-                SettingsManager.setLastSyncTime(this@MainActivity, System.currentTimeMillis())
-                updateLastSyncLabel()
-                tvSyncStatus.setTextColor(ContextCompat.getColor(this@MainActivity, R.color.success))
-                tvSyncStatus.text = if (result.syncedEvents == 0) {
-                    "Already up to date."
-                } else {
-                    "Synced ${result.syncedEvents} events across ${result.syncedDays} day(s). ✓"
+        val workRequest = androidx.work.OneTimeWorkRequestBuilder<SyncWorker>().build()
+        androidx.work.WorkManager.getInstance(this).enqueue(workRequest)
+
+        androidx.work.WorkManager.getInstance(this).getWorkInfoByIdLiveData(workRequest.id)
+            .observe(this) { workInfo ->
+                if (workInfo != null && workInfo.state.isFinished) {
+                    btnSync.isEnabled = true
+                    if (workInfo.state == androidx.work.WorkInfo.State.SUCCEEDED) {
+                        SettingsManager.setLastSyncTime(this@MainActivity, System.currentTimeMillis())
+                        updateLastSyncLabel()
+                        val syncedEvents = workInfo.outputData.getInt("syncedEvents", 0)
+                        val syncedDays = workInfo.outputData.getInt("syncedDays", 0)
+                        
+                        tvSyncStatus.setTextColor(ContextCompat.getColor(this@MainActivity, R.color.success))
+                        tvSyncStatus.text = if (syncedEvents == 0) {
+                            "Already up to date."
+                        } else {
+                            "Synced $syncedEvents events across $syncedDays day(s). ✓"
+                        }
+                    } else {
+                        val error = workInfo.outputData.getString("error") ?: "Unknown error"
+                        tvSyncStatus.setTextColor(ContextCompat.getColor(this@MainActivity, R.color.error))
+                        tvSyncStatus.text = "Sync failed: $error"
+                    }
                 }
-            } else {
-                tvSyncStatus.setTextColor(ContextCompat.getColor(this@MainActivity, R.color.error))
-                tvSyncStatus.text = "Sync failed: ${result.errorMessage}"
             }
-        }
     }
 
     private fun updateLastSyncLabel() {

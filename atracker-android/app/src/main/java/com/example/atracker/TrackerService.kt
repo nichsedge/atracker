@@ -14,9 +14,15 @@ import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
+import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.*
+import javax.inject.Inject
 
+@AndroidEntryPoint
 class TrackerService : Service() {
+
+    @Inject
+    lateinit var eventDao: EventDao
 
     companion object {
         /** Checked by WatchdogWorker to decide whether to restart. */
