@@ -1,5 +1,8 @@
-package com.example.atracker
+package com.example.atracker.service
 
+import com.example.atracker.ui.MainActivity
+import com.example.atracker.data.repository.EventRepository
+import com.example.atracker.data.local.Event
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -17,6 +20,7 @@ import androidx.core.app.NotificationCompat
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.*
 import javax.inject.Inject
+import com.example.atracker.receiver.ServiceRestartReceiver
 
 @AndroidEntryPoint
 class TrackerService : Service() {

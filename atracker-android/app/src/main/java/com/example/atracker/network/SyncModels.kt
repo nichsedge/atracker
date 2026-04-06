@@ -1,4 +1,4 @@
-package com.example.atracker
+package com.example.atracker.network
 
 import kotlinx.serialization.Serializable
 

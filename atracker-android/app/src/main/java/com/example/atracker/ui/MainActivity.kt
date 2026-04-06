@@ -1,5 +1,11 @@
-package com.example.atracker
+package com.example.atracker.ui
 
+import com.example.atracker.worker.WatchdogWorker
+import com.example.atracker.worker.SyncWorker
+import com.example.atracker.service.TrackerService
+import com.example.atracker.service.ServiceStateManager
+import com.example.atracker.receiver.ServiceRestartReceiver
+import com.example.atracker.data.repository.SettingsRepository
 import android.Manifest
 import android.app.AppOpsManager
 import android.content.Context

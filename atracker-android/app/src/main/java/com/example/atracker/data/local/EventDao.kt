@@ -1,5 +1,6 @@
-package com.example.atracker
+package com.example.atracker.data.local
 
+import com.example.atracker.data.local.Event
 import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy

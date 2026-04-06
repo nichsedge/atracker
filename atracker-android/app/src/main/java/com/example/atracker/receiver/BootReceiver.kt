@@ -1,5 +1,7 @@
-package com.example.atracker
+package com.example.atracker.receiver
 
+import com.example.atracker.service.TrackerService
+import com.example.atracker.data.repository.SettingsRepository
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -9,6 +11,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import com.example.atracker.worker.WatchdogWorker
 
 @AndroidEntryPoint
 class BootReceiver : BroadcastReceiver() {

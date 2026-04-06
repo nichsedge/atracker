@@ -1,5 +1,8 @@
-package com.example.atracker
+package com.example.atracker.worker
 
+import com.example.atracker.data.repository.SettingsRepository
+import com.example.atracker.data.repository.EventRepository
+import com.example.atracker.data.local.Event
 import android.content.Context
 import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
@@ -15,6 +18,8 @@ import io.ktor.http.*
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import com.example.atracker.network.AndroidSyncPayload
+import com.example.atracker.network.AndroidEventPayload
 
 @HiltWorker
 class SyncWorker @AssistedInject constructor(
