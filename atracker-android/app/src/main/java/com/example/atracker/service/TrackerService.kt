@@ -21,6 +21,7 @@ import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.*
 import javax.inject.Inject
 import com.example.atracker.receiver.ServiceRestartReceiver
+import com.example.atracker.util.AppLabelProvider
 
 @AndroidEntryPoint
 class TrackerService : Service() {
@@ -31,6 +32,9 @@ class TrackerService : Service() {
     @Inject
     lateinit var serviceStateManager: ServiceStateManager
 
+    @Inject
+    lateinit var appLabelProvider: AppLabelProvider
+
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var pollingJob: Job? = null
 
@@ -38,7 +42,6 @@ class TrackerService : Service() {
     private var currentStartTime: Long = 0L
     private var isIdle: Boolean = false
     private var lastQueryTime: Long = 0L
-    private val appLabelCache = HashMap<String, String>()
 
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -100,15 +103,6 @@ class TrackerService : Service() {
         return lastResumedApp
     }
 
-    private fun getAppLabel(packageName: String): String {
-        appLabelCache[packageName]?.let { return it }
-        return try {
-            val appInfo = packageManager.getApplicationInfo(packageName, 0)
-            packageManager.getApplicationLabel(appInfo).toString().also { appLabelCache[packageName] = it }
-        } catch (e: PackageManager.NameNotFoundException) {
-            packageName.also { appLabelCache[packageName] = it }
-        }
-    }
 
     private fun handleScreenOff() {
         val now = System.currentTimeMillis()
@@ -130,7 +124,7 @@ class TrackerService : Service() {
             if (duration >= 3.0) {
                 val pkg = currentPackage!!
 
-                val label = if (pkg == "__idle__") "" else getAppLabel(pkg)
+                val label = if (pkg == "__idle__") "" else appLabelProvider.getAppLabel(pkg)
                 val event = Event(
                     packageName = pkg,
                     appLabel = label,
@@ -150,7 +144,7 @@ class TrackerService : Service() {
         val notifText = when {
             nextPackage == null -> "Running in background"
             nextPackage == "__idle__" -> "Screen off"
-            else -> "Tracking: ${getAppLabel(nextPackage)}"
+            else -> "Tracking: ${appLabelProvider.getAppLabel(nextPackage)}"
         }
         updateNotification(notifText)
     }

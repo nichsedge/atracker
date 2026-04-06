@@ -4,6 +4,7 @@ import com.example.atracker.worker.SyncWorker
 import com.example.atracker.service.ServiceStateManager
 import com.example.atracker.data.repository.SettingsRepository
 import com.example.atracker.data.repository.EventRepository
+import com.example.atracker.util.AppLabelProvider
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.work.OneTimeWorkRequestBuilder
@@ -40,7 +41,8 @@ class MainViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val eventRepository: EventRepository,
     private val serviceStateManager: ServiceStateManager,
-    private val workManager: WorkManager
+    private val workManager: WorkManager,
+    private val appLabelProvider: AppLabelProvider
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(MainUiState())
@@ -81,9 +83,15 @@ class MainViewModel @Inject constructor(
                     .filter { !it.isIdle }
                     .groupBy { it.packageName }
                     .map { (pkg, evts) ->
+                        val rawLabel = evts.first().appLabel
+                        val displayLabel = if (rawLabel.isBlank() || rawLabel == pkg) {
+                            appLabelProvider.getAppLabel(pkg)
+                        } else {
+                            rawLabel
+                        }
                         TodayAppUsage(
                             packageName = pkg,
-                            appLabel = evts.first().appLabel.ifBlank { pkg },
+                            appLabel = displayLabel,
                             totalSecs = evts.sumOf { it.durationSecs }
                         )
                     }
