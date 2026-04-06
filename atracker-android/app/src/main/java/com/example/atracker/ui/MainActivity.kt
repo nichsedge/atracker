@@ -46,6 +46,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlin.math.roundToLong
+import com.example.atracker.ui.theme.AtrackerTheme
 
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
@@ -88,7 +89,7 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
-            MaterialTheme {
+            AtrackerTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
