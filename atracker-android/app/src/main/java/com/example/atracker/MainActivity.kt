@@ -8,6 +8,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.PowerManager
 import android.os.Process
 import android.provider.Settings
 import android.util.Patterns
@@ -17,10 +18,10 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
@@ -28,21 +29,17 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.work.OneTimeWorkRequestBuilder
-import androidx.work.WorkInfo
-import androidx.work.WorkManager
 import dagger.hilt.android.AndroidEntryPoint
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.math.roundToLong
 
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
@@ -73,10 +70,11 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         lifecycleScope.launch {
+            SyncWorker.cancelAutoSync(this@MainActivity)
             if (settingsRepository.isTrackingEnabled()) {
                 WatchdogWorker.schedule(this@MainActivity)
                 ServiceRestartReceiver.schedule(this@MainActivity)
-                
+
                 if (!serviceStateManager.isServiceRunningFlow.value) {
                     handleStartTracking()
                 }
@@ -97,7 +95,8 @@ class MainActivity : ComponentActivity() {
                         onOpenUsageSettings = {
                             startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
                         },
-                        onOpenNotificationSettings = { openNotificationSettings() }
+                        onOpenNotificationSettings = { openNotificationSettings() },
+                        onOpenBatterySettings = { openBatteryOptimizationSettings() }
                     )
                 }
             }
@@ -112,7 +111,8 @@ class MainActivity : ComponentActivity() {
     private fun updatePermissions() {
         viewModel.updatePermissions(
             hasUsage = hasUsageStatsPermission(),
-            hasNotif = hasNotificationPermission()
+            hasNotif = hasNotificationPermission(),
+            isBatteryExempted = isBatteryOptimizationExempted()
         )
     }
 
@@ -144,6 +144,7 @@ class MainActivity : ComponentActivity() {
         viewModel.setTrackingEnabled(false)
         WatchdogWorker.cancel(this)
         ServiceRestartReceiver.cancel(this)
+        SyncWorker.cancelAutoSync(this)
         updatePermissions()
         Toast.makeText(this, "Tracker Stopped", Toast.LENGTH_SHORT).show()
     }
@@ -163,6 +164,18 @@ class MainActivity : ComponentActivity() {
             }
         }
         startActivity(intent)
+    }
+
+    private fun openBatteryOptimizationSettings() {
+        val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+            data = Uri.parse("package:$packageName")
+        }
+        startActivity(intent)
+    }
+
+    private fun isBatteryOptimizationExempted(): Boolean {
+        val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+        return pm.isIgnoringBatteryOptimizations(packageName)
     }
 
     private fun hasNotificationPermission(): Boolean {
@@ -198,9 +211,21 @@ class MainActivity : ComponentActivity() {
 }
 
 private fun isValidBackendUrl(url: String): Boolean {
-    if (!Patterns.WEB_URL.matcher(url).matches()) return false
-    val scheme = Uri.parse(url).scheme ?: return false
-    return scheme == "http" || scheme == "https"
+    val lower = url.lowercase().trim()
+    if (lower.startsWith("http://")) return lower.length > 7
+    if (lower.startsWith("https://")) return lower.length > 8
+    return false
+}
+
+private fun formatDuration(secs: Double): String {
+    val total = secs.roundToLong()
+    val hours = total / 3600
+    val minutes = (total % 3600) / 60
+    return when {
+        hours > 0 -> "${hours}h ${minutes}m"
+        minutes > 0 -> "${minutes}m"
+        else -> "<1m"
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -211,10 +236,10 @@ fun MainScreen(
     onStopTracking: () -> Unit,
     onSync: () -> Unit,
     onOpenUsageSettings: () -> Unit,
-    onOpenNotificationSettings: () -> Unit
+    onOpenNotificationSettings: () -> Unit,
+    onOpenBatterySettings: () -> Unit
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    val context = LocalContext.current
     val keyboardController = LocalSoftwareKeyboardController.current
 
     var backendUrlInput by remember { mutableStateOf(state.backendUrl) }
@@ -242,7 +267,8 @@ fun MainScreen(
             modifier = Modifier
                 .padding(paddingValues)
                 .padding(16.dp)
-                .fillMaxSize(),
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             // Status Card
@@ -282,6 +308,13 @@ fun MainScreen(
                 isGranted = state.hasNotificationPermission,
                 onClick = onOpenNotificationSettings
             )
+            PermissionRow(
+                title = "Battery Optimization",
+                isGranted = state.isBatteryOptimizationExempted,
+                grantedLabel = "Exempted",
+                deniedLabel = "Exempt",
+                onClick = onOpenBatterySettings
+            )
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
@@ -311,7 +344,7 @@ fun MainScreen(
             if (backendMessage.isNotEmpty()) {
                 Text(backendMessage, color = backendMessageColor, fontSize = 12.sp)
             }
-            
+
             Button(
                 onClick = {
                     keyboardController?.hide()
@@ -339,7 +372,7 @@ fun MainScreen(
                 "Never"
             }
             Text("Last sync: $lastSyncStr", style = MaterialTheme.typography.bodyMedium)
-            
+
             if (state.syncStatusMessage.isNotEmpty()) {
                 val color = when (state.isSyncSuccess) {
                     true -> Color(0xFF388E3C)
@@ -356,12 +389,58 @@ fun MainScreen(
             ) {
                 Text(if (state.isSyncing) "Syncing..." else "Sync Now")
             }
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+            // Today's Activity
+            Text("Today's Activity", style = MaterialTheme.typography.titleMedium)
+            if (state.todayUsage.isEmpty()) {
+                Text(
+                    "No activity recorded today",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.Gray
+                )
+            } else {
+                state.todayUsage.take(10).forEach { usage ->
+                    TodayUsageRow(usage)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
         }
     }
 }
 
 @Composable
-fun PermissionRow(title: String, isGranted: Boolean, onClick: () -> Unit) {
+fun TodayUsageRow(usage: TodayAppUsage) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = usage.appLabel,
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.weight(1f)
+        )
+        Text(
+            text = formatDuration(usage.totalSecs),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.primary
+        )
+    }
+}
+
+@Composable
+fun PermissionRow(
+    title: String,
+    isGranted: Boolean,
+    onClick: () -> Unit,
+    grantedLabel: String = "Granted",
+    deniedLabel: String = "Grant"
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -372,7 +451,7 @@ fun PermissionRow(title: String, isGranted: Boolean, onClick: () -> Unit) {
     ) {
         Text(title, style = MaterialTheme.typography.bodyLarge)
         Text(
-            text = if (isGranted) "Granted" else "Grant",
+            text = if (isGranted) grantedLabel else deniedLabel,
             color = if (isGranted) Color(0xFF388E3C) else MaterialTheme.colorScheme.error,
             fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
         )

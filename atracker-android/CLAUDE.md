@@ -45,7 +45,7 @@ MainViewModel (StateFlow<MainUiState>)
 MainActivity / MainScreen (Compose)
 ```
 
-For sync: `SyncWorker` reads unsynced events from Room, groups by day, POSTs to `{backendUrl}/api/sync/android` via Ktor.
+For sync: `SyncWorker` reads unsynced events from Room, groups by day, POSTs to `{backendUrl}/api/sync/android` via Ktor when manually triggered.
 
 ### Service Reliability
 

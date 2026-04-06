@@ -8,7 +8,14 @@ import androidx.work.WorkManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import java.util.Calendar
 import javax.inject.Inject
+
+data class TodayAppUsage(
+    val packageName: String,
+    val appLabel: String,
+    val totalSecs: Double
+)
 
 data class MainUiState(
     val backendUrl: String = "",
@@ -16,15 +23,18 @@ data class MainUiState(
     val isTrackerRunning: Boolean = false,
     val hasUsagePermission: Boolean = false,
     val hasNotificationPermission: Boolean = false,
+    val isBatteryOptimizationExempted: Boolean = false,
     val isSyncing: Boolean = false,
     val syncStatusMessage: String = "",
     val isSyncSuccess: Boolean? = null,
-    val lastSyncTime: Long = 0L
+    val lastSyncTime: Long = 0L,
+    val todayUsage: List<TodayAppUsage> = emptyList()
 )
 
 @HiltViewModel
 class MainViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
+    private val eventRepository: EventRepository,
     private val serviceStateManager: ServiceStateManager,
     private val workManager: WorkManager
 ) : ViewModel() {
@@ -54,16 +64,41 @@ class MainViewModel @Inject constructor(
                 _uiState.update { it.copy(isTrackerRunning = isRunning) }
             }
         }
+        viewModelScope.launch {
+            val todayStart = Calendar.getInstance().apply {
+                set(Calendar.HOUR_OF_DAY, 0)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }.timeInMillis
+            val todayEnd = todayStart + 86_400_000L
+            eventRepository.getEventsByDayFlow(todayStart, todayEnd).collect { events ->
+                val usage = events
+                    .filter { !it.isIdle }
+                    .groupBy { it.packageName }
+                    .map { (pkg, evts) ->
+                        TodayAppUsage(
+                            packageName = pkg,
+                            appLabel = evts.first().appLabel.ifBlank { pkg },
+                            totalSecs = evts.sumOf { it.durationSecs }
+                        )
+                    }
+                    .sortedByDescending { it.totalSecs }
+                _uiState.update { it.copy(todayUsage = usage) }
+            }
+        }
     }
 
     fun updatePermissions(
         hasUsage: Boolean,
-        hasNotif: Boolean
+        hasNotif: Boolean,
+        isBatteryExempted: Boolean
     ) {
         _uiState.update {
             it.copy(
                 hasUsagePermission = hasUsage,
-                hasNotificationPermission = hasNotif
+                hasNotificationPermission = hasNotif,
+                isBatteryOptimizationExempted = isBatteryExempted
             )
         }
     }
@@ -115,10 +150,10 @@ class MainViewModel @Inject constructor(
     }
 
     private fun isValidBackendUrl(url: String): Boolean {
-        // Simplified URL validation for ViewModel
-        if (url.isBlank()) return false
-        val lower = url.lowercase()
-        return lower.startsWith("http://") || lower.startsWith("https://")
+        val lower = url.lowercase().trim()
+        if (lower.startsWith("http://")) return lower.length > 7
+        if (lower.startsWith("https://")) return lower.length > 8
+        return false
     }
 
     private fun syncStarted() {

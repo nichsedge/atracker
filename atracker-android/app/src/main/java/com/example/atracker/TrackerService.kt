@@ -34,6 +34,7 @@ class TrackerService : Service() {
     private var currentStartTime: Long = 0L
     private var isIdle: Boolean = false
     private var lastQueryTime: Long = 0L
+    private val appLabelCache = HashMap<String, String>()
 
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -96,11 +97,12 @@ class TrackerService : Service() {
     }
 
     private fun getAppLabel(packageName: String): String {
+        appLabelCache[packageName]?.let { return it }
         return try {
             val appInfo = packageManager.getApplicationInfo(packageName, 0)
-            packageManager.getApplicationLabel(appInfo).toString()
+            packageManager.getApplicationLabel(appInfo).toString().also { appLabelCache[packageName] = it }
         } catch (e: PackageManager.NameNotFoundException) {
-            packageName
+            packageName.also { appLabelCache[packageName] = it }
         }
     }
 
@@ -121,7 +123,7 @@ class TrackerService : Service() {
     private fun flushPreviousEvent(nextPackage: String?, endTime: Long) {
         if (currentPackage != null && currentStartTime > 0) {
             val duration = (endTime - currentStartTime) / 1000.0
-            if (duration > 1.0) {
+            if (duration >= 3.0) {
                 val pkg = currentPackage!!
 
                 val label = if (pkg == "__idle__") "" else getAppLabel(pkg)
@@ -141,6 +143,12 @@ class TrackerService : Service() {
         }
         currentPackage = nextPackage
         currentStartTime = endTime
+        val notifText = when {
+            nextPackage == null -> "Running in background"
+            nextPackage == "__idle__" -> "Screen off"
+            else -> "Tracking: ${getAppLabel(nextPackage)}"
+        }
+        updateNotification(notifText)
     }
 
     private fun createNotificationChannel() {
@@ -160,7 +168,11 @@ class TrackerService : Service() {
             .createNotificationChannel(channel)
     }
 
-    private fun createNotification(): Notification {
+    private fun updateNotification(contentText: String) {
+        getSystemService(NotificationManager::class.java).notify(1, createNotification(contentText))
+    }
+
+    private fun createNotification(contentText: String = "Running in background"): Notification {
         val intent = Intent(this, MainActivity::class.java)
         val pendingIntent = PendingIntent.getActivity(
             this,
@@ -171,7 +183,7 @@ class TrackerService : Service() {
 
         return NotificationCompat.Builder(this, "tracker_channel_v2")
             .setContentTitle("atracker")
-            .setContentText("Running in background")
+            .setContentText(contentText)
             .setSmallIcon(android.R.drawable.ic_menu_recent_history)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true)

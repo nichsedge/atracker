@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.Data
+import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
@@ -94,12 +95,16 @@ class SyncWorker @AssistedInject constructor(
                 )
             }
         } catch (e: Exception) {
-            // Return failure or retry if network failed
-            Result.failure(
-                Data.Builder()
-                    .putString("error", e.message ?: "Network error")
-                    .build()
-            )
+            // Retry on transient network failures (important for periodic background sync)
+            Result.retry()
+        }
+    }
+
+    companion object {
+        private const val SYNC_WORK_NAME = "atracker_auto_sync"
+
+        fun cancelAutoSync(context: Context) {
+            WorkManager.getInstance(context).cancelUniqueWork(SYNC_WORK_NAME)
         }
     }
 }
