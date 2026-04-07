@@ -19,11 +19,14 @@ DEFAULT_CONFIG = {
     },
     "logging": {
         "level": "INFO",
-    }
+    },
 }
 
-CONFIG_DIR = Path(os.environ.get("ATRACKER_CONFIG_DIR", Path.home() / ".config" / "atracker"))
+CONFIG_DIR = Path(
+    os.environ.get("ATRACKER_CONFIG_DIR", Path.home() / ".config" / "atracker")
+)
 CONFIG_PATH = CONFIG_DIR / "config.yaml"
+
 
 class Config:
     def __init__(self):
@@ -42,7 +45,11 @@ class Config:
 
     def _update_dict(self, base_dict, update_with):
         for key, value in update_with.items():
-            if isinstance(value, dict) and key in base_dict and isinstance(base_dict[key], dict):
+            if (
+                isinstance(value, dict)
+                and key in base_dict
+                and isinstance(base_dict[key], dict)
+            ):
                 self._update_dict(base_dict[key], value)
             else:
                 base_dict[key] = value
@@ -82,5 +89,6 @@ class Config:
             with open(CONFIG_PATH, "w") as f:
                 yaml.dump(DEFAULT_CONFIG, f, default_flow_style=False)
             print(f"Created default config at {CONFIG_PATH}")
+
 
 config = Config()

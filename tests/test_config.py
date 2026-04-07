@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 from atracker.config import Config, DEFAULT_CONFIG
 
+
 def test_config_properties(monkeypatch, tmp_path):
     # Mock CONFIG_PATH to a non-existent file to ensure defaults
     fake_config = tmp_path / "nonexistent.yaml"
@@ -21,6 +22,7 @@ def test_config_properties(monkeypatch, tmp_path):
     expected_db_path = Path(os.path.expanduser(DEFAULT_CONFIG["database"]["path"]))
     assert conf.db_path == expected_db_path
 
+
 def test_update_dict():
     conf = Config()
     base = {"a": {"b": 1}, "c": 2}
@@ -28,13 +30,14 @@ def test_update_dict():
     conf._update_dict(base, update)
     assert base == {"a": {"b": 3, "d": 4}, "c": 2, "e": 5}
 
+
 def test_load_config(tmp_path, monkeypatch):
     config_file = tmp_path / "config.yaml"
 
     user_config = {
         "dashboard": {"port": 9999},
         "database": {"retention_days": 30},
-        "tracking": {"poll_interval": 10}
+        "tracking": {"poll_interval": 10},
     }
     with open(config_file, "w") as f:
         yaml.dump(user_config, f)
@@ -45,7 +48,8 @@ def test_load_config(tmp_path, monkeypatch):
     assert conf.dashboard_port == 9999
     assert conf.retention_days == 30
     assert conf.poll_interval == 10
-    assert conf.idle_threshold == 120 # remains default
+    assert conf.idle_threshold == 120  # remains default
+
 
 def test_ensure_config_file(tmp_path, monkeypatch):
     config_dir = tmp_path / "config_dir"
@@ -64,10 +68,11 @@ def test_ensure_config_file(tmp_path, monkeypatch):
         loaded = yaml.safe_load(f)
     assert loaded == DEFAULT_CONFIG
 
+
 def test_load_invalid_yaml(tmp_path, monkeypatch, capsys):
     config_file = tmp_path / "invalid.yaml"
     with open(config_file, "w") as f:
-        f.write("invalid: { : yaml") # Improperly formatted YAML
+        f.write("invalid: { : yaml")  # Improperly formatted YAML
 
     monkeypatch.setattr("atracker.config.CONFIG_PATH", config_file)
 
@@ -75,4 +80,4 @@ def test_load_invalid_yaml(tmp_path, monkeypatch, capsys):
     conf = Config()
     captured = capsys.readouterr()
     assert "Error loading config" in captured.out
-    assert conf.dashboard_port == 8932 # stayed default
+    assert conf.dashboard_port == 8932  # stayed default

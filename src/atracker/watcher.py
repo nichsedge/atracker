@@ -37,7 +37,7 @@ class Watcher:
         self._missing_window_since: datetime | None = None
         self._filter_rules = []
         self._stop_event = asyncio.Event()
-        
+
         # Configuration
         self._poll_interval = poll_interval or DEFAULT_POLL_INTERVAL
         self._idle_threshold = idle_threshold or DEFAULT_IDLE_THRESHOLD
@@ -63,8 +63,11 @@ class Watcher:
         for sig in (signal.SIGINT, signal.SIGTERM):
             loop.add_signal_handler(sig, lambda: asyncio.create_task(self.stop()))
 
-        logger.info("Watcher started — polling every %ds, idle threshold %ds",
-                     self._poll_interval, self._idle_threshold // 1000)
+        logger.info(
+            "Watcher started — polling every %ds, idle threshold %ds",
+            self._poll_interval,
+            self._idle_threshold // 1000,
+        )
 
         while self._running:
             # Periodically refresh settings from DB
@@ -75,8 +78,11 @@ class Watcher:
             if self._last_poll_time:
                 delta = (now - self._last_poll_time).total_seconds()
                 if delta > (self._poll_interval * 4):  # e.g. >20s gap
-                    logger.warning("Time jump detected (%.1fs). Ending previous event at %s.",
-                                   delta, self._last_poll_time)
+                    logger.warning(
+                        "Time jump detected (%.1fs). Ending previous event at %s.",
+                        delta,
+                        self._last_poll_time,
+                    )
                     await self._flush_current_event(end_time=self._last_poll_time)
                     self._current_start = now
 
@@ -85,9 +91,11 @@ class Watcher:
                 self._last_poll_time = datetime.now()
             except Exception as e:
                 logger.exception("Poll error (will retry)")
-            
+
             try:
-                await asyncio.wait_for(self._stop_event.wait(), timeout=self._poll_interval)
+                await asyncio.wait_for(
+                    self._stop_event.wait(), timeout=self._poll_interval
+                )
             except asyncio.TimeoutError:
                 pass
 
@@ -102,15 +110,20 @@ class Watcher:
             if not self._manual_poll and "poll_interval" in settings:
                 new_interval = int(settings["poll_interval"])
                 if new_interval != self._poll_interval:
-                    logger.info("Settings updated from DB: poll_interval = %ds", new_interval)
+                    logger.info(
+                        "Settings updated from DB: poll_interval = %ds", new_interval
+                    )
                     self._poll_interval = new_interval
             if not self._manual_idle and "idle_threshold" in settings:
                 # Dashboard saves idle_threshold in seconds
                 new_threshold = int(settings["idle_threshold"]) * 1000
                 if new_threshold != self._idle_threshold:
-                    logger.info("Settings updated from DB: idle_threshold = %ds", new_threshold // 1000)
+                    logger.info(
+                        "Settings updated from DB: idle_threshold = %ds",
+                        new_threshold // 1000,
+                    )
                     self._idle_threshold = new_threshold
-            
+
             # Refresh filter rules
             self._filter_rules = await db.get_filter_rules()
         except Exception as e:
@@ -138,12 +151,14 @@ class Watcher:
                 self._current_wm_class = "__paused__"
                 self._current_title = "Paused"
                 self._current_start = datetime.now()
-                db.set_current_state({
-                    "wm_class": "__paused__",
-                    "title": "Paused",
-                    "duration_secs": 0,
-                    "is_idle": False
-                })
+                db.set_current_state(
+                    {
+                        "wm_class": "__paused__",
+                        "title": "Paused",
+                        "duration_secs": 0,
+                        "is_idle": False,
+                    }
+                )
                 broadcast_event({"type": "pause_state", "is_paused": True})
             return
 
@@ -159,13 +174,15 @@ class Watcher:
             self._current_title = "Idle"
             self._current_pid = 0
             self._current_start = datetime.now()
-            db.set_current_state({
-                "wm_class": "__idle__",
-                "title": "Idle",
-                "timestamp": self._current_start.isoformat(),
-                "duration_secs": 0,
-                "is_idle": True
-            })
+            db.set_current_state(
+                {
+                    "wm_class": "__idle__",
+                    "title": "Idle",
+                    "timestamp": self._current_start.isoformat(),
+                    "duration_secs": 0,
+                    "is_idle": True,
+                }
+            )
             broadcast_event({"type": "idle"})
             logger.debug("User went idle")
             return
@@ -185,7 +202,9 @@ class Watcher:
             if self._missing_window_since is None:
                 self._missing_window_since = datetime.now()
             else:
-                missing_secs = (datetime.now() - self._missing_window_since).total_seconds()
+                missing_secs = (
+                    datetime.now() - self._missing_window_since
+                ).total_seconds()
                 if missing_secs >= MAX_MISSING_WINDOW_SECS:
                     # Avoid extremely long events if window info disappears.
                     await self._flush_current_event()
@@ -209,18 +228,16 @@ class Watcher:
             self._current_title = title
             self._current_pid = pid
             self._current_start = datetime.now()
-            db.set_current_state({
-                "wm_class": wm_class,
-                "title": title,
-                "timestamp": self._current_start.isoformat(),
-                "duration_secs": 0,
-                "is_idle": False
-            })
-            broadcast_event({
-                "type": "activity",
-                "wm_class": wm_class,
-                "title": title
-            })
+            db.set_current_state(
+                {
+                    "wm_class": wm_class,
+                    "title": title,
+                    "timestamp": self._current_start.isoformat(),
+                    "duration_secs": 0,
+                    "is_idle": False,
+                }
+            )
+            broadcast_event({"type": "activity", "wm_class": wm_class, "title": title})
             logger.debug("Window changed: %s — %s", wm_class, title)
 
     async def _get_active_window(self) -> dict | None:
@@ -246,7 +263,9 @@ class Watcher:
         """Fallback: try xdotool (works for XWayland windows)."""
         try:
             proc = await asyncio.create_subprocess_exec(
-                "xdotool", "getactivewindow", "getwindowname",
+                "xdotool",
+                "getactivewindow",
+                "getwindowname",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
@@ -255,7 +274,8 @@ class Watcher:
                 title = stdout.decode().strip()
                 # Try to get WM_CLASS via xprop
                 proc2 = await asyncio.create_subprocess_exec(
-                    "xdotool", "getactivewindow",
+                    "xdotool",
+                    "getactivewindow",
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
                 )
@@ -263,7 +283,10 @@ class Watcher:
                 wid = stdout2.decode().strip()
 
                 proc3 = await asyncio.create_subprocess_exec(
-                    "xprop", "-id", wid, "WM_CLASS",
+                    "xprop",
+                    "-id",
+                    wid,
+                    "WM_CLASS",
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
                 )
@@ -310,7 +333,7 @@ class Watcher:
 
         if duration < 1:
             return  # Skip sub-second events
-            
+
         wm_class = self._current_wm_class
         title = self._current_title
 
@@ -319,12 +342,14 @@ class Watcher:
             for rule in self._filter_rules:
                 match_class = True
                 if rule["wm_class_pattern"]:
-                    match_class = bool(re.search(rule["wm_class_pattern"], wm_class, re.I))
-                
+                    match_class = bool(
+                        re.search(rule["wm_class_pattern"], wm_class, re.I)
+                    )
+
                 match_title = True
                 if rule["title_pattern"]:
                     match_title = bool(re.search(rule["title_pattern"], title, re.I))
-                
+
                 if match_class and match_title:
                     if rule["rule_type"] == "ignore":
                         logger.debug("Ignoring event (matched rule %s)", rule["id"])

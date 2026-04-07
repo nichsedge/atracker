@@ -20,7 +20,7 @@ from atracker.lock import acquire_watcher_lock, release_watcher_lock
 def main():
     """Main entry point — runs watcher + API server together."""
     config.ensure_config_file()
-    
+
     # Use log level from config
     logging.basicConfig(
         level=getattr(logging, config.log_level.upper(), logging.INFO),
@@ -30,12 +30,12 @@ def main():
     logger = logging.getLogger("atracker.cli")
 
     args = sys.argv[1:]
-    
+
     # Very basic arg parsing
     command = "start"
     poll_interval = None
     idle_threshold = None
-    
+
     i = 0
     while i < len(args):
         arg = args[i]
@@ -46,16 +46,18 @@ def main():
         elif arg == "help":
             command = "help"
         elif arg == "--poll-interval" and i + 1 < len(args):
-            poll_interval = int(args[i+1])
+            poll_interval = int(args[i + 1])
             i += 1
         elif arg == "--idle-threshold" and i + 1 < len(args):
-            idle_threshold = int(args[i+1]) * 1000
+            idle_threshold = int(args[i + 1]) * 1000
             i += 1
         i += 1
 
     if command == "start":
         logger.info("Starting atracker daemon...")
-        logger.info(f"Dashboard will be available at http://localhost:{config.dashboard_port}")
+        logger.info(
+            f"Dashboard will be available at http://localhost:{config.dashboard_port}"
+        )
 
         if not acquire_watcher_lock():
             logger.error("Another atracker watcher is already running; exiting.")
@@ -68,7 +70,11 @@ def main():
 
             # Run the watcher in the main async loop
             try:
-                asyncio.run(run_watcher(poll_interval=poll_interval, idle_threshold=idle_threshold))
+                asyncio.run(
+                    run_watcher(
+                        poll_interval=poll_interval, idle_threshold=idle_threshold
+                    )
+                )
             except KeyboardInterrupt:
                 logger.info("Shutting down...")
         finally:
@@ -76,9 +82,13 @@ def main():
 
     elif command == "status":
         import urllib.request
+
         try:
-            with urllib.request.urlopen(f"http://localhost:{config.dashboard_port}/api/status", timeout=2) as resp:
+            with urllib.request.urlopen(
+                f"http://localhost:{config.dashboard_port}/api/status", timeout=2
+            ) as resp:
                 import json
+
                 data = json.loads(resp.read())
                 print(f"✅ atracker is running")
                 print(f"   Database: {data['db_path']}")
@@ -96,8 +106,12 @@ def main():
         print("  help    Show this help message")
         print("")
         print("Options (for 'start'):")
-        print(f"  --poll-interval SECS    How often to poll the active window (default: {config.poll_interval})")
-        print(f"  --idle-threshold SECS   How long to wait before marking as idle (default: {config.idle_threshold})")
+        print(
+            f"  --poll-interval SECS    How often to poll the active window (default: {config.poll_interval})"
+        )
+        print(
+            f"  --idle-threshold SECS   How long to wait before marking as idle (default: {config.idle_threshold})"
+        )
 
     else:
         print(f"Unknown command: {command}")
@@ -108,7 +122,10 @@ def main():
 def _run_api_server():
     """Run the FastAPI server in a separate thread."""
     from atracker.api import app
-    uvicorn.run(app, host=config.dashboard_host, port=config.dashboard_port, log_level="warning")
+
+    uvicorn.run(
+        app, host=config.dashboard_host, port=config.dashboard_port, log_level="warning"
+    )
 
 
 if __name__ == "__main__":

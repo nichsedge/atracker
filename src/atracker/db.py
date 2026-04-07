@@ -84,13 +84,61 @@ DEFAULT_CATEGORIES = [
     ("Browser", "firefox|chromium|google-chrome|brave|zen", "", "#3b82f6", 0, 0, 0),
     ("Terminal", "gnome-terminal|kitty|alacritty|java", "", "#10b981", 0, 0, 0),
     ("Editor", "code|Code|antigravity|DBeaver|jetbrains", "", "#8b5cf6", 0, 0, 0),
-    ("Communication", "slack|discord|telegram|signal|teams|zoom", "", "#f59e0b", 0, 0, 0),
+    (
+        "Communication",
+        "slack|discord|telegram|signal|teams|zoom",
+        "",
+        "#f59e0b",
+        0,
+        0,
+        0,
+    ),
     ("Files", "nautilus|thunar|dolphin|nemo", "", "#6366f1", 0, 0, 0),
-    ("Media", "vlc|mpv|spotify|rhythmbox|totem", "YouTube|TikTok|Netflix|pahe", "#ec4899", 0, 0, 0),
-    ("Office", "libreoffice|soffice|evince|okular|obsidian|Google Sheets", "", "#14b8a6", 0, 0, 0),
-    ("Social Media", "", "Facebook|Reddit|Instagram|Twitter|\\bX\\b|X\\.com|LinkedIn", "#ef4444", 0, 0, 1),
-    ("Research & AI", "", "\\bGemini\\b|ChatGPT|Stack Overflow|GitHub|Arxiv|Claude|Perplexity|DeepSeek", "#818cf8", 0, 0, 0),
-    ("Shopping", "", "Tokopedia|Shopee|Amazon|eBay|Lazada|Indomaret|Alfagit|Aliexpress", "#fb923c", 0, 0, 0),
+    (
+        "Media",
+        "vlc|mpv|spotify|rhythmbox|totem",
+        "YouTube|TikTok|Netflix|pahe",
+        "#ec4899",
+        0,
+        0,
+        0,
+    ),
+    (
+        "Office",
+        "libreoffice|soffice|evince|okular|obsidian|Google Sheets",
+        "",
+        "#14b8a6",
+        0,
+        0,
+        0,
+    ),
+    (
+        "Social Media",
+        "",
+        "Facebook|Reddit|Instagram|Twitter|\\bX\\b|X\\.com|LinkedIn",
+        "#ef4444",
+        0,
+        0,
+        1,
+    ),
+    (
+        "Research & AI",
+        "",
+        "\\bGemini\\b|ChatGPT|Stack Overflow|GitHub|Arxiv|Claude|Perplexity|DeepSeek",
+        "#818cf8",
+        0,
+        0,
+        0,
+    ),
+    (
+        "Shopping",
+        "",
+        "Tokopedia|Shopee|Amazon|eBay|Lazada|Indomaret|Alfagit|Aliexpress",
+        "#fb923c",
+        0,
+        0,
+        0,
+    ),
     ("Learning", "", "Duolingo|Coursera|Udemy|Khan Academy", "#a855f7", 0, 0, 0),
     ("Database", "DBeaver|Postgres|MySQL|MongoDB|Redis", "", "#0ea5e9", 0, 0, 0),
 ]
@@ -116,21 +164,26 @@ def get_device_id() -> str:
         DEVICE_ID = _get_device_id()
     return DEVICE_ID
 
+
 _current_tracking_state = None
 _is_paused = False
-_pause_until = 0.0 # timestamp
+_pause_until = 0.0  # timestamp
+
 
 def set_current_state(state: dict | None):
     global _current_tracking_state
     _current_tracking_state = state
 
+
 def get_current_state() -> dict | None:
     return _current_tracking_state
+
 
 def set_paused(paused: bool, until: float = 0.0):
     global _is_paused, _pause_until
     _is_paused = paused
     _pause_until = until
+
 
 def get_paused() -> bool:
     global _is_paused, _pause_until
@@ -139,6 +192,7 @@ def get_paused() -> bool:
             _is_paused = False
             _pause_until = 0.0
     return _is_paused
+
 
 async def init_db() -> None:
     """Initialize database and migrate if needed."""
@@ -151,27 +205,54 @@ async def init_db() -> None:
         # Seed default categories if empty
         count = conn.execute("SELECT COUNT(*) FROM categories").fetchone()[0]
         if count == 0:
-            for name, pattern, title_pattern, color, goal, limit, is_case_sensitive in DEFAULT_CATEGORIES:
+            for (
+                name,
+                pattern,
+                title_pattern,
+                color,
+                goal,
+                limit,
+                is_case_sensitive,
+            ) in DEFAULT_CATEGORIES:
                 cat_id = str(uuid.uuid4())
                 conn.execute(
                     "INSERT INTO categories (id, name, wm_class_pattern, title_pattern, color, daily_goal_secs, daily_limit_secs, is_case_sensitive) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                    (cat_id, name, pattern, title_pattern, color, goal, limit, is_case_sensitive),
+                    (
+                        cat_id,
+                        name,
+                        pattern,
+                        title_pattern,
+                        color,
+                        goal,
+                        limit,
+                        is_case_sensitive,
+                    ),
                 )
-        
+
         # Migrations: Add columns if they don't exist
         version = conn.execute("PRAGMA user_version").fetchone()[0]
         if version < 1:
-            existing_cols = [r[1] for r in conn.execute("PRAGMA table_info(categories)").fetchall()]
+            existing_cols = [
+                r[1] for r in conn.execute("PRAGMA table_info(categories)").fetchall()
+            ]
             if "title_pattern" not in existing_cols:
-                conn.execute("ALTER TABLE categories ADD COLUMN title_pattern TEXT NOT NULL DEFAULT ''")
+                conn.execute(
+                    "ALTER TABLE categories ADD COLUMN title_pattern TEXT NOT NULL DEFAULT ''"
+                )
             if "daily_goal_secs" not in existing_cols:
-                conn.execute("ALTER TABLE categories ADD COLUMN daily_goal_secs INTEGER NOT NULL DEFAULT 0")
+                conn.execute(
+                    "ALTER TABLE categories ADD COLUMN daily_goal_secs INTEGER NOT NULL DEFAULT 0"
+                )
             if "daily_limit_secs" not in existing_cols:
-                conn.execute("ALTER TABLE categories ADD COLUMN daily_limit_secs INTEGER NOT NULL DEFAULT 0")
+                conn.execute(
+                    "ALTER TABLE categories ADD COLUMN daily_limit_secs INTEGER NOT NULL DEFAULT 0"
+                )
             if "is_case_sensitive" not in existing_cols:
-                conn.execute("ALTER TABLE categories ADD COLUMN is_case_sensitive INTEGER NOT NULL DEFAULT 0")
+                conn.execute(
+                    "ALTER TABLE categories ADD COLUMN is_case_sensitive INTEGER NOT NULL DEFAULT 0"
+                )
             conn.execute("PRAGMA user_version = 1")
-            
+
         if version < 2:
             conn.executescript("""
                 CREATE TABLE IF NOT EXISTS events_new (
@@ -214,36 +295,50 @@ async def init_db() -> None:
 
                 PRAGMA user_version = 2;
             """)
-            
+
         if version < 3:
-            existing_cols = [r[1] for r in conn.execute("PRAGMA table_info(android_events)").fetchall()]
+            existing_cols = [
+                r[1]
+                for r in conn.execute("PRAGMA table_info(android_events)").fetchall()
+            ]
             if "source_type" not in existing_cols:
-                conn.execute("ALTER TABLE android_events ADD COLUMN source_type TEXT NOT NULL DEFAULT 'APP'")
+                conn.execute(
+                    "ALTER TABLE android_events ADD COLUMN source_type TEXT NOT NULL DEFAULT 'APP'"
+                )
             if "domain" not in existing_cols:
-                conn.execute("ALTER TABLE android_events ADD COLUMN domain TEXT NOT NULL DEFAULT ''")
+                conn.execute(
+                    "ALTER TABLE android_events ADD COLUMN domain TEXT NOT NULL DEFAULT ''"
+                )
             if "page_title" not in existing_cols:
-                conn.execute("ALTER TABLE android_events ADD COLUMN page_title TEXT NOT NULL DEFAULT ''")
+                conn.execute(
+                    "ALTER TABLE android_events ADD COLUMN page_title TEXT NOT NULL DEFAULT ''"
+                )
             if "browser_package" not in existing_cols:
-                conn.execute("ALTER TABLE android_events ADD COLUMN browser_package TEXT NOT NULL DEFAULT ''")
+                conn.execute(
+                    "ALTER TABLE android_events ADD COLUMN browser_package TEXT NOT NULL DEFAULT ''"
+                )
             conn.execute("PRAGMA user_version = 3")
-        
+
         # Seed default settings if empty
         settings_defaults = [
             ("poll_interval", str(config.poll_interval)),
-            ("idle_threshold", str(config.idle_threshold)), # seconds (dashboard uses seconds)
-            ("min_app_usage_secs", "120")
+            (
+                "idle_threshold",
+                str(config.idle_threshold),
+            ),  # seconds (dashboard uses seconds)
+            ("min_app_usage_secs", "120"),
         ]
         for key, value in settings_defaults:
             conn.execute(
                 "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)",
-                (key, value)
+                (key, value),
             )
 
         # Register local device in devices table
         local_id = _get_device_id()
         conn.execute(
             "INSERT OR IGNORE INTO devices (id, name, platform, last_seen) VALUES (?, ?, ?, ?)",
-            (local_id, "Local Desktop", "Local", datetime.now().isoformat())
+            (local_id, "Local Desktop", "Local", datetime.now().isoformat()),
         )
 
         conn.commit()
@@ -260,7 +355,6 @@ async def close_db():
     if _db_conn is not None:
         await _db_conn.close()
         _db_conn = None
-
 
 
 async def get_db() -> aiosqlite.Connection:
@@ -301,7 +395,17 @@ async def insert_event(
         await db.execute(
             """INSERT INTO events (id, device_id, timestamp, end_timestamp, wm_class, title, pid, duration_secs, is_idle)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (event_id, device_id, timestamp, end_timestamp, wm_class, title, pid, duration_secs, int(is_idle)),
+            (
+                event_id,
+                device_id,
+                timestamp,
+                end_timestamp,
+                wm_class,
+                title,
+                pid,
+                duration_secs,
+                int(is_idle),
+            ),
         )
         await db.commit()
         return event_id
@@ -312,14 +416,16 @@ async def prune_events(days_to_keep: int) -> int:
     async with _aconn() as db:
         cursor = await db.execute(
             "DELETE FROM events WHERE timestamp < DATE('now', ?)",
-            (f"-{days_to_keep} days",)
+            (f"-{days_to_keep} days",),
         )
         deleted_count = cursor.rowcount
         await db.commit()
         return deleted_count
 
 
-async def get_events(target_date: date, device_ids: list[str] | None = None) -> list[dict]:
+async def get_events(
+    target_date: date, device_ids: list[str] | None = None
+) -> list[dict]:
     """Get all events for a specific date (unified)."""
     day_start = f"{target_date.isoformat()}T00:00:00"
     next_day = target_date + timedelta(days=1)
@@ -350,13 +456,17 @@ async def get_events(target_date: date, device_ids: list[str] | None = None) -> 
         return [dict(r) for r in rows]
 
 
-async def get_summary_range(start_date: date, end_date: date, device_ids: list[str] | None = None) -> list[dict]:
+async def get_summary_range(
+    start_date: date, end_date: date, device_ids: list[str] | None = None
+) -> list[dict]:
     """Get per-app usage summary for a date range (unified)."""
     range_start = f"{start_date.isoformat()}T00:00:00"
     next_day = end_date + timedelta(days=1)
     range_end = f"{next_day.isoformat()}T00:00:00"
 
-    where_clause = "WHERE timestamp >= ? AND timestamp < ? AND is_idle = 0 AND wm_class != ''"
+    where_clause = (
+        "WHERE timestamp >= ? AND timestamp < ? AND is_idle = 0 AND wm_class != ''"
+    )
     params = [range_start, range_end]
 
     if device_ids:
@@ -387,7 +497,9 @@ async def get_summary_range(start_date: date, end_date: date, device_ids: list[s
         return [dict(r) for r in rows]
 
 
-async def get_timeline_range(start_date: date, end_date: date, device_ids: list[str] | None = None) -> list[dict]:
+async def get_timeline_range(
+    start_date: date, end_date: date, device_ids: list[str] | None = None
+) -> list[dict]:
     """Get timeline blocks for a date range (unified)."""
     range_start = f"{start_date.isoformat()}T00:00:00"
     next_day = end_date + timedelta(days=1)
@@ -419,17 +531,23 @@ async def get_timeline_range(start_date: date, end_date: date, device_ids: list[
         return [dict(r) for r in rows]
 
 
-async def get_timeline(target_date: date, device_ids: list[str] | None = None) -> list[dict]:
+async def get_timeline(
+    target_date: date, device_ids: list[str] | None = None
+) -> list[dict]:
     """Get timeline blocks for visualization (unified)."""
     return await get_timeline_range(target_date, target_date, device_ids)
 
 
-async def get_summary(target_date: date, device_ids: list[str] | None = None) -> list[dict]:
+async def get_summary(
+    target_date: date, device_ids: list[str] | None = None
+) -> list[dict]:
     """Get per-app usage summary for a specific date (unified)."""
     return await get_summary_range(target_date, target_date, device_ids)
 
 
-async def get_daily_totals(days: int = 7, device_ids: list[str] | None = None) -> list[dict]:
+async def get_daily_totals(
+    days: int = 7, device_ids: list[str] | None = None
+) -> list[dict]:
     """Get daily usage totals over last N days (unified)."""
     where_clause = "WHERE timestamp >= DATE('now', ?)"
     params = [f"-{days} days"]
@@ -461,7 +579,9 @@ async def get_daily_totals(days: int = 7, device_ids: list[str] | None = None) -
         return [dict(r) for r in rows]
 
 
-async def get_daily_totals_range(start_date: date, end_date: date, device_ids: list[str] | None = None) -> list[dict]:
+async def get_daily_totals_range(
+    start_date: date, end_date: date, device_ids: list[str] | None = None
+) -> list[dict]:
     """Get daily usage totals over a specific range (unified)."""
     range_start = f"{start_date.isoformat()}T00:00:00"
     next_day = end_date + timedelta(days=1)
@@ -506,24 +626,59 @@ async def get_categories() -> list[dict]:
         return [dict(r) for r in rows]
 
 
-async def add_category(name: str, wm_class_pattern: str, color: str, daily_goal_secs: int = 0, daily_limit_secs: int = 0, title_pattern: str = "", is_case_sensitive: bool = False) -> str:
+async def add_category(
+    name: str,
+    wm_class_pattern: str,
+    color: str,
+    daily_goal_secs: int = 0,
+    daily_limit_secs: int = 0,
+    title_pattern: str = "",
+    is_case_sensitive: bool = False,
+) -> str:
     """Add a new category and return its UUID."""
     cat_id = str(uuid.uuid4())
     async with _aconn() as db:
         await db.execute(
             "INSERT INTO categories (id, name, wm_class_pattern, title_pattern, color, daily_goal_secs, daily_limit_secs, is_case_sensitive) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            (cat_id, name, wm_class_pattern, title_pattern, color, daily_goal_secs, daily_limit_secs, 1 if is_case_sensitive else 0),
+            (
+                cat_id,
+                name,
+                wm_class_pattern,
+                title_pattern,
+                color,
+                daily_goal_secs,
+                daily_limit_secs,
+                1 if is_case_sensitive else 0,
+            ),
         )
         await db.commit()
     return cat_id
 
 
-async def update_category(cat_id: str, name: str, wm_class_pattern: str, color: str, daily_goal_secs: int = 0, daily_limit_secs: int = 0, title_pattern: str = "", is_case_sensitive: bool = False):
+async def update_category(
+    cat_id: str,
+    name: str,
+    wm_class_pattern: str,
+    color: str,
+    daily_goal_secs: int = 0,
+    daily_limit_secs: int = 0,
+    title_pattern: str = "",
+    is_case_sensitive: bool = False,
+):
     """Update an existing category."""
     async with _aconn() as db:
         await db.execute(
             "UPDATE categories SET name = ?, wm_class_pattern = ?, title_pattern = ?, color = ?, daily_goal_secs = ?, daily_limit_secs = ?, is_case_sensitive = ? WHERE id = ?",
-            (name, wm_class_pattern, title_pattern, color, daily_goal_secs, daily_limit_secs, 1 if is_case_sensitive else 0, cat_id),
+            (
+                name,
+                wm_class_pattern,
+                title_pattern,
+                color,
+                daily_goal_secs,
+                daily_limit_secs,
+                1 if is_case_sensitive else 0,
+                cat_id,
+            ),
         )
         await db.commit()
 
@@ -562,8 +717,7 @@ async def set_setting(key: str, value: str) -> None:
     """Set a setting."""
     async with _aconn() as db:
         await db.execute(
-            "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
-            (key, value)
+            "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, value)
         )
         await db.commit()
 
@@ -576,16 +730,20 @@ async def get_filter_rules() -> list[dict]:
         rows = await cursor.fetchall()
         return [dict(r) for r in rows]
 
-async def add_filter_rule(rule_type: str, wm_class_pattern: str = "", title_pattern: str = "") -> str:
+
+async def add_filter_rule(
+    rule_type: str, wm_class_pattern: str = "", title_pattern: str = ""
+) -> str:
     """Add a new filter rule."""
     rule_id = str(uuid.uuid4())
     async with _aconn() as db:
         await db.execute(
             "INSERT INTO filter_rules (id, rule_type, wm_class_pattern, title_pattern) VALUES (?, ?, ?, ?)",
-            (rule_id, rule_type, wm_class_pattern, title_pattern)
+            (rule_id, rule_type, wm_class_pattern, title_pattern),
         )
         await db.commit()
     return rule_id
+
 
 async def delete_filter_rule(rule_id: str) -> None:
     """Delete a filter rule."""
@@ -617,7 +775,7 @@ async def sync_android_day(day: str, events: list[dict]) -> int:
                     e.get("source_type", "APP"),
                     e.get("domain", ""),
                     e.get("page_title", ""),
-                    e.get("browser_package", "")
+                    e.get("browser_package", ""),
                 ),
             )
         await db.commit()
@@ -634,7 +792,16 @@ async def update_device(device_id: str, name: str, platform: str):
                name = CASE WHEN ? != '' THEN ? ELSE name END,
                platform = ?,
                last_seen = ?""",
-            (device_id, name, platform, datetime.now().isoformat(), name, name, platform, datetime.now().isoformat())
+            (
+                device_id,
+                name,
+                platform,
+                datetime.now().isoformat(),
+                name,
+                name,
+                platform,
+                datetime.now().isoformat(),
+            ),
         )
         await db.commit()
 
@@ -644,7 +811,7 @@ async def get_devices() -> list[dict]:
     async with _aconn() as db:
         db.row_factory = aiosqlite.Row
         local_id = get_device_id()
-        
+
         # Prefer names from 'devices' table, fallback to platform, then hardcoded defaults
         cursor = await db.execute(
             """
@@ -662,23 +829,20 @@ async def get_devices() -> list[dict]:
             ) ids
             LEFT JOIN devices d ON ids.device_id = d.id
             """,
-            (local_id,)
+            (local_id,),
         )
         rows = await cursor.fetchall()
         devices = []
         for r in rows:
             d = dict(r)
-            if not d["device_id"]: continue # skip empty IDs if any
-            
+            if not d["device_id"]:
+                continue  # skip empty IDs if any
+
             # Final touch-ups for the UI
             label = d["name"]
             if d["device_id"] == local_id:
                 label += " (*)"
-            
-            devices.append({
-                "device_id": d["device_id"],
-                "platform": label
-            })
-            
-        return devices
 
+            devices.append({"device_id": d["device_id"], "platform": label})
+
+        return devices

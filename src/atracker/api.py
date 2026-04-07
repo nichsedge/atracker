@@ -20,6 +20,7 @@ from atracker.config import config
 
 DASHBOARD_DIR = Path(__file__).parent.parent.parent / "dashboard"
 
+
 class CategoryCreate(BaseModel):
     name: str
     wm_class_pattern: str
@@ -28,6 +29,7 @@ class CategoryCreate(BaseModel):
     daily_goal_secs: int = 0
     daily_limit_secs: int = 0
     is_case_sensitive: bool = False
+
 
 class CategoryImport(BaseModel):
     categories: list[dict]
@@ -38,11 +40,13 @@ class SettingsUpdate(BaseModel):
     idle_threshold: str
     min_app_usage_secs: str
 
+
 class PauseRequest(BaseModel):
-    duration_mins: int | None = None # None means indefinite
+    duration_mins: int | None = None  # None means indefinite
+
 
 class RuleCreate(BaseModel):
-    rule_type: str # 'ignore' or 'redact'
+    rule_type: str  # 'ignore' or 'redact'
     wm_class_pattern: str = ""
     title_pattern: str = ""
 
@@ -50,7 +54,7 @@ class RuleCreate(BaseModel):
 class AndroidEvent(BaseModel):
     id: str
     device_id: str
-    timestamp: str       # ISO 8601, e.g. '2026-02-25T08:30:00'
+    timestamp: str  # ISO 8601, e.g. '2026-02-25T08:30:00'
     end_timestamp: str
     package_name: str
     app_label: str = ""
@@ -96,7 +100,7 @@ class ConnectionManager:
     async def broadcast(self, message: dict):
         if not _ws_clients:
             return
-            
+
         # Create a list of tasks for sending messages
         disconnected = []
         for ws in _ws_clients:
@@ -104,12 +108,14 @@ class ConnectionManager:
                 await ws.send_json(message)
             except Exception:
                 disconnected.append(ws)
-        
+
         # Cleanup any stale connections
         for ws in disconnected:
             self.disconnect(ws)
 
+
 manager = ConnectionManager()
+
 
 def broadcast_event(event_data: dict):
     """Synchronous bridge to broadcast to WS clients from other threads."""
@@ -138,7 +144,7 @@ async def prune_loop():
                     logger.info(f"Pruned {deleted} events older than {days} days.")
         except Exception as e:
             logger.error(f"Error in prune_loop: {e}")
-        
+
         # Run once a day
         await asyncio.sleep(86400)
 
@@ -176,7 +182,9 @@ async def status():
 
 
 @app.get("/api/events")
-async def events(target_date: str = Query(None, alias="date"), devices: str = Query(None)):
+async def events(
+    target_date: str = Query(None, alias="date"), devices: str = Query(None)
+):
     """Get raw events for a date (defaults to today)."""
     d = _parse_date(target_date)
     device_ids = devices.split(",") if devices else None
@@ -185,53 +193,66 @@ async def events(target_date: str = Query(None, alias="date"), devices: str = Qu
 
 
 @app.get("/api/summary")
-async def summary(target_date: str = Query(None, alias="date"), devices: str = Query(None)):
+async def summary(
+    target_date: str = Query(None, alias="date"), devices: str = Query(None)
+):
     """Get per-app usage summary for a date."""
     d = _parse_date(target_date)
     device_ids = devices.split(",") if devices else None
     rows = await db.get_summary(d, device_ids=device_ids)
-    
+
     # Only append local "Now Tracking" if local device is in device_ids or no filter
     local_id = db.get_device_id()
     if d == date.today() and (not device_ids or local_id in device_ids):
         curr = db.get_current_state()
-        if curr and not curr.get("is_idle") and curr.get("wm_class") and curr.get("wm_class") != "__idle__":
+        if (
+            curr
+            and not curr.get("is_idle")
+            and curr.get("wm_class")
+            and curr.get("wm_class") != "__idle__"
+        ):
             try:
                 curr_start = datetime.fromisoformat(curr["timestamp"])
                 duration = (datetime.now() - curr_start).total_seconds()
-                
+
                 found = False
                 for r in rows:
-                    if r["wm_class"] == curr["wm_class"] and r.get("title", "") == curr.get("title", ""):
+                    if r["wm_class"] == curr["wm_class"] and r.get(
+                        "title", ""
+                    ) == curr.get("title", ""):
                         r["total_secs"] += duration
                         r["event_count"] += 1
                         r["last_seen"] = datetime.now().isoformat()
                         found = True
                         break
-                
+
                 if not found:
-                    rows.append({
-                        "wm_class": curr["wm_class"],
-                        "title": curr.get("title", ""),
-                        "total_secs": duration,
-                        "event_count": 1,
-                        "first_seen": curr["timestamp"],
-                        "last_seen": datetime.now().isoformat()
-                    })
-                
+                    rows.append(
+                        {
+                            "wm_class": curr["wm_class"],
+                            "title": curr.get("title", ""),
+                            "total_secs": duration,
+                            "event_count": 1,
+                            "first_seen": curr["timestamp"],
+                            "last_seen": datetime.now().isoformat(),
+                        }
+                    )
+
                 rows.sort(key=lambda x: x["total_secs"], reverse=True)
             except Exception as e:
                 logger.error(f"Error appending current state to summary: {e}")
 
     categories = await db.get_categories()
     min_secs = float(await db.get_setting("min_app_usage_secs", "120"))
-    
+
     filtered_rows = []
     # Enrich with category info
     for row in rows:
         if row["total_secs"] < min_secs:
             continue
-        matched_cat = _get_matched_category(row["wm_class"], row.get("title", ""), categories)
+        matched_cat = _get_matched_category(
+            row["wm_class"], row.get("title", ""), categories
+        )
         row["category_name"] = matched_cat["name"]
         row["color"] = matched_cat.get("color", "#64748b")
         row["total_formatted"] = _format_duration(row["total_secs"])
@@ -240,12 +261,14 @@ async def summary(target_date: str = Query(None, alias="date"), devices: str = Q
 
 
 @app.get("/api/timeline")
-async def timeline(target_date: str = Query(None, alias="date"), devices: str = Query(None)):
+async def timeline(
+    target_date: str = Query(None, alias="date"), devices: str = Query(None)
+):
     """Get timeline blocks for a date."""
     d = _parse_date(target_date)
     device_ids = devices.split(",") if devices else None
     rows = await db.get_timeline(d, device_ids=device_ids)
-    
+
     # Only append local current state if local device is in device_ids or no filter
     local_id = db.get_device_id()
     if d == date.today() and (not device_ids or local_id in device_ids):
@@ -263,7 +286,9 @@ async def timeline(target_date: str = Query(None, alias="date"), devices: str = 
 
     categories = await db.get_categories()
     for row in rows:
-        row["color"] = _get_matched_category(row["wm_class"], row.get("title", ""), categories).get("color", "#64748b")
+        row["color"] = _get_matched_category(
+            row["wm_class"], row.get("title", ""), categories
+        ).get("color", "#64748b")
     return {"date": d.isoformat(), "timeline": rows}
 
 
@@ -279,22 +304,26 @@ async def history(days: int = Query(7), devices: str = Query(None)):
 
 
 @app.get("/api/range/summary")
-async def range_summary(start: str = Query(...), end: str = Query(...), devices: str = Query(None)):
+async def range_summary(
+    start: str = Query(...), end: str = Query(...), devices: str = Query(None)
+):
     """Get per-app usage summary for a date range."""
     s = _parse_date(start)
     e = _parse_date(end)
     device_ids = devices.split(",") if devices else None
     rows = await db.get_summary_range(s, e, device_ids=device_ids)
-    
+
     # We don't append "Now Tracking" for ranges as it's usually historical
     categories = await db.get_categories()
     min_secs = float(await db.get_setting("min_app_usage_secs", "120"))
-    
+
     filtered_rows = []
     for row in rows:
         if row["total_secs"] < min_secs:
             continue
-        matched_cat = _get_matched_category(row["wm_class"], row.get("title", ""), categories)
+        matched_cat = _get_matched_category(
+            row["wm_class"], row.get("title", ""), categories
+        )
         row["category_name"] = matched_cat["name"]
         row["color"] = matched_cat.get("color", "#64748b")
         row["total_formatted"] = _format_duration(row["total_secs"])
@@ -303,7 +332,9 @@ async def range_summary(start: str = Query(...), end: str = Query(...), devices:
 
 
 @app.get("/api/range/history")
-async def range_history(start: str = Query(...), end: str = Query(...), devices: str = Query(None)):
+async def range_history(
+    start: str = Query(...), end: str = Query(...), devices: str = Query(None)
+):
     """Get daily totals for a date range."""
     s = _parse_date(start)
     e = _parse_date(end)
@@ -315,43 +346,53 @@ async def range_history(start: str = Query(...), end: str = Query(...), devices:
     return {"start": s.isoformat(), "end": e.isoformat(), "history": rows}
 
 
-
 @app.get("/api/export")
-async def export_data(start: str = Query(...), end: str = Query(...), format: str = Query("csv")):
+async def export_data(
+    start: str = Query(...), end: str = Query(...), format: str = Query("csv")
+):
     """Export raw events for a date range."""
     s = _parse_date(start)
     e = _parse_date(end)
-    
+
     # Get timeline blocks (which are merged/cleaner events)
     rows = await db.get_timeline_range(s, e)
-    
+
     if format == "json":
         return {"start": s.isoformat(), "end": e.isoformat(), "events": rows}
-    
+
     # CSV format
     output = io.StringIO()
-    writer = csv.DictWriter(output, fieldnames=["timestamp", "end_timestamp", "wm_class", "title", "duration_secs", "is_idle"])
+    writer = csv.DictWriter(
+        output,
+        fieldnames=[
+            "timestamp",
+            "end_timestamp",
+            "wm_class",
+            "title",
+            "duration_secs",
+            "is_idle",
+        ],
+    )
     writer.writeheader()
     for r in rows:
-        writer.writerow({
-            "timestamp": r["timestamp"],
-            "end_timestamp": r["end_timestamp"],
-            "wm_class": r["wm_class"],
-            "title": r["title"],
-            "duration_secs": r["duration_secs"],
-            "is_idle": r["is_idle"]
-        })
-    
+        writer.writerow(
+            {
+                "timestamp": r["timestamp"],
+                "end_timestamp": r["end_timestamp"],
+                "wm_class": r["wm_class"],
+                "title": r["title"],
+                "duration_secs": r["duration_secs"],
+                "is_idle": r["is_idle"],
+            }
+        )
+
     output.seek(0)
     filename = f"atracker_export_{s.isoformat()}_{e.isoformat()}.csv"
     return StreamingResponse(
         iter([output.getvalue()]),
         media_type="text/csv",
-        headers={"Content-Disposition": f"attachment; filename={filename}"}
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
     )
-
-
-
 
 
 @app.get("/api/categories")
@@ -371,7 +412,7 @@ async def create_category(cat: CategoryCreate):
         title_pattern=cat.title_pattern,
         daily_goal_secs=cat.daily_goal_secs,
         daily_limit_secs=cat.daily_limit_secs,
-        is_case_sensitive=cat.is_case_sensitive
+        is_case_sensitive=cat.is_case_sensitive,
     )
     return {"id": cat_id, "message": "Category created"}
 
@@ -387,7 +428,7 @@ async def update_category(cat_id: str, cat: CategoryCreate):
         title_pattern=cat.title_pattern,
         daily_goal_secs=cat.daily_goal_secs,
         daily_limit_secs=cat.daily_limit_secs,
-        is_case_sensitive=cat.is_case_sensitive
+        is_case_sensitive=cat.is_case_sensitive,
     )
     return {"id": cat_id, "message": "Category updated"}
 
@@ -411,7 +452,7 @@ async def import_categories(data: CategoryImport, replace: bool = Query(False)):
     """Import categories, optionally replacing existing ones."""
     if replace:
         await db.clear_categories()
-    
+
     imported = 0
     for cat in data.categories:
         name = cat.get("name")
@@ -421,7 +462,7 @@ async def import_categories(data: CategoryImport, replace: bool = Query(False)):
         goal = cat.get("daily_goal_secs", 0)
         limit = cat.get("daily_limit_secs", 0)
         is_cs = cat.get("is_case_sensitive", False)
-        
+
         if name and (pattern or title_pattern):
             await db.add_category(
                 name=name,
@@ -430,10 +471,10 @@ async def import_categories(data: CategoryImport, replace: bool = Query(False)):
                 title_pattern=title_pattern,
                 daily_goal_secs=goal,
                 daily_limit_secs=limit,
-                is_case_sensitive=is_cs
+                is_case_sensitive=is_cs,
             )
             imported += 1
-            
+
     return {"message": f"Imported {imported} categories."}
 
 
@@ -451,11 +492,14 @@ async def update_settings(settings: SettingsUpdate):
     await db.set_setting("min_app_usage_secs", settings.min_app_usage_secs)
     return {"status": "ok"}
 
+
 # --- Privacy & Pause ---
+
 
 @app.get("/api/pause_status")
 async def get_pause_status():
     return {"is_paused": db.get_paused()}
+
 
 @app.post("/api/pause")
 async def pause_tracking(req: PauseRequest):
@@ -466,20 +510,26 @@ async def pause_tracking(req: PauseRequest):
     manager.broadcast({"type": "pause_state", "is_paused": True, "until": until})
     return {"status": "ok", "until": until}
 
+
 @app.post("/api/resume")
 async def resume_tracking():
     db.set_paused(False)
     manager.broadcast({"type": "pause_state", "is_paused": False})
     return {"status": "ok"}
 
+
 @app.get("/api/rules")
 async def get_rules():
     return await db.get_filter_rules()
 
+
 @app.post("/api/rules")
 async def add_rule(rule: RuleCreate):
-    rule_id = await db.add_filter_rule(rule.rule_type, rule.wm_class_pattern, rule.title_pattern)
+    rule_id = await db.add_filter_rule(
+        rule.rule_type, rule.wm_class_pattern, rule.title_pattern
+    )
     return {"status": "ok", "id": rule_id}
+
 
 @app.delete("/api/rules/{rule_id}")
 async def delete_rule(rule_id: str):
@@ -488,6 +538,7 @@ async def delete_rule(rule_id: str):
 
 
 # --- Android sync ---
+
 
 @app.post("/api/sync/android")
 async def sync_android(payload: AndroidSyncPayload):
@@ -522,7 +573,9 @@ async def add_manual_event(event: ManualEventCreate):
         return JSONResponse(status_code=400, content={"error": "Invalid date format."})
 
     if start >= end:
-        return JSONResponse(status_code=400, content={"error": "Start time must be before end time."})
+        return JSONResponse(
+            status_code=400, content={"error": "Start time must be before end time."}
+        )
 
     duration_secs = (end - start).total_seconds()
 
@@ -533,9 +586,9 @@ async def add_manual_event(event: ManualEventCreate):
         title=event.title,
         pid=0,
         duration_secs=duration_secs,
-        is_idle=False
+        is_idle=False,
     )
-    
+
     broadcast_event({"type": "activity"})
     return {"status": "ok"}
 
@@ -546,10 +599,10 @@ async def get_devices():
     return await db.get_devices()
 
 
-
 # --- Static files for dashboard ---
 
 if DASHBOARD_DIR.exists():
+
     @app.get("/")
     async def serve_dashboard():
         return FileResponse(DASHBOARD_DIR / "index.html")
@@ -558,6 +611,7 @@ if DASHBOARD_DIR.exists():
 
 
 # --- Helpers ---
+
 
 def _parse_date(date_str: str | None) -> date:
     if date_str:
@@ -573,6 +627,16 @@ def _format_duration(secs: float) -> str:
     return f"{minutes}m"
 
 
+_regex_cache: dict[tuple[str, int], re.Pattern] = {}
+
+
+def _get_compiled_regex(pattern: str, flags: int) -> re.Pattern:
+    key = (pattern, flags)
+    if key not in _regex_cache:
+        _regex_cache[key] = re.compile(pattern, flags)
+    return _regex_cache[key]
+
+
 def _get_matched_category(wm_class: str, title: str, categories: list[dict]) -> dict:
     """Match a wm_class or title against category patterns and return the category dict.
     Title patterns are checked first for all categories to allow more granular matching
@@ -580,33 +644,37 @@ def _get_matched_category(wm_class: str, title: str, categories: list[dict]) -> 
     """
     wm_lower = wm_class.lower()
     title_lower = title.lower()
-    
+
     # First pass: Check all title patterns
     for cat in categories:
         title_pattern = cat.get("title_pattern", "")
         if not title_pattern:
             continue
-            
+
         is_cs = bool(cat.get("is_case_sensitive"))
         if is_cs:
-            if re.search(title_pattern, title):
+            reg = _get_compiled_regex(title_pattern, 0)
+            if reg.search(title):
                 return cat
         else:
-            if re.search(title_pattern, title_lower, re.IGNORECASE):
+            reg = _get_compiled_regex(title_pattern, re.IGNORECASE)
+            if reg.search(title_lower):
                 return cat
-            
+
     # Second pass: Check all wm_class patterns
     for cat in categories:
         wm_pattern = cat.get("wm_class_pattern", "")
         if not wm_pattern:
             continue
-            
+
         is_cs = bool(cat.get("is_case_sensitive"))
         if is_cs:
-            if re.search(wm_pattern, wm_class):
+            reg = _get_compiled_regex(wm_pattern, 0)
+            if reg.search(wm_class):
                 return cat
         else:
-            if re.search(wm_pattern, wm_lower, re.IGNORECASE):
+            reg = _get_compiled_regex(wm_pattern, re.IGNORECASE)
+            if reg.search(wm_lower):
                 return cat
-            
+
     return {"name": "Uncategorized", "color": "#64748b"}
