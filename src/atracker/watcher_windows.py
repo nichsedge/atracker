@@ -23,8 +23,10 @@ user32 = ctypes.windll.user32
 kernel32 = ctypes.windll.kernel32
 psapi = ctypes.windll.psapi
 
+
 class LASTINPUTINFO(ctypes.Structure):
     _fields_ = [("cbSize", wintypes.UINT), ("dwTime", wintypes.DWORD)]
+
 
 def get_idle_time_ms() -> int:
     lii = LASTINPUTINFO()
@@ -34,6 +36,7 @@ def get_idle_time_ms() -> int:
         tick_count = kernel32.GetTickCount64()
         return tick_count - lii.dwTime
     return 0
+
 
 def get_active_window_info() -> dict | None:
     hwnd = user32.GetForegroundWindow()
@@ -59,7 +62,9 @@ def get_active_window_info() -> dict | None:
         try:
             exe_buf = ctypes.create_unicode_buffer(1024)
             size = wintypes.DWORD(1024)
-            if kernel32.QueryFullProcessImageNameW(h_process, 0, exe_buf, ctypes.byref(size)):
+            if kernel32.QueryFullProcessImageNameW(
+                h_process, 0, exe_buf, ctypes.byref(size)
+            ):
                 wm_class = os.path.basename(exe_buf.value).lower()
                 if wm_class.endswith(".exe"):
                     wm_class = wm_class[:-4]
@@ -81,7 +86,7 @@ class WatcherWindows:
         self._last_poll_time: datetime | None = None
         self._is_idle = False
         self._missing_window_since: datetime | None = None
-        
+
         # Configuration
         self._poll_interval = poll_interval or DEFAULT_POLL_INTERVAL
         self._idle_threshold = idle_threshold or DEFAULT_IDLE_THRESHOLD
@@ -108,8 +113,11 @@ class WatcherWindows:
             # add_signal_handler is not fully implemented on Windows ProactorEventLoop
             pass
 
-        logger.info("Windows Watcher started — polling every %ds, idle threshold %ds",
-                     self._poll_interval, self._idle_threshold // 1000)
+        logger.info(
+            "Windows Watcher started — polling every %ds, idle threshold %ds",
+            self._poll_interval,
+            self._idle_threshold // 1000,
+        )
 
         while self._running:
             # Periodically refresh settings from DB
@@ -120,8 +128,11 @@ class WatcherWindows:
             if self._last_poll_time:
                 delta = (now - self._last_poll_time).total_seconds()
                 if delta > (self._poll_interval * 4):  # e.g. >20s gap
-                    logger.warning("Time jump detected (%.1fs). Ending previous event at %s.",
-                                   delta, self._last_poll_time)
+                    logger.warning(
+                        "Time jump detected (%.1fs). Ending previous event at %s.",
+                        delta,
+                        self._last_poll_time,
+                    )
                     await self._flush_current_event(end_time=self._last_poll_time)
                     self._current_start = now
 
@@ -143,13 +154,18 @@ class WatcherWindows:
             if not self._manual_poll and "poll_interval" in settings:
                 new_interval = int(settings["poll_interval"])
                 if new_interval != self._poll_interval:
-                    logger.info("Settings updated from DB: poll_interval = %ds", new_interval)
+                    logger.info(
+                        "Settings updated from DB: poll_interval = %ds", new_interval
+                    )
                     self._poll_interval = new_interval
             if not self._manual_idle and "idle_threshold" in settings:
                 # Dashboard saves idle_threshold in seconds
                 new_threshold = int(settings["idle_threshold"]) * 1000
                 if new_threshold != self._idle_threshold:
-                    logger.info("Settings updated from DB: idle_threshold = %ds", new_threshold // 1000)
+                    logger.info(
+                        "Settings updated from DB: idle_threshold = %ds",
+                        new_threshold // 1000,
+                    )
                     self._idle_threshold = new_threshold
         except Exception as e:
             logger.error("Failed to refresh settings: %s", e)
@@ -195,7 +211,9 @@ class WatcherWindows:
             if self._missing_window_since is None:
                 self._missing_window_since = datetime.now()
             else:
-                missing_secs = (datetime.now() - self._missing_window_since).total_seconds()
+                missing_secs = (
+                    datetime.now() - self._missing_window_since
+                ).total_seconds()
                 if missing_secs >= MAX_MISSING_WINDOW_SECS:
                     await self._flush_current_event()
                     self._current_wm_class = ""
