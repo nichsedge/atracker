@@ -55,7 +55,10 @@ def dedup_events(
                 row_dur = float(row["duration_secs"])
                 dur_delta = abs(row_dur - prev_dur)
 
-                if end_delta <= max_end_delta_secs and dur_delta <= max_duration_delta_secs:
+                if (
+                    end_delta <= max_end_delta_secs
+                    and dur_delta <= max_duration_delta_secs
+                ):
                     # Drop the later row (current), keep the earlier one.
                     to_delete.append((row["device_id"], row["id"]))
                     continue
@@ -94,7 +97,9 @@ def main() -> None:
         default=1.0,
         help="Max duration_secs delta to consider duplicates (seconds)",
     )
-    parser.add_argument("--dry-run", action="store_true", help="Do not delete, only report")
+    parser.add_argument(
+        "--dry-run", action="store_true", help="Do not delete, only report"
+    )
 
     args = parser.parse_args()
     deleted = dedup_events(
