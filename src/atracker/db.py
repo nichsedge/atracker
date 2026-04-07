@@ -758,26 +758,25 @@ async def sync_android_day(day: str, events: list[dict]) -> int:
     Returns the number of rows inserted.
     """
     async with _aconn() as db:
-        for e in events:
-            await db.execute(
-                """INSERT OR REPLACE INTO android_events
-                   (id, device_id, timestamp, end_timestamp, package_name, app_label, duration_secs, is_idle, source_type, domain, page_title, browser_package)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (
-                    e["id"],
-                    e.get("device_id", ""),
-                    e["timestamp"],
-                    e["end_timestamp"],
-                    e["package_name"],
-                    e.get("app_label", ""),
-                    e["duration_secs"],
-                    int(e.get("is_idle", False)),
-                    e.get("source_type", "APP"),
-                    e.get("domain", ""),
-                    e.get("page_title", ""),
-                    e.get("browser_package", ""),
-                ),
-            )
+        await db.executemany(
+            """INSERT OR REPLACE INTO android_events
+               (id, device_id, timestamp, end_timestamp, package_name, app_label, duration_secs, is_idle, source_type, domain, page_title, browser_package)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            [(
+                e["id"],
+                e.get("device_id", ""),
+                e["timestamp"],
+                e["end_timestamp"],
+                e["package_name"],
+                e.get("app_label", ""),
+                e["duration_secs"],
+                int(e.get("is_idle", False)),
+                e.get("source_type", "APP"),
+                e.get("domain", ""),
+                e.get("page_title", ""),
+                e.get("browser_package", "")
+            ) for e in events]
+        )
         await db.commit()
     return len(events)
 
