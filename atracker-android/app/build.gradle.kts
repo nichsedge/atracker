@@ -7,11 +7,11 @@ plugins {
 }
 
 android {
-    namespace = "com.example.atracker"
+    namespace = "com.sans.atracker"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.example.atracker"
+        applicationId = rootProject.extra["defaultApplicationId"] as String
         minSdk = 33
         targetSdk = 36
         versionCode = 1

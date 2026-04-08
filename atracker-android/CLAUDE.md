@@ -27,7 +27,7 @@ Android companion app for atracker that monitors active app usage on Android dev
 
 ## Architecture
 
-Single-module app (`com.example.atracker`) using MVVM + Hilt + Room + Jetpack Compose.
+Single-module app (`com.sans.atracker`) using MVVM + Hilt + Room + Jetpack Compose.
 
 ### Data Flow
 

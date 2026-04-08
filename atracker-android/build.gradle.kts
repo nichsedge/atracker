@@ -5,3 +5,4 @@ plugins {
     alias(libs.plugins.hilt.plugin) apply false
     alias(libs.plugins.compose.compiler) apply false
 }
+val defaultApplicationId by extra("com.sans.atracker")
