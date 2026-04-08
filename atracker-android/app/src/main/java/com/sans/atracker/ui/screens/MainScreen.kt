@@ -174,7 +174,11 @@ fun StatusSection(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column(modifier = Modifier.weight(1f)) {
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(end = 16.dp)
+            ) {
                 // Show as active if either the service is actually running OR the user preference is enabled
                 // This prevents the "INACTIVE" flicker on app startup when the service is still initializing.
                 StatusBadge(isRunning = isTrackerRunning || isTrackingEnabled)

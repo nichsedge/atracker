@@ -2,6 +2,7 @@ package com.sans.atracker.ui.components
 
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -158,7 +159,7 @@ fun StatusBadge(
 
     // Scale animation for the whole badge
     val badgeScale by animateFloatAsState(
-        targetValue = if (isRunning) 1.05f else 1f,
+        targetValue = if (isRunning) 1.03f else 1f,
         animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
         label = "badgeScale"
     )
@@ -167,17 +168,21 @@ fun StatusBadge(
     val inactiveColor = MaterialTheme.colorScheme.secondary
 
     Surface(
-        color = if (isRunning) activeColor.copy(alpha = 0.12f) else inactiveColor.copy(alpha = 0.12f),
-        shape = MaterialTheme.shapes.small,
+        color = if (isRunning) activeColor.copy(alpha = 0.12f) else inactiveColor.copy(alpha = 0.08f),
+        shape = CircleShape,
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,
+        border = BorderStroke(
+            1.dp, 
+            if (isRunning) activeColor.copy(alpha = 0.2f) else inactiveColor.copy(alpha = 0.15f)
+        ),
         modifier = modifier.graphicsLayer {
             scaleX = badgeScale
             scaleY = badgeScale
         }
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
@@ -191,28 +196,20 @@ fun StatusBadge(
                             
                             // Pulse Ring 1
                             drawCircle(
-                                color = activeColor.copy(alpha = pulseAlpha1),
+                                color = activeColor.copy(alpha = pulseAlpha1 * 0.4f),
                                 radius = (dSize.minDimension / 2f) * pulseScale1
                             )
                             // Pulse Ring 2
                             drawCircle(
-                                color = activeColor.copy(alpha = pulseAlpha2),
+                                color = activeColor.copy(alpha = pulseAlpha2 * 0.4f),
                                 radius = (dSize.minDimension / 2f) * pulseScale2
-                            )
-                            // Minimal Glow effect
-                            drawCircle(
-                                brush = Brush.radialGradient(
-                                    colors = listOf(activeColor.copy(alpha = 0.15f), Color.Transparent),
-                                    center = dCenter,
-                                    radius = dSize.minDimension * 2f
-                                )
                             )
                         }
                     }
                     .clip(CircleShape)
                     .background(
                         if (isRunning) activeColor.copy(alpha = dotAlpha)
-                        else inactiveColor.copy(alpha = 0.6f)
+                        else inactiveColor.copy(alpha = 0.4f)
                     )
             )
             Text(

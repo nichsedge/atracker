@@ -22,65 +22,61 @@ fun HistoryScreen(viewModel: MainViewModel) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val scrollState = rememberScrollState()
 
-    Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
-    ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .padding(paddingValues)
-                .fillMaxSize()
-                .verticalScroll(scrollState)
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .verticalScroll(scrollState)
+    ) {
+        MeshGradientHeader(
+            modifier = Modifier.padding(bottom = 8.dp)
         ) {
-            MeshGradientHeader(
-                modifier = Modifier.padding(bottom = 8.dp)
+            Column(
+                modifier = Modifier
+                    .padding(horizontal = 24.dp)
+                    .padding(top = 16.dp, bottom = 24.dp)
             ) {
-                Column(
+                Text(
+                    "Activity History",
+                    style = MaterialTheme.typography.headlineLarge,
+                    fontWeight = FontWeight.Black,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+                Text(
+                    "Review your past digital habits",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.secondary,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+        }
+
+        Column(
+            modifier = Modifier.padding(horizontal = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(28.dp)
+        ) {
+            SectionHeader("Recent Days")
+            
+            if (state.history.isEmpty()) {
+                Box(
                     modifier = Modifier
-                        .padding(horizontal = 24.dp)
-                        .padding(top = 32.dp, bottom = 24.dp)
+                        .fillMaxWidth()
+                        .padding(vertical = 40.dp),
+                    contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        "Activity History",
-                        style = MaterialTheme.typography.headlineLarge,
-                        fontWeight = FontWeight.Black,
-                        color = MaterialTheme.colorScheme.onBackground
-                    )
-                    Text(
-                        "Review your past digital habits",
+                        "No history data yet",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.secondary,
-                        fontWeight = FontWeight.Medium
+                        color = MaterialTheme.colorScheme.secondary
                     )
                 }
-            }
-
-            Column(
-                modifier = Modifier.padding(horizontal = 20.dp),
-                verticalArrangement = Arrangement.spacedBy(20.dp)
-            ) {
-                SectionHeader("Recent Days")
-                
-                if (state.history.isEmpty()) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 40.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            "No history data yet",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.secondary
-                        )
-                    }
-                } else {
-                    state.history.forEach { dayUsage ->
-                        HistoryItem(dayUsage)
-                    }
+            } else {
+                state.history.forEach { dayUsage ->
+                    HistoryItem(dayUsage)
                 }
-                
-                Spacer(modifier = Modifier.height(40.dp))
             }
+            
+            Spacer(modifier = Modifier.height(40.dp))
         }
     }
 }
