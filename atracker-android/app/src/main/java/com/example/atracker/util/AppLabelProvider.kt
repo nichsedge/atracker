@@ -8,7 +8,7 @@ import javax.inject.Singleton
 
 @Singleton
 class AppLabelProvider @Inject constructor(
-    @ApplicationContext private val context: Context
+    @param:ApplicationContext private val context: Context
 ) {
     private val appLabelCache = HashMap<String, String>()
 

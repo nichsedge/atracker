@@ -52,29 +52,26 @@ fun MainScreen(
                                 state.hasNotificationPermission && 
                                 state.isBatteryOptimizationExempted
 
-    Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
-    ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .padding(paddingValues)
-                .fillMaxSize()
-                .verticalScroll(scrollState)
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .verticalScroll(scrollState)
+    ) {
+        // Premium Header with Mesh Gradient
+        MeshGradientHeader(
+            modifier = Modifier.padding(bottom = 8.dp)
         ) {
-            // Premium Header with Mesh Gradient
-            MeshGradientHeader(
-                modifier = Modifier.padding(bottom = 8.dp)
+            Column(
+                modifier = Modifier
+                    .padding(horizontal = 24.dp)
+                    .padding(top = 16.dp, bottom = 24.dp)
             ) {
-                Column(
-                    modifier = Modifier
-                        .padding(horizontal = 24.dp)
-                        .padding(top = 32.dp, bottom = 24.dp)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 "Atracker",
@@ -162,12 +159,10 @@ fun MainScreen(
                         }
                     }
                 }
-                
                 Spacer(modifier = Modifier.height(40.dp))
             }
         }
     }
-}
 
 @Composable
 fun StatusSection(

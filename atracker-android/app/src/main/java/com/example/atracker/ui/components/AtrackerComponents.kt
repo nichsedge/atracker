@@ -49,8 +49,8 @@ fun AtrackerCard(
             ),
         shape = MaterialTheme.shapes.large,
         color = MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.8f else 0.9f),
-        tonalElevation = 2.dp,
-        shadowElevation = 4.dp
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp
     ) {
         Column(
             modifier = Modifier.padding(24.dp),
@@ -173,6 +173,8 @@ fun StatusBadge(
     Surface(
         color = if (isRunning) activeColor.copy(alpha = 0.12f) else inactiveColor.copy(alpha = 0.12f),
         shape = MaterialTheme.shapes.small,
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
         modifier = modifier.graphicsLayer {
             scaleX = badgeScale
             scaleY = badgeScale
@@ -201,12 +203,12 @@ fun StatusBadge(
                                 color = activeColor.copy(alpha = pulseAlpha2),
                                 radius = (dSize.minDimension / 2f) * pulseScale2
                             )
-                            // Glow effect
+                            // Minimal Glow effect
                             drawCircle(
                                 brush = Brush.radialGradient(
-                                    colors = listOf(activeColor.copy(alpha = 0.4f), Color.Transparent),
+                                    colors = listOf(activeColor.copy(alpha = 0.15f), Color.Transparent),
                                     center = dCenter,
-                                    radius = dSize.minDimension * 1.5f
+                                    radius = dSize.minDimension * 2f
                                 )
                             )
                         }
