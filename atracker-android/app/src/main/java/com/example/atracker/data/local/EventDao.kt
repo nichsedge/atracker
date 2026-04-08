@@ -28,6 +28,10 @@ interface EventDao {
     @Query("SELECT * FROM events WHERE startTimestamp >= :dayStart AND startTimestamp < :dayEnd ORDER BY startTimestamp ASC")
     fun getEventsByDayFlow(dayStart: Long, dayEnd: Long): Flow<List<Event>>
 
+    /** All events, descending order by time. */
+    @Query("SELECT * FROM events ORDER BY startTimestamp DESC")
+    fun getAllEventsFlow(): Flow<List<Event>>
+
     /** Mark specific events as synced. */
     @Query("UPDATE events SET synced = 1 WHERE id IN (:ids)")
     suspend fun markSynced(ids: List<String>)

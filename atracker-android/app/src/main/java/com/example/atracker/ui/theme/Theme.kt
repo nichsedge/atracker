@@ -117,7 +117,7 @@ val AtrackerTypography = Typography(
 @Composable
 fun AtrackerTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    dynamicColor: Boolean = false, // Disable dynamic color to maintain our premium brand palette
+    dynamicColor: Boolean = true, // Enabled dynamic color for Material You support
     content: @Composable () -> Unit
 ) {
     val colorScheme = when {
@@ -133,7 +133,7 @@ fun AtrackerTheme(
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
-            window.statusBarColor = colorScheme.background.toArgb() // Use background for a more unified look
+            window.statusBarColor = colorScheme.surface.toArgb() // Use surface for a cleaner integrated look
             WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
         }
     }

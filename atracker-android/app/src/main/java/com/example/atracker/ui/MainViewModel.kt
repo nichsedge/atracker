@@ -22,6 +22,12 @@ data class TodayAppUsage(
     val totalSecs: Double
 )
 
+data class DayUsage(
+    val dateLabel: String,
+    val totalSecs: Double,
+    val topApps: List<TodayAppUsage>
+)
+
 data class MainUiState(
     val backendUrl: String = "",
     val isTrackingEnabled: Boolean = false,
@@ -33,7 +39,9 @@ data class MainUiState(
     val syncStatusMessage: String = "",
     val isSyncSuccess: Boolean? = null,
     val lastSyncTime: Long = 0L,
-    val todayUsage: List<TodayAppUsage> = emptyList()
+    val todayUsage: List<TodayAppUsage> = emptyList(),
+    val hourlyUsage: List<Double> = List(24) { 0.0 },
+    val history: List<DayUsage> = emptyList()
 )
 
 @HiltViewModel
@@ -96,7 +104,62 @@ class MainViewModel @Inject constructor(
                         )
                     }
                     .sortedByDescending { it.totalSecs }
-                _uiState.update { it.copy(todayUsage = usage) }
+                
+                // Calculate hourly distribution
+                val hourly = DoubleArray(24) { 0.0 }
+                events.filter { !it.isIdle }.forEach { event ->
+                    val cal = Calendar.getInstance().apply { timeInMillis = event.startTimestamp }
+                    val hour = cal.get(Calendar.HOUR_OF_DAY)
+                    if (hour in 0..23) {
+                        hourly[hour] += event.durationSecs
+                    }
+                }
+
+                _uiState.update { it.copy(
+                    todayUsage = usage,
+                    hourlyUsage = hourly.toList()
+                ) }
+            }
+        }
+
+        viewModelScope.launch {
+            eventRepository.getAllEventsFlow().collect { allEvents ->
+                val sortedHistory = allEvents
+                    .filter { !it.isIdle }
+                    .groupBy { event ->
+                        val cal = Calendar.getInstance().apply { timeInMillis = event.startTimestamp }
+                        cal.set(Calendar.HOUR_OF_DAY, 0)
+                        cal.set(Calendar.MINUTE, 0)
+                        cal.set(Calendar.SECOND, 0)
+                        cal.set(Calendar.MILLISECOND, 0)
+                        cal.timeInMillis
+                    }
+                    .toList()
+                    .sortedByDescending { it.first }
+                    .map { (dayStart, events) ->
+                        val topApps = events
+                            .groupBy { it.packageName }
+                            .map { (pkg, evts) ->
+                                val rawLabel = evts.first().appLabel
+                                val displayLabel = if (rawLabel.isBlank() || rawLabel == pkg) {
+                                    appLabelProvider.getAppLabel(pkg)
+                                } else {
+                                    rawLabel
+                                }
+                                TodayAppUsage(pkg, displayLabel, evts.sumOf { it.durationSecs })
+                            }
+                            .sortedByDescending { it.totalSecs }
+                            .take(3)
+
+                        val sdf = java.text.SimpleDateFormat("EEEE, MMM d", java.util.Locale.getDefault())
+                        DayUsage(
+                            dateLabel = sdf.format(java.util.Date(dayStart)),
+                            totalSecs = events.sumOf { it.durationSecs },
+                            topApps = topApps
+                        )
+                    }
+                
+                _uiState.update { it.copy(history = sortedHistory) }
             }
         }
     }

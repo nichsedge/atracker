@@ -39,6 +39,7 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.font.FontWeight
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dagger.hilt.android.AndroidEntryPoint
@@ -52,6 +53,14 @@ import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+import androidx.compose.ui.platform.LocalContext
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
+import androidx.navigation.compose.currentBackStackEntryAsState
+import com.example.atracker.ui.navigation.Screen
+import com.example.atracker.ui.screens.HistoryScreen
+import com.example.atracker.ui.screens.SettingsScreen
 import com.example.atracker.ui.screens.MainScreen
 
 @AndroidEntryPoint
@@ -92,17 +101,87 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             AtrackerTheme {
-                MainScreen(
-                    viewModel = viewModel,
-                    onStartTracking = { handleStartTracking() },
-                    onStopTracking = { stopTrackerService() },
-                    onSync = { performSync() },
-                    onOpenUsageSettings = {
-                        startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
-                    },
-                    onOpenNotificationSettings = { openNotificationSettings() },
-                    onOpenBatterySettings = { openBatteryOptimizationSettings() }
-                )
+                val navController = rememberNavController()
+                val navBackStackEntry by navController.currentBackStackEntryAsState()
+                val currentDestination = navBackStackEntry?.destination
+
+                Scaffold(
+                    bottomBar = {
+                        val screens = listOf(Screen.Main, Screen.History, Screen.Settings)
+                        NavigationBar(
+                            containerColor = MaterialTheme.colorScheme.surface,
+                            contentColor = MaterialTheme.colorScheme.onSurface,
+                            tonalElevation = 0.dp
+                        ) {
+                            screens.forEach { screen ->
+                                val selected = currentDestination?.route == screen.route
+                                NavigationBarItem(
+                                    selected = selected,
+                                    onClick = {
+                                        navController.navigate(screen.route) {
+                                            popUpTo(navController.graph.startDestinationId) {
+                                                saveState = true
+                                            }
+                                            launchSingleTop = true
+                                            restoreState = true
+                                        }
+                                    },
+                                    icon = {
+                                        Icon(
+                                            screen.icon,
+                                            contentDescription = screen.label
+                                        )
+                                    },
+                                    label = {
+                                        Text(
+                                            screen.label,
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
+                                        )
+                                    },
+                                    colors = NavigationBarItemDefaults.colors(
+                                        selectedIconColor = MaterialTheme.colorScheme.primary,
+                                        selectedTextColor = MaterialTheme.colorScheme.primary,
+                                        indicatorColor = MaterialTheme.colorScheme.primaryContainer
+                                    )
+                                )
+                            }
+                        }
+                    }
+                ) { innerPadding ->
+                    NavHost(
+                        navController = navController,
+                        startDestination = Screen.Main.route,
+                        modifier = Modifier.padding(innerPadding)
+                    ) {
+                        composable(Screen.Main.route) {
+                            MainScreen(
+                                viewModel = viewModel,
+                                onStartTracking = { handleStartTracking() },
+                                onStopTracking = { stopTrackerService() },
+                                onSync = { performSync() },
+                                onOpenUsageSettings = {
+                                    startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
+                                },
+                                onOpenNotificationSettings = { openNotificationSettings() },
+                                onOpenBatterySettings = { openBatteryOptimizationSettings() }
+                            )
+                        }
+                        composable(Screen.History.route) {
+                            HistoryScreen(viewModel = viewModel)
+                        }
+                        composable(Screen.Settings.route) {
+                            SettingsScreen(
+                                viewModel = viewModel,
+                                onOpenUsageSettings = {
+                                    startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
+                                },
+                                onOpenNotificationSettings = { openNotificationSettings() },
+                                onOpenBatterySettings = { openBatteryOptimizationSettings() }
+                            )
+                        }
+                    }
+                }
             }
         }
     }

@@ -11,6 +11,7 @@ interface EventRepository {
     fun getUnsyncedFlow(): Flow<List<Event>>
     suspend fun getEventsByDay(dayStart: Long, dayEnd: Long): List<Event>
     fun getEventsByDayFlow(dayStart: Long, dayEnd: Long): Flow<List<Event>>
+    fun getAllEventsFlow(): Flow<List<Event>>
     suspend fun markSynced(ids: List<String>)
 }
 
@@ -22,5 +23,6 @@ class EventRepositoryImpl @Inject constructor(
     override fun getUnsyncedFlow(): Flow<List<Event>> = eventDao.getUnsyncedFlow()
     override suspend fun getEventsByDay(dayStart: Long, dayEnd: Long): List<Event> = eventDao.getEventsByDay(dayStart, dayEnd)
     override fun getEventsByDayFlow(dayStart: Long, dayEnd: Long): Flow<List<Event>> = eventDao.getEventsByDayFlow(dayStart, dayEnd)
+    override fun getAllEventsFlow(): Flow<List<Event>> = eventDao.getAllEventsFlow()
     override suspend fun markSynced(ids: List<String>) = eventDao.markSynced(ids)
 }
