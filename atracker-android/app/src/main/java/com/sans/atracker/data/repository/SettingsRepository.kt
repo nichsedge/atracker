@@ -26,6 +26,10 @@ interface SettingsRepository {
     suspend fun setLastSyncTime(timeMillis: Long)
     suspend fun getLastSyncTime(): Long
 
+    val dailyGoalMinutesFlow: Flow<Int>
+    suspend fun setDailyGoalMinutes(minutes: Int)
+    suspend fun getDailyGoalMinutes(): Int
+
     val deviceIdFlow: Flow<String>
     suspend fun getDeviceId(): String
 }
@@ -38,6 +42,7 @@ class SettingsRepositoryImpl(
         val BACKEND_URL = stringPreferencesKey("backend_url")
         val TRACKING_ENABLED = booleanPreferencesKey("tracking_enabled")
         val LAST_SYNC_TIME = longPreferencesKey("last_sync_time")
+        val DAILY_GOAL_MINUTES = intPreferencesKey("daily_goal_minutes")
         val DEVICE_ID = stringPreferencesKey("device_id")
     }
 
@@ -100,6 +105,26 @@ class SettingsRepositoryImpl(
     }
 
     override suspend fun getLastSyncTime(): Long = lastSyncTimeFlow.first()
+
+    override val dailyGoalMinutesFlow: Flow<Int> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.DAILY_GOAL_MINUTES] ?: 240 // Default 4 hours
+        }
+
+    override suspend fun setDailyGoalMinutes(minutes: Int) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.DAILY_GOAL_MINUTES] = minutes
+        }
+    }
+
+    override suspend fun getDailyGoalMinutes(): Int = dailyGoalMinutesFlow.first()
 
     override val deviceIdFlow: Flow<String> = dataStore.data
         .catch { exception ->

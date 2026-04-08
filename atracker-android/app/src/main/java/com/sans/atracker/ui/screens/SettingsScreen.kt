@@ -90,6 +90,52 @@ fun SettingsScreen(
                 }
             }
 
+            // Productivity Goal Section
+            Column {
+                SectionHeader("Productivity Goal")
+                AtrackerCard {
+                    Text(
+                        "Daily Screen Time Limit",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        "Target max usage per day",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.secondary
+                    )
+                    
+                    Spacer(modifier = Modifier.height(24.dp))
+                    
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "${state.dailyGoalMinutes / 60} hours",
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Black,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        
+                        Text(
+                            text = "${state.dailyGoalMinutes} min",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.secondary
+                        )
+                    }
+                    
+                    Slider(
+                        value = state.dailyGoalMinutes.toFloat(),
+                        onValueChange = { viewModel.setDailyGoalMinutes(it.toInt()) },
+                        valueRange = 30f..720f, // 30 mins to 12 hours
+                        steps = 22, // intervals of 30 mins: (720-30)/30 - 1 = 22
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+
             // Configuration Section
             ConfigurationSection(
                 backendUrl = state.backendUrl,

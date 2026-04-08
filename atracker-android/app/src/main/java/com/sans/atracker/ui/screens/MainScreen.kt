@@ -29,6 +29,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sans.atracker.ui.MainViewModel
 import com.sans.atracker.ui.TodayAppUsage
 import com.sans.atracker.ui.components.*
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import androidx.compose.ui.platform.LocalContext
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -117,7 +120,10 @@ fun MainScreen(
                     
                     if (state.todayUsage.isNotEmpty()) {
                         val totalSecs = state.todayUsage.sumOf { it.totalSecs }
-                        UsageSummaryCard(totalSecs = totalSecs)
+                        UsageSummaryCard(
+                            totalSecs = totalSecs,
+                            dailyGoalMinutes = state.dailyGoalMinutes
+                        )
                         UsageHeatmap(hourlyUsage = state.hourlyUsage)
                         Spacer(modifier = Modifier.height(24.dp))
                     }
@@ -328,20 +334,17 @@ fun UsageRow(usage: TodayAppUsage) {
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(
+        AsyncImage(
+            model = ImageRequest.Builder(LocalContext.current)
+                .data(usage.packageName)
+                .crossfade(true)
+                .build(),
+            contentDescription = null,
             modifier = Modifier
-                .size(32.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.secondary.copy(alpha = 0.1f)),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                usage.appLabel.take(1).uppercase(),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.secondary,
-                fontWeight = FontWeight.Bold
-            )
-        }
+                .size(36.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+        )
         
         Spacer(modifier = Modifier.width(16.dp))
         
@@ -362,19 +365,40 @@ fun UsageRow(usage: TodayAppUsage) {
 
 
 @Composable
-fun UsageSummaryCard(totalSecs: Double) {
+fun UsageSummaryCard(totalSecs: Double, dailyGoalMinutes: Int) {
+    val totalMinutes = totalSecs / 60
+    val progress = (totalMinutes / dailyGoalMinutes.toDouble()).coerceIn(0.0, 1.0).toFloat()
+    val isOverGoal = totalMinutes > dailyGoalMinutes
+
     AtrackerCard(
         modifier = Modifier.fillMaxWidth()
     ) {
         Column {
-            Text(
-                "TOTAL SCREEN TIME",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.secondary,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 1.2.sp
-            )
-            Spacer(modifier = Modifier.height(4.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "TOTAL SCREEN TIME",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.secondary,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.2.sp
+                )
+                
+                if (dailyGoalMinutes > 0) {
+                    Text(
+                        "Goal: ${dailyGoalMinutes / 60}h",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(8.dp))
+            
             Text(
                 text = formatDuration(totalSecs),
                 style = MaterialTheme.typography.headlineLarge.copy(
@@ -382,8 +406,39 @@ fun UsageSummaryCard(totalSecs: Double) {
                     lineHeight = 48.sp
                 ),
                 fontWeight = FontWeight.Black,
-                color = MaterialTheme.colorScheme.primary
+                color = if (isOverGoal) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
             )
+            
+            if (dailyGoalMinutes > 0) {
+                Spacer(modifier = Modifier.height(20.dp))
+                
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(10.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f))
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(progress)
+                            .fillMaxHeight()
+                            .clip(CircleShape)
+                            .background(
+                                if (isOverGoal) MaterialTheme.colorScheme.error 
+                                else MaterialTheme.colorScheme.primary
+                            )
+                    )
+                }
+                
+                Spacer(modifier = Modifier.height(8.dp))
+                
+                Text(
+                    text = if (isOverGoal) "Goal exceeded" else "${(progress * 100).toInt()}% of daily goal",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (isOverGoal) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.secondary
+                )
+            }
         }
     }
 }

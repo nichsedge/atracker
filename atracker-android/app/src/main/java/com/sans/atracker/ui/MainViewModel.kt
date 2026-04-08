@@ -41,7 +41,8 @@ data class MainUiState(
     val lastSyncTime: Long = 0L,
     val todayUsage: List<TodayAppUsage> = emptyList(),
     val hourlyUsage: List<Double> = List(24) { 0.0 },
-    val history: List<DayUsage> = emptyList()
+    val history: List<DayUsage> = emptyList(),
+    val dailyGoalMinutes: Int = 240
 )
 
 @HiltViewModel
@@ -71,6 +72,11 @@ class MainViewModel @Inject constructor(
         viewModelScope.launch {
             settingsRepository.lastSyncTimeFlow.collect { time ->
                 _uiState.update { it.copy(lastSyncTime = time) }
+            }
+        }
+        viewModelScope.launch {
+            settingsRepository.dailyGoalMinutesFlow.collect { goal ->
+                _uiState.update { it.copy(dailyGoalMinutes = goal) }
             }
         }
         viewModelScope.launch {
@@ -187,6 +193,12 @@ class MainViewModel @Inject constructor(
     fun setTrackingEnabled(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.setTrackingEnabled(enabled)
+        }
+    }
+
+    fun setDailyGoalMinutes(minutes: Int) {
+        viewModelScope.launch {
+            settingsRepository.setDailyGoalMinutes(minutes)
         }
     }
 
