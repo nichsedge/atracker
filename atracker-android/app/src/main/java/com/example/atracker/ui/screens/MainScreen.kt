@@ -98,6 +98,7 @@ fun MainScreen(
             // Status Section
             StatusSection(
                 isTrackingEnabled = state.isTrackingEnabled,
+                isTrackerRunning = state.isTrackerRunning,
                 onToggle = {
                     if (state.isTrackingEnabled) onStopTracking() else onStartTracking()
                 }
@@ -189,6 +190,7 @@ fun MainScreen(
 @Composable
 fun StatusSection(
     isTrackingEnabled: Boolean,
+    isTrackerRunning: Boolean,
     onToggle: () -> Unit
 ) {
     AtrackerCard {
@@ -198,7 +200,9 @@ fun StatusSection(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                StatusBadge(isRunning = isTrackingEnabled)
+                // Show as active if either the service is actually running OR the user preference is enabled
+                // This prevents the "INACTIVE" flicker on app startup when the service is still initializing.
+                StatusBadge(isRunning = isTrackerRunning || isTrackingEnabled)
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
                     text = if (isTrackingEnabled) "Monitoring auto-sync" else "Tracking is paused",
