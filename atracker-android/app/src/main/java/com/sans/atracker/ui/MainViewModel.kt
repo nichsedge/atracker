@@ -85,16 +85,29 @@ class MainViewModel @Inject constructor(
             }
         }
         viewModelScope.launch {
-            val todayStart = Calendar.getInstance().apply {
-                set(Calendar.HOUR_OF_DAY, 0)
-                set(Calendar.MINUTE, 0)
-                set(Calendar.SECOND, 0)
-                set(Calendar.MILLISECOND, 0)
-            }.timeInMillis
-            val todayEnd = todayStart + 86_400_000L
-            eventRepository.getEventsByDayFlow(todayStart, todayEnd).collect { events ->
-                val usage = events
-                    .filter { !it.isIdle }
+            flow {
+                while (true) {
+                    val now = Calendar.getInstance()
+                    val todayStart = now.clone() as Calendar
+                    todayStart.set(Calendar.HOUR_OF_DAY, 0)
+                    todayStart.set(Calendar.MINUTE, 0)
+                    todayStart.set(Calendar.SECOND, 0)
+                    todayStart.set(Calendar.MILLISECOND, 0)
+
+                    val todayEnd = todayStart.timeInMillis + 86_400_000L
+                    emit(Pair(todayStart.timeInMillis, todayEnd))
+
+                    val delayMillis = todayEnd - System.currentTimeMillis()
+                    if (delayMillis > 0) {
+                        kotlinx.coroutines.delay(delayMillis)
+                    } else {
+                        kotlinx.coroutines.delay(1000L)
+                    }
+                }
+            }.collectLatest { (todayStart, todayEnd) ->
+                eventRepository.getEventsByDayFlow(todayStart, todayEnd).collect { events ->
+                    val usage = events
+                        .filter { !it.isIdle }
                     .groupBy { it.packageName }
                     .map { (pkg, evts) ->
                         val rawLabel = evts.first().appLabel
@@ -112,19 +125,20 @@ class MainViewModel @Inject constructor(
                     .sortedByDescending { it.totalSecs }
                 
                 // Calculate hourly distribution
-                val hourly = DoubleArray(24) { 0.0 }
-                events.filter { !it.isIdle }.forEach { event ->
-                    val cal = Calendar.getInstance().apply { timeInMillis = event.startTimestamp }
-                    val hour = cal.get(Calendar.HOUR_OF_DAY)
-                    if (hour in 0..23) {
-                        hourly[hour] += event.durationSecs
+                    val hourly = DoubleArray(24) { 0.0 }
+                    events.filter { !it.isIdle }.forEach { event ->
+                        val cal = Calendar.getInstance().apply { timeInMillis = event.startTimestamp }
+                        val hour = cal.get(Calendar.HOUR_OF_DAY)
+                        if (hour in 0..23) {
+                            hourly[hour] += event.durationSecs
+                        }
                     }
-                }
 
-                _uiState.update { it.copy(
-                    todayUsage = usage,
-                    hourlyUsage = hourly.toList()
-                ) }
+                    _uiState.update { it.copy(
+                        todayUsage = usage,
+                        hourlyUsage = hourly.toList()
+                    ) }
+                }
             }
         }
 
