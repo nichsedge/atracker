@@ -271,7 +271,7 @@ fun ConfigurationSection(
                 value = urlInput,
                 onValueChange = { urlInput = it },
                 label = { Text("Backend Endpoint") },
-                placeholder = { Text("https://api.example.com") },
+                placeholder = { Text("http://192.xx.xx.xx:8932") },
                 modifier = Modifier.fillMaxWidth(),
                 shape = MaterialTheme.shapes.medium,
                 singleLine = true,
