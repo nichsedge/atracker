@@ -1,17 +1,17 @@
 package com.sans.atracker.receiver
 
-import com.sans.atracker.service.TrackerService
-import com.sans.atracker.data.repository.SettingsRepository
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import androidx.core.content.ContextCompat
+import com.sans.atracker.data.repository.SettingsRepository
+import com.sans.atracker.service.TrackerService
+import com.sans.atracker.worker.WatchdogWorker
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import javax.inject.Inject
-import com.sans.atracker.worker.WatchdogWorker
 
 @AndroidEntryPoint
 class BootReceiver : BroadcastReceiver() {

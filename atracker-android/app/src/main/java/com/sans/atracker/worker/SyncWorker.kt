@@ -1,25 +1,27 @@
 package com.sans.atracker.worker
 
-import com.sans.atracker.data.repository.SettingsRepository
-import com.sans.atracker.data.repository.EventRepository
-import com.sans.atracker.data.local.Event
 import android.content.Context
 import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.Data
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import com.sans.atracker.data.repository.EventRepository
+import com.sans.atracker.data.repository.SettingsRepository
+import com.sans.atracker.network.AndroidEventPayload
+import com.sans.atracker.network.AndroidSyncPayload
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
-import io.ktor.client.*
-import io.ktor.client.request.*
-import io.ktor.client.statement.*
-import io.ktor.http.*
+import io.ktor.client.HttpClient
+import io.ktor.client.request.post
+import io.ktor.client.request.setBody
+import io.ktor.client.statement.HttpResponse
+import io.ktor.http.ContentType
+import io.ktor.http.contentType
+import io.ktor.http.isSuccess
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import com.sans.atracker.network.AndroidSyncPayload
-import com.sans.atracker.network.AndroidEventPayload
 
 @HiltWorker
 class SyncWorker @AssistedInject constructor(
@@ -81,10 +83,12 @@ class SyncWorker @AssistedInject constructor(
 
             val response: HttpResponse = httpClient.post("$baseUrl/api/sync/android") {
                 contentType(ContentType.Application.Json)
-                setBody(AndroidSyncPayload(
-                    device_name = android.os.Build.MODEL,
-                    days = payloadDays
-                ))
+                setBody(
+                    AndroidSyncPayload(
+                        device_name = android.os.Build.MODEL,
+                        days = payloadDays
+                    )
+                )
             }
 
             if (response.status.isSuccess()) {

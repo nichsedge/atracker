@@ -16,7 +16,7 @@ class AppLabelProvider @Inject constructor(
     fun getAppLabel(packageName: String): String {
         if (packageName == "__idle__") return ""
         appLabelCache[packageName]?.let { return it }
-        
+
         return try {
             val pm = context.packageManager
             val appInfo = pm.getApplicationInfo(packageName, 0)

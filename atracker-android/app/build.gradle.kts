@@ -72,7 +72,7 @@ dependencies {
 
     // WorkManager watchdog
     implementation(libs.androidx.work.runtime.ktx)
-    
+
     // DataStore
     implementation(libs.androidx.datastore.preferences)
 
@@ -81,7 +81,7 @@ dependencies {
     ksp(libs.hilt.compiler)
     implementation(libs.androidx.hilt.work)
     ksp(libs.androidx.hilt.compiler)
-    
+
     // UI Libraries
     implementation(libs.coil.compose)
     implementation(libs.androidx.glance.appwidget)

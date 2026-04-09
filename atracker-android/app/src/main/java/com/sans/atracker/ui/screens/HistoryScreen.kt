@@ -1,12 +1,24 @@
 package com.sans.atracker.ui.screens
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -15,7 +27,10 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sans.atracker.ui.DayUsage
 import com.sans.atracker.ui.MainViewModel
-import com.sans.atracker.ui.components.*
+import com.sans.atracker.ui.components.AtrackerCard
+import com.sans.atracker.ui.components.MeshGradientHeader
+import com.sans.atracker.ui.components.SectionHeader
+import com.sans.atracker.ui.components.formatDuration
 
 @Composable
 fun HistoryScreen(viewModel: MainViewModel) {
@@ -56,7 +71,7 @@ fun HistoryScreen(viewModel: MainViewModel) {
             verticalArrangement = Arrangement.spacedBy(28.dp)
         ) {
             SectionHeader("Recent Days")
-            
+
             if (state.history.isEmpty()) {
                 Box(
                     modifier = Modifier
@@ -75,7 +90,7 @@ fun HistoryScreen(viewModel: MainViewModel) {
                     HistoryItem(dayUsage)
                 }
             }
-            
+
             Spacer(modifier = Modifier.height(40.dp))
         }
     }
@@ -91,8 +106,8 @@ fun HistoryItem(dayUsage: DayUsage) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    dayUsage.dateLabel, 
-                    style = MaterialTheme.typography.titleMedium, 
+                    dayUsage.dateLabel,
+                    style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
                 Text(
@@ -102,9 +117,9 @@ fun HistoryItem(dayUsage: DayUsage) {
                     fontWeight = FontWeight.Black
                 )
             }
-            
+
             Spacer(modifier = Modifier.height(12.dp))
-            
+
             dayUsage.topApps.forEach { usage ->
                 Row(
                     modifier = Modifier.padding(vertical = 4.dp),
@@ -118,14 +133,14 @@ fun HistoryItem(dayUsage: DayUsage) {
                     )
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(
-                        usage.appLabel, 
-                        style = MaterialTheme.typography.bodySmall, 
+                        usage.appLabel,
+                        style = MaterialTheme.typography.bodySmall,
                         modifier = Modifier.weight(1f),
                         maxLines = 1
                     )
                     Text(
-                        formatDuration(usage.totalSecs), 
-                        style = MaterialTheme.typography.labelSmall, 
+                        formatDuration(usage.totalSecs),
+                        style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.secondary
                     )
                 }

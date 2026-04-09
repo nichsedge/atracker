@@ -1,39 +1,71 @@
 package com.sans.atracker.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInHorizontally
 import androidx.compose.foundation.background
-import androidx.compose.animation.*
-import androidx.compose.animation.core.*
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.automirrored.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.Save
+import androidx.compose.material.icons.filled.Verified
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.sans.atracker.ui.MainViewModel
-import com.sans.atracker.ui.TodayAppUsage
-import com.sans.atracker.ui.components.*
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
-import androidx.compose.ui.platform.LocalContext
+import com.sans.atracker.ui.MainViewModel
+import com.sans.atracker.ui.TodayAppUsage
+import com.sans.atracker.ui.components.AtrackerCard
+import com.sans.atracker.ui.components.MeshGradientHeader
+import com.sans.atracker.ui.components.PrimaryButton
+import com.sans.atracker.ui.components.SectionHeader
+import com.sans.atracker.ui.components.StatusBadge
+import com.sans.atracker.ui.components.formatDuration
 import java.text.SimpleDateFormat
-import java.util.*
+import java.util.Date
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -49,9 +81,9 @@ fun MainScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val scrollState = rememberScrollState()
 
-    val allPermissionsGranted = state.hasUsagePermission && 
-                                state.hasNotificationPermission && 
-                                state.isBatteryOptimizationExempted
+    val allPermissionsGranted = state.hasUsagePermission &&
+            state.hasNotificationPermission &&
+            state.isBatteryOptimizationExempted
 
     Column(
         modifier = Modifier
@@ -73,100 +105,112 @@ fun MainScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                "Atracker",
-                                style = MaterialTheme.typography.headlineLarge,
-                                fontWeight = FontWeight.Black,
-                                color = MaterialTheme.colorScheme.onBackground
-                            )
-                            Text(
-                                "Privacy-first activity insight",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.secondary,
-                                fontWeight = FontWeight.Medium
-                            )
-                        }
-                        
-                        if (allPermissionsGranted) {
-                            Icon(
-                                Icons.Default.Verified,
-                                contentDescription = "System Ready",
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(32.dp)
-                            )
-                        }
-                    }
-                    
-                    Spacer(modifier = Modifier.height(24.dp))
-                    
-                    StatusSection(
-                        isTrackingEnabled = state.isTrackingEnabled,
-                        isTrackerRunning = state.isTrackerRunning,
-                        onToggle = {
-                            if (state.isTrackingEnabled) onStopTracking() else onStartTracking()
-                        }
-                    )
-                }
-            }
-
-            Column(
-                modifier = Modifier.padding(horizontal = 20.dp),
-                verticalArrangement = Arrangement.spacedBy(28.dp)
-            ) {
-                // Today's Activity Section
-                Column {
-                        SectionHeader("Today's Insights")
-                    
-                    if (state.todayUsage.isNotEmpty()) {
-                        val totalSecs = state.todayUsage.sumOf { it.totalSecs }
-                        UsageSummaryCard(
-                            totalSecs = totalSecs,
-                            dailyGoalMinutes = state.dailyGoalMinutes
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            "Atracker",
+                            style = MaterialTheme.typography.headlineLarge,
+                            fontWeight = FontWeight.Black,
+                            color = MaterialTheme.colorScheme.onBackground
                         )
-                        UsageHeatmap(hourlyUsage = state.hourlyUsage)
-                        Spacer(modifier = Modifier.height(24.dp))
+                        Text(
+                            "Privacy-first activity insight",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.secondary,
+                            fontWeight = FontWeight.Medium
+                        )
                     }
-                    
-                    if (state.todayUsage.isEmpty()) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 40.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                "No activity recorded yet",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.secondary
-                            )
-                        }
-                    } else {
-                        AtrackerCard(modifier = Modifier.padding(top = 12.dp)) {
-                            state.todayUsage.take(10).forEachIndexed { index, usage ->
-                                AnimatedVisibility(
-                                    visible = true,
-                                    enter = fadeIn(animationSpec = tween(300, delayMillis = index * 50)) + 
-                                            slideInHorizontally(animationSpec = tween(300, delayMillis = index * 50))
-                                ) {
-                                    Column {
-                                        UsageRow(usage)
-                                        if (index < state.todayUsage.take(10).size - 1) {
-                                            HorizontalDivider(
-                                                modifier = Modifier.padding(vertical = 14.dp),
-                                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f)
+
+                    if (allPermissionsGranted) {
+                        Icon(
+                            Icons.Default.Verified,
+                            contentDescription = "System Ready",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(32.dp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                StatusSection(
+                    isTrackingEnabled = state.isTrackingEnabled,
+                    isTrackerRunning = state.isTrackerRunning,
+                    onToggle = {
+                        if (state.isTrackingEnabled) onStopTracking() else onStartTracking()
+                    }
+                )
+            }
+        }
+
+        Column(
+            modifier = Modifier.padding(horizontal = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(28.dp)
+        ) {
+            // Today's Activity Section
+            Column {
+                SectionHeader("Today's Insights")
+
+                if (state.todayUsage.isNotEmpty()) {
+                    val totalSecs = state.todayUsage.sumOf { it.totalSecs }
+                    UsageSummaryCard(
+                        totalSecs = totalSecs,
+                        dailyGoalMinutes = state.dailyGoalMinutes
+                    )
+                    UsageHeatmap(hourlyUsage = state.hourlyUsage)
+                    Spacer(modifier = Modifier.height(24.dp))
+                }
+
+                if (state.todayUsage.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 40.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            "No activity recorded yet",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.secondary
+                        )
+                    }
+                } else {
+                    AtrackerCard(modifier = Modifier.padding(top = 12.dp)) {
+                        state.todayUsage.take(10).forEachIndexed { index, usage ->
+                            AnimatedVisibility(
+                                visible = true,
+                                enter = fadeIn(
+                                    animationSpec = tween(
+                                        300,
+                                        delayMillis = index * 50
+                                    )
+                                ) +
+                                        slideInHorizontally(
+                                            animationSpec = tween(
+                                                300,
+                                                delayMillis = index * 50
                                             )
-                                        }
+                                        )
+                            ) {
+                                Column {
+                                    UsageRow(usage)
+                                    if (index < state.todayUsage.take(10).size - 1) {
+                                        HorizontalDivider(
+                                            modifier = Modifier.padding(vertical = 14.dp),
+                                            color = MaterialTheme.colorScheme.outlineVariant.copy(
+                                                alpha = 0.2f
+                                            )
+                                        )
                                     }
                                 }
                             }
                         }
                     }
                 }
-                Spacer(modifier = Modifier.height(40.dp))
             }
+            Spacer(modifier = Modifier.height(40.dp))
         }
     }
+}
 
 @Composable
 fun StatusSection(
@@ -195,7 +239,7 @@ fun StatusSection(
                     color = MaterialTheme.colorScheme.secondary
                 )
             }
-            
+
             PrimaryButton(
                 text = if (isTrackingEnabled) "Stop" else "Start",
                 onClick = onToggle,
@@ -228,16 +272,25 @@ fun PermissionItem(
                 .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)),
             contentAlignment = Alignment.Center
         ) {
-            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+            Icon(
+                icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(20.dp)
+            )
         }
-        
+
         Spacer(modifier = Modifier.width(16.dp))
-        
+
         Column(modifier = Modifier.weight(1f)) {
             Text(title, style = MaterialTheme.typography.titleSmall)
-            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.secondary
+            )
         }
-        
+
         Icon(
             imageVector = if (isGranted) Icons.Default.CheckCircle else Icons.Default.Error,
             contentDescription = null,
@@ -276,24 +329,28 @@ fun ConfigurationSection(
                 shape = MaterialTheme.shapes.medium,
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                keyboardActions = KeyboardActions(onDone = { 
+                keyboardActions = KeyboardActions(onDone = {
                     onSaveUrl(urlInput)
                     keyboardController?.hide()
                 }),
                 trailingIcon = {
                     if (urlInput != backendUrl) {
-                        IconButton(onClick = { 
+                        IconButton(onClick = {
                             onSaveUrl(urlInput)
                             keyboardController?.hide()
                         }) {
-                            Icon(Icons.Default.Save, contentDescription = "Save", tint = MaterialTheme.colorScheme.primary)
+                            Icon(
+                                Icons.Default.Save,
+                                contentDescription = "Save",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
                         }
                     }
                 }
             )
-            
+
             Spacer(modifier = Modifier.height(20.dp))
-            
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -301,12 +358,24 @@ fun ConfigurationSection(
             ) {
                 Column {
                     val dateStr = if (lastSyncTime > 0) {
-                        SimpleDateFormat("MMM d, HH:mm", Locale.getDefault()).format(Date(lastSyncTime))
+                        SimpleDateFormat("MMM d, HH:mm", Locale.getDefault()).format(
+                            Date(
+                                lastSyncTime
+                            )
+                        )
                     } else "Never"
-                    Text("Last Sync", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.secondary)
-                    Text(dateStr, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                    Text(
+                        "Last Sync",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.secondary
+                    )
+                    Text(
+                        dateStr,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
-                
+
                 PrimaryButton(
                     text = "Sync Now",
                     onClick = onSync,
@@ -315,11 +384,11 @@ fun ConfigurationSection(
                     modifier = Modifier.width(140.dp)
                 )
             }
-            
+
             if (syncMessage.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(
-                    syncMessage, 
+                    syncMessage,
                     color = if (isSyncSuccess == true) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.error,
                     style = MaterialTheme.typography.bodySmall
                 )
@@ -345,15 +414,15 @@ fun UsageRow(usage: TodayAppUsage) {
                 .clip(RoundedCornerShape(8.dp))
                 .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
         )
-        
+
         Spacer(modifier = Modifier.width(16.dp))
-        
+
         Text(
             text = usage.appLabel,
             style = MaterialTheme.typography.bodyLarge,
             modifier = Modifier.weight(1f)
         )
-        
+
         Text(
             text = formatDuration(usage.totalSecs),
             style = MaterialTheme.typography.titleSmall,
@@ -361,7 +430,6 @@ fun UsageRow(usage: TodayAppUsage) {
         )
     }
 }
-
 
 
 @Composable
@@ -386,7 +454,7 @@ fun UsageSummaryCard(totalSecs: Double, dailyGoalMinutes: Int) {
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 1.2.sp
                 )
-                
+
                 if (dailyGoalMinutes > 0) {
                     Text(
                         "Goal: ${dailyGoalMinutes / 60}h",
@@ -396,9 +464,9 @@ fun UsageSummaryCard(totalSecs: Double, dailyGoalMinutes: Int) {
                     )
                 }
             }
-            
+
             Spacer(modifier = Modifier.height(8.dp))
-            
+
             Text(
                 text = formatDuration(totalSecs),
                 style = MaterialTheme.typography.headlineLarge.copy(
@@ -408,10 +476,10 @@ fun UsageSummaryCard(totalSecs: Double, dailyGoalMinutes: Int) {
                 fontWeight = FontWeight.Black,
                 color = if (isOverGoal) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
             )
-            
+
             if (dailyGoalMinutes > 0) {
                 Spacer(modifier = Modifier.height(20.dp))
-                
+
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -425,14 +493,14 @@ fun UsageSummaryCard(totalSecs: Double, dailyGoalMinutes: Int) {
                             .fillMaxHeight()
                             .clip(CircleShape)
                             .background(
-                                if (isOverGoal) MaterialTheme.colorScheme.error 
+                                if (isOverGoal) MaterialTheme.colorScheme.error
                                 else MaterialTheme.colorScheme.primary
                             )
                     )
                 }
-                
+
                 Spacer(modifier = Modifier.height(8.dp))
-                
+
                 Text(
                     text = if (isOverGoal) "Goal exceeded" else "${(progress * 100).toInt()}% of daily goal",
                     style = MaterialTheme.typography.labelSmall,
@@ -449,7 +517,9 @@ fun UsageHeatmap(hourlyUsage: List<Double>) {
     val normalized = hourlyUsage.map { if (maxUsage > 0) it / maxUsage else 0.0 }
 
     AtrackerCard(
-        modifier = Modifier.fillMaxWidth().padding(top = 16.dp)
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 16.dp)
     ) {
         Column {
             Text(
@@ -488,11 +558,31 @@ fun UsageHeatmap(hourlyUsage: List<Double>) {
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text("12 AM", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
-                Text("6 AM", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
-                Text("12 PM", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
-                Text("6 PM", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
-                Text("11 PM", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
+                Text(
+                    "12 AM",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.secondary
+                )
+                Text(
+                    "6 AM",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.secondary
+                )
+                Text(
+                    "12 PM",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.secondary
+                )
+                Text(
+                    "6 PM",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.secondary
+                )
+                Text(
+                    "11 PM",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.secondary
+                )
             }
         }
     }

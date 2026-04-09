@@ -1,17 +1,22 @@
 package com.sans.atracker.ui
 
-import com.sans.atracker.worker.SyncWorker
-import com.sans.atracker.service.ServiceStateManager
-import com.sans.atracker.data.repository.SettingsRepository
-import com.sans.atracker.data.repository.EventRepository
-import com.sans.atracker.util.AppLabelProvider
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
+import com.sans.atracker.data.repository.EventRepository
+import com.sans.atracker.data.repository.SettingsRepository
+import com.sans.atracker.service.ServiceStateManager
+import com.sans.atracker.util.AppLabelProvider
+import com.sans.atracker.worker.SyncWorker
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.Calendar
 import javax.inject.Inject
@@ -108,36 +113,39 @@ class MainViewModel @Inject constructor(
                 eventRepository.getEventsByDayFlow(todayStart, todayEnd).collect { events ->
                     val usage = events
                         .filter { !it.isIdle }
-                    .groupBy { it.packageName }
-                    .map { (pkg, evts) ->
-                        val rawLabel = evts.first().appLabel
-                        val displayLabel = if (rawLabel.isBlank() || rawLabel == pkg) {
-                            appLabelProvider.getAppLabel(pkg)
-                        } else {
-                            rawLabel
+                        .groupBy { it.packageName }
+                        .map { (pkg, evts) ->
+                            val rawLabel = evts.first().appLabel
+                            val displayLabel = if (rawLabel.isBlank() || rawLabel == pkg) {
+                                appLabelProvider.getAppLabel(pkg)
+                            } else {
+                                rawLabel
+                            }
+                            TodayAppUsage(
+                                packageName = pkg,
+                                appLabel = displayLabel,
+                                totalSecs = evts.sumOf { it.durationSecs }
+                            )
                         }
-                        TodayAppUsage(
-                            packageName = pkg,
-                            appLabel = displayLabel,
-                            totalSecs = evts.sumOf { it.durationSecs }
-                        )
-                    }
-                    .sortedByDescending { it.totalSecs }
-                
-                // Calculate hourly distribution
+                        .sortedByDescending { it.totalSecs }
+
+                    // Calculate hourly distribution
                     val hourly = DoubleArray(24) { 0.0 }
                     events.filter { !it.isIdle }.forEach { event ->
-                        val cal = Calendar.getInstance().apply { timeInMillis = event.startTimestamp }
+                        val cal =
+                            Calendar.getInstance().apply { timeInMillis = event.startTimestamp }
                         val hour = cal.get(Calendar.HOUR_OF_DAY)
                         if (hour in 0..23) {
                             hourly[hour] += event.durationSecs
                         }
                     }
 
-                    _uiState.update { it.copy(
-                        todayUsage = usage,
-                        hourlyUsage = hourly.toList()
-                    ) }
+                    _uiState.update {
+                        it.copy(
+                            todayUsage = usage,
+                            hourlyUsage = hourly.toList()
+                        )
+                    }
                 }
             }
         }
@@ -147,7 +155,8 @@ class MainViewModel @Inject constructor(
                 val sortedHistory = allEvents
                     .filter { !it.isIdle }
                     .groupBy { event ->
-                        val cal = Calendar.getInstance().apply { timeInMillis = event.startTimestamp }
+                        val cal =
+                            Calendar.getInstance().apply { timeInMillis = event.startTimestamp }
                         cal.set(Calendar.HOUR_OF_DAY, 0)
                         cal.set(Calendar.MINUTE, 0)
                         cal.set(Calendar.SECOND, 0)
@@ -171,14 +180,15 @@ class MainViewModel @Inject constructor(
                             .sortedByDescending { it.totalSecs }
                             .take(3)
 
-                        val sdf = java.text.SimpleDateFormat("EEEE, MMM d", java.util.Locale.getDefault())
+                        val sdf =
+                            java.text.SimpleDateFormat("EEEE, MMM d", java.util.Locale.getDefault())
                         DayUsage(
                             dateLabel = sdf.format(java.util.Date(dayStart)),
                             totalSecs = events.sumOf { it.durationSecs },
                             topApps = topApps
                         )
                     }
-                
+
                 _uiState.update { it.copy(history = sortedHistory) }
             }
         }

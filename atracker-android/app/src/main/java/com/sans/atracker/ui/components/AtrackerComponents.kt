@@ -1,27 +1,51 @@
 package com.sans.atracker.ui.components
 
-import androidx.compose.animation.core.*
-import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.geometry.Offset
 
 @Composable
 fun AtrackerCard(
@@ -79,7 +103,9 @@ fun PrimaryButton(
         shape = MaterialTheme.shapes.medium,
         colors = ButtonDefaults.buttonColors(
             containerColor = containerColor,
-            disabledContainerColor = if (isLoading) containerColor.copy(alpha = 0.7f) else MaterialTheme.colorScheme.secondary.copy(alpha = 0.3f)
+            disabledContainerColor = if (isLoading) containerColor.copy(alpha = 0.7f) else MaterialTheme.colorScheme.secondary.copy(
+                alpha = 0.3f
+            )
         ),
         contentPadding = PaddingValues(horizontal = 24.dp)
     ) {
@@ -106,7 +132,7 @@ fun StatusBadge(
     modifier: Modifier = Modifier
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "pulse")
-    
+
     // Pulse animation for the core dot
     val dotAlpha by infiniteTransition.animateFloat(
         initialValue = 0.6f,
@@ -160,7 +186,10 @@ fun StatusBadge(
     // Scale animation for the whole badge
     val badgeScale by animateFloatAsState(
         targetValue = if (isRunning) 1.03f else 1f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
         label = "badgeScale"
     )
 
@@ -173,7 +202,7 @@ fun StatusBadge(
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,
         border = BorderStroke(
-            1.dp, 
+            1.dp,
             if (isRunning) activeColor.copy(alpha = 0.2f) else inactiveColor.copy(alpha = 0.15f)
         ),
         modifier = modifier.graphicsLayer {
@@ -192,8 +221,8 @@ fun StatusBadge(
                     .drawBehind {
                         if (isRunning) {
                             val dSize = this.size
-                            val dCenter = this.center
-                            
+                            this.center
+
                             // Pulse Ring 1
                             drawCircle(
                                 color = activeColor.copy(alpha = pulseAlpha1 * 0.4f),
@@ -257,27 +286,27 @@ fun MeshGradientHeader(
             .drawBehind {
                 val dSize = this.size
                 val dCenter = this.center
-                
+
                 val brush = Brush.radialGradient(
                     colors = listOf(
                         Color(0xFF6366F1).copy(alpha = 0.12f),
                         Color.Transparent
                     ),
                     center = Offset(
-                        x = dCenter.x + (animationOffset % 200f - 100f), 
+                        x = dCenter.x + (animationOffset % 200f - 100f),
                         y = dCenter.y - 120f
                     ),
                     radius = dSize.width * 1.2f
                 )
                 drawRect(brush)
-                
+
                 val brush2 = Brush.radialGradient(
                     colors = listOf(
                         Color(0xFF10B981).copy(alpha = 0.08f),
                         Color.Transparent
                     ),
                     center = Offset(
-                        x = dCenter.x - (animationOffset % 300f - 150f), 
+                        x = dCenter.x - (animationOffset % 300f - 150f),
                         y = dCenter.y + 150f
                     ),
                     radius = dSize.width * 0.9f

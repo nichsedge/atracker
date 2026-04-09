@@ -1,8 +1,5 @@
 package com.sans.atracker.service
 
-import com.sans.atracker.ui.MainActivity
-import com.sans.atracker.data.repository.EventRepository
-import com.sans.atracker.data.local.Event
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -14,14 +11,23 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.content.pm.PackageManager
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
-import dagger.hilt.android.AndroidEntryPoint
-import kotlinx.coroutines.*
-import javax.inject.Inject
+import com.sans.atracker.data.local.Event
+import com.sans.atracker.data.repository.EventRepository
 import com.sans.atracker.receiver.ServiceRestartReceiver
+import com.sans.atracker.ui.MainActivity
 import com.sans.atracker.util.AppLabelProvider
+import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 @AndroidEntryPoint
 class TrackerService : Service() {
@@ -89,7 +95,7 @@ class TrackerService : Service() {
     private data class ForegroundEvent(val packageName: String, val timestamp: Long)
 
     private fun getForegroundApp(startTime: Long, endTime: Long): ForegroundEvent? {
-        val usageStatsManager = getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
+        val usageStatsManager = getSystemService(USAGE_STATS_SERVICE) as UsageStatsManager
         val usageEvents = usageStatsManager.queryEvents(startTime, endTime)
         val event = UsageEvents.Event()
         var lastResumedApp: ForegroundEvent? = null
@@ -212,7 +218,7 @@ class TrackerService : Service() {
             restartServiceIntent,
             PendingIntent.FLAG_ONE_SHOT or PendingIntent.FLAG_IMMUTABLE
         )
-        val alarmService = getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager
+        val alarmService = getSystemService(ALARM_SERVICE) as android.app.AlarmManager
         alarmService.set(
             android.app.AlarmManager.ELAPSED_REALTIME,
             android.os.SystemClock.elapsedRealtime() + 3000,

@@ -1,20 +1,36 @@
 package com.sans.atracker.ui.screens
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.BatteryChargingFull
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sans.atracker.ui.MainViewModel
-import com.sans.atracker.ui.components.*
+import com.sans.atracker.ui.components.AtrackerCard
+import com.sans.atracker.ui.components.MeshGradientHeader
+import com.sans.atracker.ui.components.SectionHeader
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -71,7 +87,10 @@ fun SettingsScreen(
                         icon = Icons.Default.BarChart,
                         onClick = onOpenUsageSettings
                     )
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                    HorizontalDivider(
+                        modifier = Modifier.padding(vertical = 4.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                    )
                     PermissionItem(
                         title = "Notifications",
                         subtitle = "Foreground service status",
@@ -79,7 +98,10 @@ fun SettingsScreen(
                         icon = Icons.Default.Notifications,
                         onClick = onOpenNotificationSettings
                     )
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                    HorizontalDivider(
+                        modifier = Modifier.padding(vertical = 4.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                    )
                     PermissionItem(
                         title = "Battery Optimization",
                         subtitle = "Prevent system sleep",
@@ -104,9 +126,9 @@ fun SettingsScreen(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.secondary
                     )
-                    
+
                     Spacer(modifier = Modifier.height(24.dp))
-                    
+
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -118,14 +140,14 @@ fun SettingsScreen(
                             fontWeight = FontWeight.Black,
                             color = MaterialTheme.colorScheme.primary
                         )
-                        
+
                         Text(
                             text = "${state.dailyGoalMinutes} min",
                             style = MaterialTheme.typography.labelLarge,
                             color = MaterialTheme.colorScheme.secondary
                         )
                     }
-                    
+
                     Slider(
                         value = state.dailyGoalMinutes.toFloat(),
                         onValueChange = { viewModel.setDailyGoalMinutes(it.toInt()) },
@@ -146,7 +168,7 @@ fun SettingsScreen(
                 onSaveUrl = { viewModel.saveBackendUrl(it) },
                 onSync = { viewModel.performSync() }
             )
-            
+
             Spacer(modifier = Modifier.height(40.dp))
         }
     }

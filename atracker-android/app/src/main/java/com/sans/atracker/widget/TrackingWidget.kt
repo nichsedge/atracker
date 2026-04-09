@@ -1,32 +1,36 @@
 package com.sans.atracker.widget
 
 import android.content.Context
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.runtime.Composable
-import androidx.glance.*
+import androidx.glance.GlanceId
+import androidx.glance.GlanceModifier
 import androidx.glance.action.actionStartActivity
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.provideContent
 import androidx.glance.background
-import androidx.glance.layout.*
+import androidx.glance.layout.Alignment
+import androidx.glance.layout.Box
+import androidx.glance.layout.Column
+import androidx.glance.layout.Spacer
+import androidx.glance.layout.fillMaxSize
+import androidx.glance.layout.fillMaxWidth
+import androidx.glance.layout.height
+import androidx.glance.layout.padding
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
-import com.sans.atracker.ui.MainActivity
 import com.sans.atracker.data.repository.EventRepository
+import com.sans.atracker.ui.MainActivity
 import com.sans.atracker.util.AppLabelProvider
 import dagger.hilt.EntryPoint
 import dagger.hilt.EntryPoints
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
-import kotlinx.coroutines.flow.first
 import java.util.Calendar
 
 class TrackingWidget : GlanceAppWidget() {
@@ -91,9 +95,9 @@ class TrackingWidget : GlanceAppWidget() {
                     fontWeight = FontWeight.Bold
                 )
             )
-            
+
             Spacer(modifier = GlanceModifier.height(4.dp))
-            
+
             Text(
                 text = timeStr,
                 style = TextStyle(
@@ -102,18 +106,18 @@ class TrackingWidget : GlanceAppWidget() {
                     fontWeight = FontWeight.Bold
                 )
             )
-            
+
             Spacer(modifier = GlanceModifier.height(8.dp))
-            
+
             Box(
                 modifier = GlanceModifier
                     .fillMaxWidth()
                     .height(1.dp)
                     .background(ColorProvider(Color(0xFF44474E)))
             ) {}
-            
+
             Spacer(modifier = GlanceModifier.height(8.dp))
-            
+
             Text(
                 text = "TOP APP",
                 style = TextStyle(
@@ -122,7 +126,7 @@ class TrackingWidget : GlanceAppWidget() {
                     fontWeight = FontWeight.Bold
                 )
             )
-            
+
             Text(
                 text = topApp,
                 style = TextStyle(

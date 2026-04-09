@@ -1,6 +1,5 @@
 package com.sans.atracker.receiver
 
-import com.sans.atracker.service.TrackerService
 import android.app.AlarmManager
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
@@ -8,13 +7,14 @@ import android.content.Context
 import android.content.Intent
 import android.os.SystemClock
 import androidx.core.content.ContextCompat
+import com.sans.atracker.data.repository.SettingsRepository
+import com.sans.atracker.service.ServiceStateManager
+import com.sans.atracker.service.TrackerService
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import javax.inject.Inject
-import com.sans.atracker.service.ServiceStateManager
-import com.sans.atracker.data.repository.SettingsRepository
 
 /**
  * Receives periodic AlarmManager pings and restarts TrackerService if it is not running.

@@ -1,14 +1,7 @@
 package com.sans.atracker.ui
 
-import com.sans.atracker.worker.WatchdogWorker
-import com.sans.atracker.worker.SyncWorker
-import com.sans.atracker.service.TrackerService
-import com.sans.atracker.service.ServiceStateManager
-import com.sans.atracker.receiver.ServiceRestartReceiver
-import com.sans.atracker.data.repository.SettingsRepository
 import android.Manifest
 import android.app.AppOpsManager
-import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -17,51 +10,44 @@ import android.os.Bundle
 import android.os.PowerManager
 import android.os.Process
 import android.provider.Settings
-import android.util.Patterns
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import dagger.hilt.android.AndroidEntryPoint
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
-import kotlin.math.roundToLong
-import com.sans.atracker.ui.theme.AtrackerTheme
-
 import androidx.lifecycle.lifecycleScope
-import kotlinx.coroutines.launch
-import javax.inject.Inject
-
-import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
-import androidx.navigation.compose.rememberNavController
 import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
+import com.sans.atracker.data.repository.SettingsRepository
+import com.sans.atracker.receiver.ServiceRestartReceiver
+import com.sans.atracker.service.ServiceStateManager
+import com.sans.atracker.service.TrackerService
 import com.sans.atracker.ui.navigation.Screen
 import com.sans.atracker.ui.screens.HistoryScreen
-import com.sans.atracker.ui.screens.SettingsScreen
 import com.sans.atracker.ui.screens.MainScreen
+import com.sans.atracker.ui.screens.SettingsScreen
+import com.sans.atracker.ui.theme.AtrackerTheme
+import com.sans.atracker.worker.SyncWorker
+import com.sans.atracker.worker.WatchdogWorker
+import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -257,7 +243,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun isBatteryOptimizationExempted(): Boolean {
-        val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+        val pm = getSystemService(POWER_SERVICE) as PowerManager
         return pm.isIgnoringBatteryOptimizations(packageName)
     }
 
@@ -273,7 +259,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun hasUsageStatsPermission(): Boolean {
-        val appOps = getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
+        val appOps = getSystemService(APP_OPS_SERVICE) as AppOpsManager
         val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             @Suppress("DEPRECATION")
             appOps.unsafeCheckOpNoThrow(
