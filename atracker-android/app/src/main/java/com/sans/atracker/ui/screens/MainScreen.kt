@@ -136,7 +136,7 @@ fun MainScreen(
                     isTrackingEnabled = state.isTrackingEnabled,
                     isTrackerRunning = state.isTrackerRunning,
                     onToggle = {
-                        if (state.isTrackingEnabled) onStopTracking() else onStartTracking()
+                        if (state.isTrackerRunning || state.isTrackingEnabled) onStopTracking() else onStartTracking()
                     }
                 )
             }
@@ -218,6 +218,7 @@ fun StatusSection(
     isTrackerRunning: Boolean,
     onToggle: () -> Unit
 ) {
+    val isActive = isTrackerRunning || isTrackingEnabled
     AtrackerCard {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -231,20 +232,20 @@ fun StatusSection(
             ) {
                 // Show as active if either the service is actually running OR the user preference is enabled
                 // This prevents the "INACTIVE" flicker on app startup when the service is still initializing.
-                StatusBadge(isRunning = isTrackerRunning || isTrackingEnabled)
+                StatusBadge(isRunning = isActive)
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = if (isTrackingEnabled) "Monitoring auto-sync" else "Tracking is paused",
+                    text = if (isActive) "Monitoring auto-sync" else "Tracking is paused",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.secondary
                 )
             }
 
             PrimaryButton(
-                text = if (isTrackingEnabled) "Stop" else "Start",
+                text = if (isActive) "Stop" else "Start",
                 onClick = onToggle,
                 modifier = Modifier.width(100.dp),
-                containerColor = if (isTrackingEnabled) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                containerColor = if (isActive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
             )
         }
     }
