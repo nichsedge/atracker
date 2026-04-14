@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -102,14 +103,11 @@ class MainViewModel @Inject constructor(
                     val todayEnd = todayStart.timeInMillis + 86_400_000L
                     emit(Pair(todayStart.timeInMillis, todayEnd))
 
-                    val delayMillis = todayEnd - System.currentTimeMillis()
-                    if (delayMillis > 0) {
-                        kotlinx.coroutines.delay(delayMillis)
-                    } else {
-                        kotlinx.coroutines.delay(1000L)
-                    }
+                    kotlinx.coroutines.delay(60_000L)
                 }
-            }.collectLatest { (todayStart, todayEnd) ->
+            }
+            .distinctUntilChanged()
+            .collectLatest { (todayStart, todayEnd) ->
                 eventRepository.getEventsByDayFlow(todayStart, todayEnd).collect { events ->
                     val usage = events
                         .filter { !it.isIdle }
