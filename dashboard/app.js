@@ -622,8 +622,8 @@ function renderCategories(categories) {
                 </div>
             </div>
             <div class="category-actions">
-                <button class="btn btn-secondary" onclick="editCategory('${cat.id}')">Edit</button>
-                <button class="btn btn-danger" onclick="deleteCategory('${cat.id}')">Delete</button>
+                <button class="btn btn-secondary" onclick="editCategory('${escapeHtml(cat.id)}')">Edit</button>
+                <button class="btn btn-danger" onclick="deleteCategory('${escapeHtml(cat.id)}')">Delete</button>
             </div>
         </div>
     `).join('');
@@ -1080,14 +1080,14 @@ function renderPrivacyRules(rules) {
 
     container.innerHTML = rules.map(rule => `
         <div class="rule-row">
-            <span class="rule-type-tag ${rule.rule_type}">${rule.rule_type}</span>
+            <span class="rule-type-tag ${escapeHtml(rule.rule_type)}">${escapeHtml(rule.rule_type)}</span>
             <div class="rule-details">
                 <div class="rule-patterns">
                     ${rule.wm_class_pattern ? `<div class="pattern-item"><span class="label">Class</span><b>${escapeHtml(rule.wm_class_pattern)}</b></div>` : ''}
                     ${rule.title_pattern ? `<div class="pattern-item"><span class="label">Title</span><b>${escapeHtml(rule.title_pattern)}</b></div>` : ''}
                 </div>
             </div>
-            <button class="btn btn-danger" onclick="deleteRule('${rule.id}')">Delete</button>
+            <button class="btn btn-danger" onclick="deleteRule('${escapeHtml(rule.id)}')">Delete</button>
         </div>
     `).join('');
 }
@@ -1175,7 +1175,11 @@ function getAppEmoji(wmClass) {
 
 function escapeHtml(str) {
     if (!str) return '';
-    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    return str.replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
 }
 
 function clearRegexErrors() {
