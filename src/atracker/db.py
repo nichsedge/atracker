@@ -328,11 +328,10 @@ async def init_db() -> None:
             ),  # seconds (dashboard uses seconds)
             ("min_app_usage_secs", "120"),
         ]
-        for key, value in settings_defaults:
-            conn.execute(
-                "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)",
-                (key, value),
-            )
+        conn.executemany(
+            "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)",
+            settings_defaults,
+        )
 
         # Register local device in devices table
         local_id = _get_device_id()
