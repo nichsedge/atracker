@@ -6,7 +6,7 @@ import io
 from datetime import date, datetime
 from pathlib import Path
 
-from fastapi import FastAPI, Query, HTTPException, Body, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
