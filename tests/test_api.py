@@ -98,3 +98,10 @@ async def test_prune_events(async_client: AsyncClient, setup_test_db):
         cursor = await conn.execute("SELECT wm_class FROM events")
         row = await cursor.fetchone()
         assert row[0] == "new_app"
+
+
+@pytest.mark.asyncio
+async def test_events_invalid_date(async_client: AsyncClient):
+    response = await async_client.get("/api/events?date=invalid-date")
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Invalid date format. Use YYYY-MM-DD"
