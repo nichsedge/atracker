@@ -127,7 +127,7 @@ app = FastAPI(title="atracker", version="0.1.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=config.allow_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
