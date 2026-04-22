@@ -8,6 +8,12 @@ DEFAULT_CONFIG = {
     "dashboard": {
         "port": 8932,
         "host": "0.0.0.0",
+        "allow_origins": [
+            "http://localhost:8932",
+            "http://127.0.0.1:8932",
+            "http://localhost",
+            "http://127.0.0.1",
+        ],
     },
     "database": {
         "path": str(Path.home() / ".local" / "share" / "atracker" / "atracker.db"),
@@ -61,6 +67,10 @@ class Config:
     @property
     def dashboard_host(self) -> str:
         return self._config["dashboard"]["host"]
+
+    @property
+    def allow_origins(self) -> list[str]:
+        return self._config["dashboard"]["allow_origins"]
 
     @property
     def db_path(self) -> Path:
