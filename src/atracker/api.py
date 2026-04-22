@@ -6,7 +6,7 @@ import io
 from datetime import date, datetime
 from pathlib import Path
 
-from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -614,9 +614,14 @@ if DASHBOARD_DIR.exists():
 
 
 def _parse_date(date_str: str | None) -> date:
-    if date_str:
+    if not date_str:
+        return date.today()
+    try:
         return date.fromisoformat(date_str)
-    return date.today()
+    except ValueError:
+        raise HTTPException(
+            status_code=400, detail="Invalid date format. Use YYYY-MM-DD"
+        )
 
 
 def _format_duration(secs: float) -> str:
