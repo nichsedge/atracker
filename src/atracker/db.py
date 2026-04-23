@@ -328,11 +328,10 @@ async def init_db() -> None:
             ),  # seconds (dashboard uses seconds)
             ("min_app_usage_secs", "120"),
         ]
-        for key, value in settings_defaults:
-            conn.execute(
-                "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)",
-                (key, value),
-            )
+        conn.executemany(
+            "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)",
+            settings_defaults,
+        )
 
         # Register local device in devices table
         local_id = _get_device_id()
@@ -431,26 +430,22 @@ async def get_events(
     next_day = target_date + timedelta(days=1)
     next_day_start = f"{next_day.isoformat()}T00:00:00"
 
-    where_clause = "WHERE timestamp >= ? AND timestamp < ?"
-    params = [day_start, next_day_start]
-
-    if device_ids:
-        placeholders = ",".join(["?"] * len(device_ids))
-        where_clause += f" AND device_id IN ({placeholders})"
-        params.extend(device_ids)
+    device_filter_active = device_ids is not None
+    device_json = json.dumps(device_ids or [])
 
     async with _aconn() as db:
         db.row_factory = aiosqlite.Row
         cursor = await db.execute(
-            f"""WITH combined_events AS (
+            """WITH combined_events AS (
                 SELECT id, device_id, 'local' as platform, timestamp, end_timestamp, wm_class, title, pid, duration_secs, is_idle FROM events
                 UNION ALL
                 SELECT id, device_id, 'android' as platform, timestamp, end_timestamp, package_name as wm_class, CASE WHEN source_type = 'BROWSER_TAB' THEN COALESCE(NULLIF(page_title, ''), NULLIF(domain, ''), app_label) ELSE app_label END as title, 0 as pid, duration_secs, is_idle FROM android_events
             )
             SELECT * FROM combined_events
-            {where_clause}
+            WHERE timestamp >= ? AND timestamp < ?
+              AND (? = 0 OR device_id IN (SELECT value FROM json_each(?)))
             ORDER BY timestamp""",
-            params,
+            (day_start, next_day_start, int(device_filter_active), device_json),
         )
         rows = await cursor.fetchall()
         return [dict(r) for r in rows]
@@ -464,20 +459,13 @@ async def get_summary_range(
     next_day = end_date + timedelta(days=1)
     range_end = f"{next_day.isoformat()}T00:00:00"
 
-    where_clause = (
-        "WHERE timestamp >= ? AND timestamp < ? AND is_idle = 0 AND wm_class != ''"
-    )
-    params = [range_start, range_end]
-
-    if device_ids:
-        placeholders = ",".join(["?"] * len(device_ids))
-        where_clause += f" AND device_id IN ({placeholders})"
-        params.extend(device_ids)
+    device_filter_active = device_ids is not None
+    device_json = json.dumps(device_ids or [])
 
     async with _aconn() as db:
         db.row_factory = aiosqlite.Row
         cursor = await db.execute(
-            f"""WITH combined_events AS (
+            """WITH combined_events AS (
                 SELECT device_id, timestamp, end_timestamp, wm_class, title, duration_secs, is_idle FROM events
                 UNION ALL
                 SELECT device_id, timestamp, end_timestamp, package_name as wm_class, CASE WHEN source_type = 'BROWSER_TAB' THEN COALESCE(NULLIF(page_title, ''), NULLIF(domain, ''), app_label) ELSE app_label END as title, duration_secs, is_idle FROM android_events
@@ -488,10 +476,11 @@ async def get_summary_range(
                    MIN(timestamp) as first_seen,
                    MAX(end_timestamp) as last_seen
             FROM combined_events
-            {where_clause}
+            WHERE timestamp >= ? AND timestamp < ? AND is_idle = 0 AND wm_class != ''
+              AND (? = 0 OR device_id IN (SELECT value FROM json_each(?)))
             GROUP BY wm_class, title
             ORDER BY total_secs DESC""",
-            params,
+            (range_start, range_end, int(device_filter_active), device_json),
         )
         rows = await cursor.fetchall()
         return [dict(r) for r in rows]
@@ -505,27 +494,23 @@ async def get_timeline_range(
     next_day = end_date + timedelta(days=1)
     range_end = f"{next_day.isoformat()}T00:00:00"
 
-    where_clause = "WHERE timestamp >= ? AND timestamp < ?"
-    params = [range_start, range_end]
-
-    if device_ids:
-        placeholders = ",".join(["?"] * len(device_ids))
-        where_clause += f" AND device_id IN ({placeholders})"
-        params.extend(device_ids)
+    device_filter_active = device_ids is not None
+    device_json = json.dumps(device_ids or [])
 
     async with _aconn() as db:
         db.row_factory = aiosqlite.Row
         cursor = await db.execute(
-            f"""WITH combined_events AS (
+            """WITH combined_events AS (
                 SELECT device_id, timestamp, end_timestamp, wm_class, title, duration_secs, is_idle FROM events
                 UNION ALL
                 SELECT device_id, timestamp, end_timestamp, package_name as wm_class, CASE WHEN source_type = 'BROWSER_TAB' THEN COALESCE(NULLIF(page_title, ''), NULLIF(domain, ''), app_label) ELSE app_label END as title, duration_secs, is_idle FROM android_events
             )
             SELECT timestamp, end_timestamp, wm_class, title, duration_secs, is_idle, device_id
             FROM combined_events
-            {where_clause}
+            WHERE timestamp >= ? AND timestamp < ?
+              AND (? = 0 OR device_id IN (SELECT value FROM json_each(?)))
             ORDER BY timestamp""",
-            params,
+            (range_start, range_end, int(device_filter_active), device_json),
         )
         rows = await cursor.fetchall()
         return [dict(r) for r in rows]
@@ -549,18 +534,13 @@ async def get_daily_totals(
     days: int = 7, device_ids: list[str] | None = None
 ) -> list[dict]:
     """Get daily usage totals over last N days (unified)."""
-    where_clause = "WHERE timestamp >= DATE('now', ?)"
-    params = [f"-{days} days"]
-
-    if device_ids:
-        placeholders = ",".join(["?"] * len(device_ids))
-        where_clause += f" AND device_id IN ({placeholders})"
-        params.extend(device_ids)
+    device_filter_active = device_ids is not None
+    device_json = json.dumps(device_ids or [])
 
     async with _aconn() as db:
         db.row_factory = aiosqlite.Row
         cursor = await db.execute(
-            f"""WITH combined_events AS (
+            """WITH combined_events AS (
                 SELECT device_id, timestamp, duration_secs, is_idle FROM events
                 UNION ALL
                 SELECT device_id, timestamp, duration_secs, is_idle FROM android_events
@@ -570,10 +550,11 @@ async def get_daily_totals(
                    SUM(CASE WHEN is_idle = 1 THEN duration_secs ELSE 0 END) as idle_secs,
                    COUNT(*) as event_count
             FROM combined_events
-            {where_clause}
+            WHERE timestamp >= DATE('now', ?)
+              AND (? = 0 OR device_id IN (SELECT value FROM json_each(?)))
             GROUP BY DATE(timestamp)
             ORDER BY day DESC""",
-            params,
+            (f"-{days} days", int(device_filter_active), device_json),
         )
         rows = await cursor.fetchall()
         return [dict(r) for r in rows]
@@ -587,18 +568,13 @@ async def get_daily_totals_range(
     next_day = end_date + timedelta(days=1)
     range_end = f"{next_day.isoformat()}T00:00:00"
 
-    where_clause = "WHERE timestamp >= ? AND timestamp < ?"
-    params = [range_start, range_end]
-
-    if device_ids:
-        placeholders = ",".join(["?"] * len(device_ids))
-        where_clause += f" AND device_id IN ({placeholders})"
-        params.extend(device_ids)
+    device_filter_active = device_ids is not None
+    device_json = json.dumps(device_ids or [])
 
     async with _aconn() as db:
         db.row_factory = aiosqlite.Row
         cursor = await db.execute(
-            f"""WITH combined_events AS (
+            """WITH combined_events AS (
                 SELECT device_id, timestamp, duration_secs, is_idle FROM events
                 UNION ALL
                 SELECT device_id, timestamp, duration_secs, is_idle FROM android_events
@@ -608,10 +584,11 @@ async def get_daily_totals_range(
                    SUM(CASE WHEN is_idle = 1 THEN duration_secs ELSE 0 END) as idle_secs,
                    COUNT(*) as event_count
             FROM combined_events
-            {where_clause}
+            WHERE timestamp >= ? AND timestamp < ?
+              AND (? = 0 OR device_id IN (SELECT value FROM json_each(?)))
             GROUP BY DATE(timestamp)
             ORDER BY day DESC""",
-            params,
+            (range_start, range_end, int(device_filter_active), device_json),
         )
         rows = await cursor.fetchall()
         return [dict(r) for r in rows]

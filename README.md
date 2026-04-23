@@ -71,12 +71,27 @@ To accurately track windows on Wayland, you **must** install the GNOME extension
 
 ## 🪟 Windows Installation
 
-1.  **Install Python 3.12+** and **uv**.
-2.  **Run the tracker**:
+1.  **Install Python 3.12+** and **[uv](https://github.com/astral-sh/uv)**.
+2.  **Install dependencies**:
+    ```powershell
+    uv sync
+    ```
+3.  **Start the tracker**:
     ```powershell
     uv run atracker start
     ```
-    *Note: On Windows, it handles hidden windows and process names automatically using the native Win32 API.*
+    The dashboard opens automatically in your browser at [http://localhost:8932](http://localhost:8932).
+
+4.  **Auto-start on login** (optional):
+    ```powershell
+    uv run atracker install
+    ```
+    This registers a Windows startup entry (via `HKCU\...\Run` registry key, no admin needed) so atracker starts silently in the background every time you log in. To remove it:
+    ```powershell
+    uv run atracker uninstall
+    ```
+
+> **Tip:** Use `atracker start --no-browser` to suppress the automatic browser launch (e.g. when running headless or from the scheduled task).
 
 ---
 

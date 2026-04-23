@@ -9,13 +9,20 @@ import com.sans.atracker.data.repository.EventRepository
 import com.sans.atracker.data.repository.SettingsRepository
 import com.sans.atracker.service.ServiceStateManager
 import com.sans.atracker.util.AppLabelProvider
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import com.sans.atracker.worker.SyncWorker
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.Calendar
@@ -52,6 +59,7 @@ data class MainUiState(
 
 @HiltViewModel
 class MainViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val settingsRepository: SettingsRepository,
     private val eventRepository: EventRepository,
     private val serviceStateManager: ServiceStateManager,
@@ -90,8 +98,8 @@ class MainViewModel @Inject constructor(
             }
         }
         viewModelScope.launch {
-            flow {
-                while (true) {
+            callbackFlow {
+                val sendDayBounds = {
                     val now = Calendar.getInstance()
                     val todayStart = now.clone() as Calendar
                     todayStart.set(Calendar.HOUR_OF_DAY, 0)
@@ -100,16 +108,30 @@ class MainViewModel @Inject constructor(
                     todayStart.set(Calendar.MILLISECOND, 0)
 
                     val todayEnd = todayStart.timeInMillis + 86_400_000L
-                    emit(Pair(todayStart.timeInMillis, todayEnd))
+                    trySend(Pair(todayStart.timeInMillis, todayEnd))
+                }
 
-                    val delayMillis = todayEnd - System.currentTimeMillis()
-                    if (delayMillis > 0) {
-                        kotlinx.coroutines.delay(delayMillis)
-                    } else {
-                        kotlinx.coroutines.delay(1000L)
+                val receiver = object : BroadcastReceiver() {
+                    override fun onReceive(context: Context?, intent: Intent?) {
+                        sendDayBounds()
                     }
                 }
-            }.collectLatest { (todayStart, todayEnd) ->
+
+                val filter = IntentFilter().apply {
+                    addAction(Intent.ACTION_DATE_CHANGED)
+                    addAction(Intent.ACTION_TIME_CHANGED)
+                    addAction(Intent.ACTION_TIMEZONE_CHANGED)
+                }
+
+                context.registerReceiver(receiver, filter)
+                sendDayBounds() // Initial emission
+
+                awaitClose {
+                    context.unregisterReceiver(receiver)
+                }
+            }
+            .distinctUntilChanged()
+            .collectLatest { (todayStart, todayEnd) ->
                 eventRepository.getEventsByDayFlow(todayStart, todayEnd).collect { events ->
                     val usage = events
                         .filter { !it.isIdle }
