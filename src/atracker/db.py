@@ -156,6 +156,8 @@ def _get_device_id() -> str:
 
 
 DEVICE_ID = None  # Lazy-initialized
+_category_cache = None
+_category_version = 0
 
 
 def get_device_id() -> str:
@@ -194,8 +196,16 @@ def get_paused() -> bool:
     return _is_paused
 
 
+def get_category_version() -> int:
+    global _category_version
+    return _category_version
+
+
 async def init_db() -> None:
     """Initialize database and migrate if needed."""
+    global _category_cache, _category_version
+    _category_cache = None
+    _category_version += 1
     DB_DIR.mkdir(parents=True, exist_ok=True)
 
     conn = sqlite3.connect(str(DB_PATH), uri=True)
@@ -596,11 +606,15 @@ async def get_daily_totals_range(
 
 async def get_categories() -> list[dict]:
     """Get all categories."""
-    async with _aconn() as db:
-        db.row_factory = aiosqlite.Row
-        cursor = await db.execute("SELECT * FROM categories ORDER BY name")
-        rows = await cursor.fetchall()
-        return [dict(r) for r in rows]
+    global _category_cache
+    if _category_cache is None:
+        async with _aconn() as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute("SELECT * FROM categories ORDER BY name")
+            rows = await cursor.fetchall()
+            _category_cache = [dict(r) for r in rows]
+
+    return [cat.copy() for cat in _category_cache]
 
 
 async def add_category(
@@ -613,6 +627,9 @@ async def add_category(
     is_case_sensitive: bool = False,
 ) -> str:
     """Add a new category and return its UUID."""
+    global _category_cache, _category_version
+    _category_cache = None
+    _category_version += 1
     cat_id = str(uuid.uuid4())
     async with _aconn() as db:
         await db.execute(
@@ -643,6 +660,9 @@ async def update_category(
     is_case_sensitive: bool = False,
 ):
     """Update an existing category."""
+    global _category_cache, _category_version
+    _category_cache = None
+    _category_version += 1
     async with _aconn() as db:
         await db.execute(
             "UPDATE categories SET name = ?, wm_class_pattern = ?, title_pattern = ?, color = ?, daily_goal_secs = ?, daily_limit_secs = ?, is_case_sensitive = ? WHERE id = ?",
@@ -662,6 +682,9 @@ async def update_category(
 
 async def delete_category(cat_id: str) -> None:
     """Delete a category."""
+    global _category_cache, _category_version
+    _category_cache = None
+    _category_version += 1
     async with _aconn() as db:
         await db.execute("DELETE FROM categories WHERE id = ?", (cat_id,))
         await db.commit()
@@ -669,6 +692,9 @@ async def delete_category(cat_id: str) -> None:
 
 async def clear_categories() -> None:
     """Delete all categories."""
+    global _category_cache, _category_version
+    _category_cache = None
+    _category_version += 1
     async with _aconn() as db:
         await db.execute("DELETE FROM categories")
         await db.commit()
