@@ -1,11 +1,9 @@
 """SQLite database layer for activity events."""
 
 import json
-import os
 import sqlite3
 import uuid
 from datetime import date, datetime, timedelta
-from pathlib import Path
 
 import aiosqlite
 
