@@ -242,7 +242,7 @@ async def summary(
             except Exception as e:
                 logger.error(f"Error appending current state to summary: {e}")
 
-    categories = await db.get_categories()
+    categories = await _get_matchable_categories()
     min_secs = float(await db.get_setting("min_app_usage_secs", "120"))
 
     filtered_rows = []
@@ -284,7 +284,7 @@ async def timeline(
             except Exception as e:
                 logger.error(f"Error appending current state to timeline: {e}")
 
-    categories = await db.get_categories()
+    categories = await _get_matchable_categories()
     for row in rows:
         row["color"] = _get_matched_category(
             row["wm_class"], row.get("title", ""), categories
@@ -314,7 +314,7 @@ async def range_summary(
     rows = await db.get_summary_range(s, e, device_ids=device_ids)
 
     # We don't append "Now Tracking" for ranges as it's usually historical
-    categories = await db.get_categories()
+    categories = await _get_matchable_categories()
     min_secs = float(await db.get_setting("min_app_usage_secs", "120"))
 
     filtered_rows = []
@@ -637,6 +637,43 @@ def _get_compiled_regex(pattern: str, flags: int) -> re.Pattern:
     return _regex_cache[key]
 
 
+def _prepare_categories(categories: list[dict]) -> list[dict]:
+    """Precompile regex patterns for a list of categories."""
+    for cat in categories:
+        is_cs = bool(cat.get("is_case_sensitive"))
+        flags = 0 if is_cs else re.IGNORECASE
+
+        tp = cat.get("title_pattern", "")
+        if tp:
+            try:
+                cat["_compiled_title"] = re.compile(tp, flags)
+            except re.error:
+                pass
+
+        wp = cat.get("wm_class_pattern", "")
+        if wp:
+            try:
+                cat["_compiled_wm"] = re.compile(wp, flags)
+            except re.error:
+                pass
+    return categories
+
+
+_prepared_categories_cache: list[dict] = []
+_prepared_categories_version: int = -1
+
+
+async def _get_matchable_categories() -> list[dict]:
+    """Get categories with precompiled regex, using versioned caching."""
+    global _prepared_categories_cache, _prepared_categories_version
+    current_version = db.get_category_version()
+    if current_version != _prepared_categories_version:
+        cats = await db.get_categories()
+        _prepared_categories_cache = _prepare_categories(cats)
+        _prepared_categories_version = current_version
+    return _prepared_categories_cache
+
+
 def _get_matched_category(wm_class: str, title: str, categories: list[dict]) -> dict:
     """Match a wm_class or title against category patterns and return the category dict.
     Title patterns are checked first for all categories to allow more granular matching
@@ -647,34 +684,44 @@ def _get_matched_category(wm_class: str, title: str, categories: list[dict]) -> 
 
     # First pass: Check all title patterns
     for cat in categories:
-        title_pattern = cat.get("title_pattern", "")
-        if not title_pattern:
-            continue
-
-        is_cs = bool(cat.get("is_case_sensitive"))
-        if is_cs:
-            reg = _get_compiled_regex(title_pattern, 0)
-            if reg.search(title):
+        compiled = cat.get("_compiled_title")
+        if compiled:
+            if cat.get("is_case_sensitive"):
+                if compiled.search(title):
+                    return cat
+            elif compiled.search(title_lower):
                 return cat
-        else:
-            reg = _get_compiled_regex(title_pattern, re.IGNORECASE)
-            if reg.search(title_lower):
+        elif cat.get("title_pattern"):
+            # Fallback for robustness if categories were not pre-prepared
+            is_cs = bool(cat.get("is_case_sensitive"))
+            reg = _get_compiled_regex(
+                cat["title_pattern"], 0 if is_cs else re.IGNORECASE
+            )
+            if is_cs:
+                if reg.search(title):
+                    return cat
+            elif reg.search(title_lower):
                 return cat
 
     # Second pass: Check all wm_class patterns
     for cat in categories:
-        wm_pattern = cat.get("wm_class_pattern", "")
-        if not wm_pattern:
-            continue
-
-        is_cs = bool(cat.get("is_case_sensitive"))
-        if is_cs:
-            reg = _get_compiled_regex(wm_pattern, 0)
-            if reg.search(wm_class):
+        compiled = cat.get("_compiled_wm")
+        if compiled:
+            if cat.get("is_case_sensitive"):
+                if compiled.search(wm_class):
+                    return cat
+            elif compiled.search(wm_lower):
                 return cat
-        else:
-            reg = _get_compiled_regex(wm_pattern, re.IGNORECASE)
-            if reg.search(wm_lower):
+        elif cat.get("wm_class_pattern"):
+            # Fallback
+            is_cs = bool(cat.get("is_case_sensitive"))
+            reg = _get_compiled_regex(
+                cat["wm_class_pattern"], 0 if is_cs else re.IGNORECASE
+            )
+            if is_cs:
+                if reg.search(wm_class):
+                    return cat
+            elif reg.search(wm_lower):
                 return cat
 
     return {"name": "Uncategorized", "color": "#64748b"}
