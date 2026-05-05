@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { CheckCircle, AlertCircle } from 'lucide-react';
 import { fetchAPI } from '../api';
 
 export default function ManualView({ onAdded }) {
@@ -13,7 +14,11 @@ export default function ManualView({ onAdded }) {
     setMsg({ type: '', text: '' });
 
     if (!start || !end || !app) {
-      setMsg({ type: 'error', text: 'Please fill in all required fields' });
+      setMsg({ type: 'error', text: 'Please fill in all required fields.' });
+      return;
+    }
+    if (new Date(end) <= new Date(start)) {
+      setMsg({ type: 'error', text: 'End time must be after start time.' });
       return;
     }
 
@@ -24,51 +29,98 @@ export default function ManualView({ onAdded }) {
           start_time: new Date(start).toISOString(),
           end_time: new Date(end).toISOString(),
           wm_class: app,
-          window_title: title
-        })
+          title: title,
+        }),
       });
-      setMsg({ type: 'success', text: 'Manual activity logged successfully!' });
+      setMsg({ type: 'success', text: 'Activity logged successfully.' });
       setStart('');
       setEnd('');
       setApp('');
       setTitle('');
       if (onAdded) onAdded();
     } catch (err) {
-      setMsg({ type: 'error', text: err.message || 'Failed to save activity' });
+      setMsg({ type: 'error', text: err.message || 'Failed to save activity.' });
     }
   };
 
   return (
-    <div className="max-w-2xl mx-auto flex flex-col gap-6 pb-20">
+    <div className="max-w-xl mx-auto flex flex-col gap-5 pb-20 animate-fade-in">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight text-white">Add Manual</h1>
-        <p className="text-sm text-[var(--text-secondary)] mt-1">Log time away from the computer or missed tracking.</p>
+        <h1 className="text-2xl font-bold tracking-tight text-white">Add Manual</h1>
+        <p className="text-sm text-[var(--text-muted)] mt-0.5">Log time away from the computer or missed tracking.</p>
       </div>
-      <div className="glass-card p-6">
+
+      <div className="glass-card p-5">
         {msg.text && (
-          <div className={`p-3 mb-4 rounded text-sm ${msg.type === 'error' ? 'bg-[rgba(239,68,68,0.1)] text-[#fca5a5] border border-[rgba(239,68,68,0.2)]' : 'bg-[rgba(16,185,129,0.1)] text-[#6ee7b7] border border-[rgba(16,185,129,0.2)]'}`}>
+          <div className={`mb-4 ${msg.type === 'error' ? 'feedback-error' : 'feedback-success'}`}>
+            {msg.type === 'error'
+              ? <AlertCircle size={15} className="flex-shrink-0 mt-0.5" />
+              : <CheckCircle size={15} className="flex-shrink-0 mt-0.5" />
+            }
             {msg.text}
           </div>
         )}
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-[var(--text-secondary)]">Start Date & Time *</label>
-            <input type="datetime-local" value={start} onChange={e => setStart(e.target.value)} required className="glass-input px-3 py-2 [color-scheme:dark]" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-medium text-[var(--text-secondary)]">
+                Start <span className="text-[var(--danger)]">*</span>
+              </label>
+              <input
+                type="datetime-local"
+                value={start}
+                onChange={e => setStart(e.target.value)}
+                required
+                className="glass-input px-3 py-2 text-sm [color-scheme:dark]"
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-medium text-[var(--text-secondary)]">
+                End <span className="text-[var(--danger)]">*</span>
+              </label>
+              <input
+                type="datetime-local"
+                value={end}
+                onChange={e => setEnd(e.target.value)}
+                required
+                className="glass-input px-3 py-2 text-sm [color-scheme:dark]"
+              />
+            </div>
           </div>
+
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-[var(--text-secondary)]">End Date & Time *</label>
-            <input type="datetime-local" value={end} onChange={e => setEnd(e.target.value)} required className="glass-input px-3 py-2 [color-scheme:dark]" />
+            <label className="text-xs font-medium text-[var(--text-secondary)]">
+              Application <span className="text-[var(--danger)]">*</span>
+            </label>
+            <input
+              type="text"
+              value={app}
+              onChange={e => setApp(e.target.value)}
+              required
+              placeholder="e.g. Reading, Meeting, Focus"
+              className="glass-input px-3 py-2 text-sm"
+            />
           </div>
+
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-[var(--text-secondary)]">Application Name *</label>
-            <input type="text" value={app} onChange={e => setApp(e.target.value)} required className="glass-input px-3 py-2" placeholder="e.g. Reading, Meeting" />
+            <label className="text-xs font-medium text-[var(--text-secondary)]">
+              Details <span className="text-[var(--text-muted)]">(optional)</span>
+            </label>
+            <input
+              type="text"
+              value={title}
+              onChange={e => setTitle(e.target.value)}
+              placeholder="e.g. Project brainstorm"
+              className="glass-input px-3 py-2 text-sm"
+            />
           </div>
-          <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-[var(--text-secondary)]">Window Title Details (Optional)</label>
-            <input type="text" value={title} onChange={e => setTitle(e.target.value)} className="glass-input px-3 py-2" placeholder="e.g. Project brainstorm" />
+
+          <div className="flex justify-end pt-1">
+            <button type="submit" className="btn btn-primary px-5">
+              Save Activity
+            </button>
           </div>
-          <button type="submit" className="btn btn-primary mt-2 self-start">Save Activity</button>
         </form>
       </div>
     </div>

@@ -41,6 +41,12 @@ class SettingsUpdate(BaseModel):
     min_app_usage_secs: str
 
 
+class SettingsUpdatePut(BaseModel):
+    poll_interval: int
+    idle_threshold: int
+    min_app_usage_secs: int
+
+
 class PauseRequest(BaseModel):
     duration_mins: int | None = None  # None means indefinite
 
@@ -493,6 +499,14 @@ async def update_settings(settings: SettingsUpdate):
     return {"status": "ok"}
 
 
+@app.put("/api/settings")
+async def put_settings(settings: SettingsUpdatePut):
+    await db.set_setting("poll_interval", str(settings.poll_interval))
+    await db.set_setting("idle_threshold", str(settings.idle_threshold))
+    await db.set_setting("min_app_usage_secs", str(settings.min_app_usage_secs))
+    return {"status": "ok"}
+
+
 # --- Privacy & Pause ---
 
 
@@ -507,20 +521,20 @@ async def pause_tracking(req: PauseRequest):
     if req.duration_mins:
         until = datetime.now().timestamp() + (req.duration_mins * 60)
     db.set_paused(True, until)
-    manager.broadcast({"type": "pause_state", "is_paused": True, "until": until})
+    await manager.broadcast({"type": "pause_state", "is_paused": True, "until": until})
     return {"status": "ok", "until": until}
 
 
 @app.post("/api/resume")
 async def resume_tracking():
     db.set_paused(False)
-    manager.broadcast({"type": "pause_state", "is_paused": False})
+    await manager.broadcast({"type": "pause_state", "is_paused": False})
     return {"status": "ok"}
 
 
 @app.get("/api/rules")
 async def get_rules():
-    return await db.get_filter_rules()
+    return {"rules": await db.get_filter_rules()}
 
 
 @app.post("/api/rules")

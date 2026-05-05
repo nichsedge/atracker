@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir \"C:\\\\Users\\\\muhammad.amal\\\\Projects\\\\atracker\\\\dashboard\\\\dist\" /s /b)"
+    ]
+  }
+}

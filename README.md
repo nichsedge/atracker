@@ -22,25 +22,27 @@
 
 ---
 
-## 🚀 Quick Start (Python)
+## 🚀 Quick Start
 
-Ensure you have [uv](https://github.com/astral-sh/uv) installed.
+Ensure you have [uv](https://github.com/astral-sh/uv) and [Node.js](https://nodejs.org) (v18+) installed.
 
-### 1. Install & Setup
+### 1. Clone & Install
 ```bash
-# Clone the repository
 git clone https://github.com/user/atracker.git
 cd atracker
 
-# Install dependencies
+# Install Python dependencies
 uv sync
+
+# Install and build the dashboard
+cd dashboard && npm install && npm run build && cd ..
 ```
 
 ### 2. Start the Daemon
 ```bash
 uv run atracker start
 ```
-This will start both the tracking daemon and the web dashboard server.
+This starts both the activity tracking daemon and the web dashboard server.
 
 ### 3. Open Dashboard
 Visit [http://localhost:8932](http://localhost:8932) in your browser.
@@ -71,10 +73,11 @@ To accurately track windows on Wayland, you **must** install the GNOME extension
 
 ## 🪟 Windows Installation
 
-1.  **Install Python 3.12+** and **[uv](https://github.com/astral-sh/uv)**.
-2.  **Install dependencies**:
+1.  **Install Python 3.12+**, **[uv](https://github.com/astral-sh/uv)**, and **[Node.js](https://nodejs.org) v18+**.
+2.  **Install dependencies and build the dashboard**:
     ```powershell
     uv sync
+    cd dashboard; npm install; npm run build; cd ..
     ```
 3.  **Start the tracker**:
     ```powershell
@@ -134,16 +137,30 @@ For more detailed information, check out:
 
 ---
 
-## �🛠️ Development
+## 🛠️ Development
 
 - **Backend**: Python (FastAPI, aiosqlite, dbus-next)
-- **Frontend**: Vanilla JS, CSS, HTML
+- **Frontend**: React 19, Vite, Tailwind CSS, React Router
 - **Android**: Kotlin, WorkManager
 - **Gnome**: GJS (Gnome JavaScript)
 
-### Running Tests
+### Running the backend
 ```bash
-uv run pytest
+uv run atracker start
+```
+
+### Running the frontend dev server
+The Vite dev server proxies `/api` and `/ws` to the running backend, so hot-reload works without rebuilding:
+```bash
+cd dashboard
+npm run dev
+# open http://localhost:5173
+```
+
+### Building the dashboard for production
+```bash
+cd dashboard
+npm run build   # outputs to dashboard/dist/, served by FastAPI at :8932
 ```
 
 ---

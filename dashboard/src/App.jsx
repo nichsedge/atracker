@@ -24,7 +24,7 @@ function App() {
       .catch(console.error);
 
     fetchAPI('/api/pause_status')
-      .then(res => setIsPaused(res.paused))
+      .then(res => setIsPaused(res.is_paused))
       .catch(console.error);
   }, []);
 
@@ -51,7 +51,7 @@ function App() {
     try {
       await fetchAPI('/api/pause', {
         method: 'POST',
-        body: JSON.stringify({ duration_minutes: mins })
+        body: JSON.stringify({ duration_mins: mins })
       });
       setIsPaused(true);
     } catch (err) {
