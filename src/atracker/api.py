@@ -18,7 +18,7 @@ import logging
 from atracker import db
 from atracker.config import config
 
-DASHBOARD_DIR = Path(__file__).parent.parent.parent / "dashboard"
+DASHBOARD_DIR = Path(__file__).parent.parent.parent / "dashboard" / "dist"
 
 
 class CategoryCreate(BaseModel):

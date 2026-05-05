@@ -1,0 +1,87 @@
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --bg-primary: #07070d;
+    --bg-secondary: #0d0d17;
+    --bg-card: rgba(15, 15, 30, 0.7);
+    --bg-card-hover: rgba(20, 20, 40, 0.8);
+    --bg-sidebar: rgba(10, 10, 22, 0.95);
+
+    --border-subtle: rgba(255, 255, 255, 0.06);
+    --border-active: rgba(99, 102, 241, 0.3);
+
+    --text-primary: #e2e8f0;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+    --text-accent: #818cf8;
+
+    --accent-blue: #3b82f6;
+    --accent-violet: #8b5cf6;
+    --accent-indigo: #6366f1;
+    --accent-green: #10b981;
+    --accent-amber: #f59e0b;
+
+    --glow-blue: rgba(59, 130, 246, 0.15);
+    --glow-violet: rgba(139, 92, 246, 0.1);
+
+    --sidebar-width: 220px;
+    --radius: 12px;
+    --radius-sm: 8px;
+    --radius-md: 10px;
+
+    --transition-base: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-premium: 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+  }
+
+  body {
+    @apply bg-[var(--bg-primary)] text-[var(--text-primary)];
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+@layer components {
+  .glass-card {
+    @apply bg-[var(--bg-card)] border border-[var(--border-subtle)] backdrop-blur-md rounded-[var(--radius)] transition-all duration-200;
+  }
+  .glass-card:hover {
+    @apply bg-[var(--bg-card-hover)] border-[rgba(255,255,255,0.1)];
+  }
+  .glass-input {
+    @apply bg-[rgba(0,0,0,0.2)] border border-[var(--border-subtle)] rounded-[var(--radius-sm)] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-indigo)] focus:ring-1 focus:ring-[var(--accent-indigo)] transition-all;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium rounded-[var(--radius-sm)] transition-all cursor-pointer;
+  }
+  .btn-primary {
+    @apply bg-[var(--accent-indigo)] text-white hover:bg-[var(--text-accent)] shadow-[0_0_15px_var(--glow-violet)];
+  }
+  .btn-secondary {
+    @apply bg-[rgba(255,255,255,0.05)] text-[var(--text-primary)] border border-[var(--border-subtle)] hover:bg-[rgba(255,255,255,0.1)] hover:border-[rgba(255,255,255,0.15)];
+  }
+  .btn-danger {
+    @apply bg-[rgba(239,68,68,0.1)] text-[#fca5a5] border border-[rgba(239,68,68,0.2)] hover:bg-[rgba(239,68,68,0.2)];
+  }
+}
