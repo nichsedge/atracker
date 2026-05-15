@@ -10,7 +10,7 @@ from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 import asyncio
 import logging
@@ -29,6 +29,13 @@ class CategoryCreate(BaseModel):
     daily_goal_secs: int = 0
     daily_limit_secs: int = 0
     is_case_sensitive: bool = False
+
+    @field_validator("color")
+    @classmethod
+    def validate_color(cls, v: str) -> str:
+        if not re.match(r"^#(?:[0-9a-fA-F]{3}){1,2}$", v):
+            raise ValueError("Invalid color format. Use #RGB or #RRGGBB")
+        return v
 
 
 class CategoryImport(BaseModel):
@@ -459,6 +466,9 @@ async def import_categories(data: CategoryImport, replace: bool = Query(False)):
         pattern = cat.get("wm_class_pattern", "")
         title_pattern = cat.get("title_pattern", "")
         color = cat.get("color", "#64748b")
+
+        if not re.match(r"^#(?:[0-9a-fA-F]{3}){1,2}$", color):
+            color = "#64748b"  # Default to safe color if invalid
         goal = cat.get("daily_goal_secs", 0)
         limit = cat.get("daily_limit_secs", 0)
         is_cs = cat.get("is_case_sensitive", False)
