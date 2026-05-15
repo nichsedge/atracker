@@ -647,6 +647,39 @@ async def add_category(
     return cat_id
 
 
+async def add_categories(categories: list[dict]) -> int:
+    """Add multiple categories in bulk and return the count."""
+    global _category_cache, _category_version
+    if not categories:
+        return 0
+    _category_cache = None
+    _category_version += 1
+
+    rows = []
+    for cat in categories:
+        cat_id = str(uuid.uuid4())
+        rows.append(
+            (
+                cat_id,
+                cat.get("name", ""),
+                cat.get("wm_class_pattern", ""),
+                cat.get("title_pattern", ""),
+                cat.get("color", "#64748b"),
+                cat.get("daily_goal_secs", 0),
+                cat.get("daily_limit_secs", 0),
+                1 if cat.get("is_case_sensitive") else 0,
+            )
+        )
+
+    async with _aconn() as db:
+        await db.executemany(
+            "INSERT INTO categories (id, name, wm_class_pattern, title_pattern, color, daily_goal_secs, daily_limit_secs, is_case_sensitive) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            rows,
+        )
+        await db.commit()
+    return len(rows)
+
+
 async def update_category(
     cat_id: str,
     name: str,
