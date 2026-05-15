@@ -1,10 +1,11 @@
 [Unit]
-Description=Activity Tracker Daemon
+Description=Activity Tracker Daemon (Rust)
 After=graphical-session.target
 
 [Service]
 Type=simple
-ExecStart=/home/al/Projects/atracker/.venv/bin/python3 /home/al/Projects/atracker/.venv/bin/atracker start
+ExecStart=/home/al/Projects/atracker/atracker-rs/target/release/atracker-rs
+WorkingDirectory=/home/al/Projects/atracker/atracker-rs
 Restart=on-failure
 RestartSec=5
 Environment=DISPLAY=:0

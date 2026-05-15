@@ -7,6 +7,7 @@ use uuid::Uuid;
 #[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
 pub struct Event {
     pub id: String,
+    pub device_id: String,
     pub timestamp: String,
     pub end_timestamp: String,
     pub wm_class: String,
@@ -76,14 +77,16 @@ pub async fn init_db(config: &Config) -> SqlitePool {
 
     sqlx::query(
         "CREATE TABLE IF NOT EXISTS events (
-            id TEXT PRIMARY KEY,
+            id TEXT NOT NULL,
+            device_id TEXT NOT NULL DEFAULT 'local',
             timestamp TEXT NOT NULL,
             end_timestamp TEXT NOT NULL,
             wm_class TEXT NOT NULL,
             title TEXT NOT NULL DEFAULT '',
             pid INTEGER NOT NULL DEFAULT 0,
             duration_secs REAL NOT NULL DEFAULT 0,
-            is_idle BOOLEAN NOT NULL DEFAULT 0
+            is_idle BOOLEAN NOT NULL DEFAULT 0,
+            PRIMARY KEY (device_id, id)
         )"
     )
     .execute(&pool)
@@ -156,10 +159,11 @@ pub async fn init_db(config: &Config) -> SqlitePool {
 // --- Events ---
 pub async fn insert_event(pool: &SqlitePool, event: Event) -> Result<(), sqlx::Error> {
     sqlx::query(
-        "INSERT INTO events (id, timestamp, end_timestamp, wm_class, title, pid, duration_secs, is_idle)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+        "INSERT INTO events (id, device_id, timestamp, end_timestamp, wm_class, title, pid, duration_secs, is_idle)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
     )
     .bind(event.id)
+    .bind(event.device_id)
     .bind(event.timestamp)
     .bind(event.end_timestamp)
     .bind(event.wm_class)
@@ -239,12 +243,12 @@ pub async fn get_timeline(pool: &SqlitePool, date: &str) -> Vec<Event> {
 
 pub async fn get_daily_totals(pool: &SqlitePool, days: i64) -> Vec<DailyTotal> {
     sqlx::query_as::<_, DailyTotal>(
-        "SELECT DATE(timestamp) as day,
+        "SELECT DATE(timestamp, 'localtime') as day,
                 SUM(CASE WHEN is_idle = 0 THEN duration_secs ELSE 0 END) as active_secs,
                 SUM(CASE WHEN is_idle = 1 THEN duration_secs ELSE 0 END) as idle_secs,
                 COUNT(*) as event_count
          FROM events
-         WHERE timestamp >= DATE('now', ?)
+         WHERE timestamp >= DATE('now', 'localtime', ?)
          GROUP BY day
          ORDER BY day DESC"
     )
@@ -279,6 +283,24 @@ pub async fn add_category(pool: &SqlitePool, cat: Category) -> Result<String, sq
     .execute(pool)
     .await?;
     Ok(id)
+}
+
+pub async fn update_category(pool: &SqlitePool, cat: Category) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "UPDATE categories SET name = ?, wm_class_pattern = ?, title_pattern = ?, color = ?, daily_goal_secs = ?, daily_limit_secs = ?, is_case_sensitive = ?
+         WHERE id = ?"
+    )
+    .bind(cat.name)
+    .bind(cat.wm_class_pattern)
+    .bind(cat.title_pattern)
+    .bind(cat.color)
+    .bind(cat.daily_goal_secs)
+    .bind(cat.daily_limit_secs)
+    .bind(cat.is_case_sensitive)
+    .bind(cat.id)
+    .execute(pool)
+    .await?;
+    Ok(())
 }
 
 pub async fn delete_category(pool: &SqlitePool, id: &str) -> Result<(), sqlx::Error> {
@@ -354,3 +376,59 @@ pub async fn get_devices(pool: &SqlitePool) -> Vec<Device> {
         .await
         .unwrap_or_default()
 }
+
+pub async fn update_device(pool: &SqlitePool, id: &str, name: &str, platform: &str) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "INSERT INTO devices (id, name, platform, last_seen)
+         VALUES (?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET
+            name = excluded.name,
+            platform = excluded.platform,
+            last_seen = excluded.last_seen"
+    )
+    .bind(id)
+    .bind(name)
+    .bind(platform)
+    .bind(Local::now().to_rfc3339())
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+pub async fn get_last_event_timestamp(pool: &SqlitePool, device_id: &str) -> Option<String> {
+    sqlx::query_scalar("SELECT MAX(timestamp) FROM events WHERE device_id = ?")
+        .bind(device_id)
+        .fetch_one(pool)
+        .await
+        .unwrap_or(None)
+}
+
+pub async fn sync_events(pool: &SqlitePool, device_id: &str, events: Vec<Event>) -> Result<usize, sqlx::Error> {
+    let mut count = 0;
+    for mut event in events {
+        // Force the device_id from the sync endpoint for security/consistency
+        event.device_id = device_id.to_string();
+        
+        let res = sqlx::query(
+            "INSERT OR IGNORE INTO events (id, device_id, timestamp, end_timestamp, wm_class, title, pid, duration_secs, is_idle)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        )
+        .bind(&event.id)
+        .bind(&event.device_id)
+        .bind(&event.timestamp)
+        .bind(&event.end_timestamp)
+        .bind(&event.wm_class)
+        .bind(&event.title)
+        .bind(event.pid)
+        .bind(event.duration_secs)
+        .bind(event.is_idle)
+        .execute(pool)
+        .await?;
+        
+        if res.rows_affected() > 0 {
+            count += 1;
+        }
+    }
+    Ok(count)
+}
+

@@ -44,12 +44,23 @@ impl Watcher {
     pub async fn run_once(&self) -> Result<Option<CurrentState>, Box<dyn std::error::Error + Send + Sync>> {
         let mut conn_lock = self.dbus_conn.lock().await;
         if conn_lock.is_none() {
-            *conn_lock = Some(Connection::session().await.map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?);
+            match Connection::session().await {
+                Ok(c) => *conn_lock = Some(c),
+                Err(e) => return Err(Box::new(e)),
+            }
         }
         let conn = conn_lock.as_ref().unwrap();
 
-        let state = self.poll(conn).await.map_err(|e| e as Box<dyn std::error::Error + Send + Sync>)?;
-        Ok(state)
+        // Self-healing poll
+        match self.poll(conn).await {
+            Ok(state) => Ok(state),
+            Err(_) => {
+                if let Ok(mut lock) = self.dbus_conn.try_lock() {
+                    *lock = None;
+                }
+                Ok(None)
+            }
+        }
     }
 
     async fn poll(&self, conn: &Connection) -> Result<Option<CurrentState>, Box<dyn std::error::Error + Send + Sync>> {
@@ -107,6 +118,7 @@ impl Watcher {
         let is_idle_event = curr.wm_class == "__idle__";
         let event = Event {
             id: Uuid::new_v4().to_string(),
+            device_id: "local".to_string(),
             timestamp: curr.start_time.to_rfc3339(),
             end_timestamp: end_time.to_rfc3339(),
             wm_class: curr.wm_class,

@@ -18,7 +18,7 @@ import logging
 from atracker import db
 from atracker.config import config
 
-DASHBOARD_DIR = Path(__file__).parent.parent.parent / "dashboard"
+DASHBOARD_DIR = Path("/home/al/Projects/atracker/dashboards/dashboard")
 
 
 class CategoryCreate(BaseModel):
@@ -595,15 +595,7 @@ async def get_devices():
     return await db.get_devices()
 
 
-# --- Static files for dashboard ---
 
-if DASHBOARD_DIR.exists():
-
-    @app.get("/")
-    async def serve_dashboard():
-        return FileResponse(DASHBOARD_DIR / "index.html")
-
-    app.mount("/", StaticFiles(directory=str(DASHBOARD_DIR)), name="dashboard")
 
 
 # --- Helpers ---
@@ -726,3 +718,15 @@ def _get_matched_category(wm_class: str, title: str, categories: list[dict]) -> 
                 return cat
 
     return {"name": "Uncategorized", "color": "#64748b"}
+
+
+# --- Static files for dashboard ---
+
+if DASHBOARD_DIR.exists():
+    @app.get("/", include_in_schema=False)
+    async def root():
+        return FileResponse(DASHBOARD_DIR / "index.html")
+
+    app.mount("/", StaticFiles(directory=str(DASHBOARD_DIR)), name="dashboard")
+else:
+    logger.warning(f"Dashboard directory not found at {DASHBOARD_DIR}")

@@ -1,0 +1,15 @@
+[Unit]
+Description=Activity Tracker Daemon
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/home/al/Projects/atracker/.venv/bin/python3 /home/al/Projects/atracker/.venv/bin/atracker start
+WorkingDirectory=/home/al/Projects/atracker
+Restart=on-failure
+RestartSec=5
+Environment=DISPLAY=:0
+Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/%U/bus
+
+[Install]
+WantedBy=default.target

@@ -14,7 +14,6 @@ sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "sqlite", "macros"
 chrono = { version = "0.4", features = ["serde"] }
 zbus = "4.1"
 futures = "0.3"
-rust-embed = "8.3"
 uuid = { version = "1.8", features = ["v4", "serde"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
