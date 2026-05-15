@@ -1,67 +1,63 @@
-# REST API Documentation
+# REST API Reference (v2)
 
-The `atracker` daemon exposes a REST API on port `8932` (default).
+The `atracker-rs` backend provides a JSON REST API on port **8933**.
 
 ## Base URL
-`http://localhost:8932/api`
+`http://localhost:8933/api`
 
 ## Endpoints
 
-### `GET /status`
-Check if the daemon is running.
+### 🟢 Status & Health
+- `GET /status`: Returns daemon status, engine type (rust-axum), and current tracking state.
 
-**Response:**
-```json
-{
-  "status": "ok",
-  "version": "0.1.0",
-  "platform": "linux",
-  "device_id": "uuid-..."
-}
-```
+### 📊 Activity Data
+- `GET /events?date=YYYY-MM-DD`: Get raw activity events for a specific day.
+- `GET /summary?date=YYYY-MM-DD`: Get aggregated per-app usage summary.
+- `GET /timeline?date=YYYY-MM-DD`: Get timeline blocks with category colors.
+- `GET /history?days=N`: Get daily totals for the last N days.
 
-### `GET /events`
-Retrieve raw events for a specific date.
+### 📅 Range Queries
+- `GET /range/summary?start=YYYY-MM-DD&end=YYYY-MM-DD`: Summary over a custom range.
+- `GET /range/history?start=YYYY-MM-DD&end=YYYY-MM-DD`: Daily totals over a custom range.
 
-**Parameters:**
-- `date` (format: `YYYY-MM-DD`, default: today)
+### 📥 Data Management
+- `GET /export?start=YYYY-MM-DD&end=YYYY-MM-DD&format=csv|json`: Export data for backup or external analysis.
+- `POST /events/manual`: Manually add an activity record.
+  ```json
+  {
+    "start_time": "ISO_TIMESTAMP",
+    "end_time": "ISO_TIMESTAMP",
+    "wm_class": "App Name",
+    "title": "Optional Title"
+  }
+  ```
 
-### `GET /summary`
-Get application usage summary grouped by `wm_class`.
+### 🏷️ Categories & Rules
+- `GET /categories`: List all categories.
+- `POST /categories`: Create a new category.
+- `PUT /categories/:id`: Update a category.
+- `DELETE /categories/:id`: Delete a category.
+- `POST /categories/import?replace=true`: Bulk import categories.
+- `GET /rules`: List all privacy/filter rules.
+- `POST /rules`: Add a new rule (ignore or redact).
+- `DELETE /rules/:id`: Remove a rule.
 
-**Parameters:**
-- `date` (format: `YYYY-MM-DD`, default: today)
+### 📱 Android Sync
+- `POST /sync/android`: Synchronize usage data from the Android client.
+- `GET /devices`: List all registered devices (Local, Android, etc.).
 
-### `GET /timeline`
-Retrieve activity blocks for the timeline view. Automatically groups small events and merges consecutive identical apps.
+### ⚙️ Settings & Control
+- `GET /settings`: Get current daemon settings (poll interval, etc.).
+- `POST /update_settings`: Update settings in the database.
+- `GET /pause_status`: Check if tracking is currently paused.
+- `POST /pause`: Pause tracking indefinitely or for N minutes.
+- `POST /resume`: Resume tracking.
 
-**Parameters:**
-- `date` (format: `YYYY-MM-DD`, default: today)
+## 🔌 WebSockets
+`WS /ws`
 
-### `GET /history`
-Get daily totals for the last N days.
-
-**Parameters:**
-- `days` (integer, default: 30)
-
-### `GET /categories`
-Retrieve all defined categories and their regex patterns.
-
-### `POST /events/sync`
-Used by the Android app to upload events.
-
-**Body:** List of Event objects.
-
-## Event Object Schema
-```json
-{
-  "id": "uuid",
-  "device_id": "uuid",
-  "timestamp": "float",
-  "end_timestamp": "float",
-  "wm_class": "string",
-  "title": "string",
-  "duration_secs": "float",
-  "is_idle": "boolean"
-}
-```
+Broadcasts real-time events:
+- `{ "type": "activity", "wm_class": "...", "title": "..." }`
+- `{ "type": "idle" }`
+- `{ "type": "resume" }`
+- `{ "type": "pause_state", "is_paused": true, "until": ... }`

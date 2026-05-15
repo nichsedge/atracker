@@ -1,154 +1,97 @@
-# 🕒 atracker
+# 🕒 atracker (v2)
 
-**Local-first activity watcher & tracker for Linux (GNOME/Wayland), Windows, and Android.**
+**High-performance, local-first activity watcher & tracker for Linux (GNOME/Wayland).**
 
 `atracker` is a privacy-focused tool that automatically monitors your active windows and apps, helps you understand where your time goes, and provides beautiful visualizations—all while keeping your data strictly local.
+
+This version (v2) is built with **Rust** for the backend and **React** for the dashboard, providing superior performance, real-time updates via WebSockets, and a modern "wealth management" aesthetic.
 
 ---
 
 ## ✨ Features
 
-- 🔒 **Privacy-First**: No data leaves your machine unless you explicitly sync it. No cloud, no tracking.
-- 🐧 **Linux Support**: First-class support for GNOME/Wayland via a dedicated shell extension.
-- 🪟 **Windows Support**: Native tracking using Windows APIs.
-- 📱 **Android App**: Track mobile usage and sync with your desktop.
-- 📊 **Beautiful Dashboard**: A modern, glassmorphism web-based dashboard with:
-    - Daily Activity Timelines
-    - App Usage Analytics
-    - Categorization & Regex rules
-    - History & Productivity Trends
-- ⚙️ **Highly Configurable**: Customize poll intervals, idle thresholds, and more.
-- ⚡ **Lightweight**: Minimal CPU and memory footprint.
+- 🔒 **Privacy-First**: No data leaves your machine. Your activity is your business.
+- 🦀 **Rust Core**: Ultra-low overhead daemon using `atracker-rs`.
+- ⚛️ **Modern Dashboard**: A professional React-based UI (`dashboard-v2`) with:
+    - 📊 **Real-time Activity**: Instant updates via WebSockets.
+    - 🕒 **Timeline View**: 24-hour activity visualization.
+    - 📱 **Multi-Device**: View stats from your Linux desktop and Android phone in one place.
+    - 🏷️ **Smart Categorization**: Auto-categorize apps using regex patterns.
+- 📱 **Android Sync**: Companion app to track mobile usage.
+- 🐧 **Linux Native**: Optimized for GNOME/Wayland via a dedicated shell extension.
 
 ---
 
-## 🚀 Quick Start (Python)
+## 🚀 Quick Start (Rust Stack)
 
-Ensure you have [uv](https://github.com/astral-sh/uv) installed.
-
-### 1. Install & Setup
+### 1. Build & Install
 ```bash
-# Clone the repository
-git clone https://github.com/user/atracker.git
-cd atracker
+# Build the Rust backend
+cd atracker-rs
+cargo build --release
 
-# Install dependencies
-uv sync
+# Build the React dashboard
+cd ../dashboards/dashboard-v2
+npm install
+npm run build
 ```
 
-### 2. Start the Daemon
+### 2. Start the Service
+You can run it directly:
 ```bash
-uv run atracker start
+./atracker-rs/target/release/atracker-rs
 ```
-This will start both the tracking daemon and the web dashboard server.
+Or install as a systemd user service (recommended):
+```bash
+mkdir -p ~/.config/systemd/user/
+cp deploy/systemd/atracker-rs.service ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now atracker-rs
+```
 
 ### 3. Open Dashboard
-Visit [http://localhost:8932](http://localhost:8932) in your browser.
+Visit [http://localhost:8933](http://localhost:8933) in your browser.
 
 ---
 
-## 🐧 Linux (GNOME/Wayland) Installation
+## 🏗️ Architecture
 
-To accurately track windows on Wayland, you **must** install the GNOME extension included in this repo.
-
-1.  **Install the extension**:
-    ```bash
-    cp -r gnome-extension/atracker@local ~/.local/share/gnome-shell/extensions/
-    ```
-2.  **Enable it**:
-    - Restart GNOME Shell (Alt+F2, type `r`, Enter—or logout and log back in on Wayland).
-    - Enable "Activity Tracker Window Watcher" in the Extensions app.
-3.  **Run as a Service**:
-    You can install the provided systemd service for automatic startup:
-    ```bash
-    mkdir -p ~/.config/systemd/user/
-    cp atracker.service ~/.config/systemd/user/
-    systemctl --user daemon-reload
-    systemctl --user enable --now atracker
-    ```
+- **Backend (`atracker-rs`)**: Rust + Axum + SQLx (SQLite).
+- **Frontend (`dashboard-v2`)**: React + Vite + Tailwind (Legacy) / Vanilla CSS.
+- **Watcher**: D-Bus integration with GNOME Shell and Mutter.
+- **Android**: Kotlin app syncing via REST API.
 
 ---
 
-## 🪟 Windows Installation
+## 🐍 Legacy Python Stack (Isolated)
 
-1.  **Install Python 3.12+** and **[uv](https://github.com/astral-sh/uv)**.
-2.  **Install dependencies**:
-    ```powershell
-    uv sync
-    ```
-3.  **Start the tracker**:
-    ```powershell
-    uv run atracker start
-    ```
-    The dashboard opens automatically in your browser at [http://localhost:8932](http://localhost:8932).
+The original Python implementation is still available in `atracker-py`. It runs independently on port **8932** and uses a separate database.
 
-4.  **Auto-start on login** (optional):
-    ```powershell
-    uv run atracker install
-    ```
-    This registers a Windows startup entry (via `HKCU\...\Run` registry key, no admin needed) so atracker starts silently in the background every time you log in. To remove it:
-    ```powershell
-    uv run atracker uninstall
-    ```
-
-> **Tip:** Use `atracker start --no-browser` to suppress the automatic browser launch (e.g. when running headless or from the scheduled task).
-
----
-
-## 📱 Android Sync
-
-The Android app tracks application usage using the `UsageStats` service.
-
-1.  **Build/Install**: Use Android Studio to build and install the `atracker-android` app.
-2.  **Permissions**: Grant "Usage Access" permission when prompted.
-3.  **Syncing**: Configure the desktop API URL (e.g., `http://192.168.1.5:8932`) in the app settings to sync your phone data to your centralized dashboard.
+To run the legacy stack:
+```bash
+cd atracker-py
+uv sync
+uv run atracker start
+```
 
 ---
 
 ## ⚙️ Configuration
 
-Configuration is stored in `~/.config/atracker/config.yaml`.
-
-```yaml
-dashboard:
-  port: 8932
-  host: "0.0.0.0"
-
-database:
-  path: "~/.local/share/atracker/atracker.db"
-  retention_days: 90
-
-tracking:
-  poll_interval: 5    # seconds
-  idle_threshold: 120 # seconds before marked as idle
-```
+- **Rust Config**: `~/.config/atracker-rs/config-rs.yaml`
+- **Rust DB**: `~/.local/share/atracker-rs/atracker-rs.db`
 
 ---
 
-## � Documentation
+## 📖 Documentation
 
-For more detailed information, check out:
 - [System Architecture](docs/architecture.md)
 - [REST API Reference](docs/api.md)
+- [GNOME Extension Guide](docs/gnome-extension.md)
 - [Android Tracker Guide](docs/android.md)
-
----
-
-## �🛠️ Development
-
-- **Backend**: Python (FastAPI, aiosqlite, dbus-next)
-- **Frontend**: Vanilla JS, CSS, HTML
-- **Android**: Kotlin, WorkManager
-- **Gnome**: GJS (Gnome JavaScript)
-
-### Running Tests
-```bash
-uv run pytest
-```
 
 ---
 
 ## ⚖️ License
 
 MIT License.
-

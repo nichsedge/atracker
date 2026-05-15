@@ -53,40 +53,42 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     // Start Watcher
-    let watcher = Arc::new(Watcher::new(config, pool));
+    let watcher = Arc::new(Watcher::new(config.clone(), pool.clone(), tx.clone()));
     let watcher_clone = watcher.clone();
     let watcher_state = state.clone();
     
     tokio::spawn(async move {
         loop {
-            let is_paused = {
+            let (is_paused, until) = {
                 let pause = watcher_state.pause_state.lock().await;
-                if pause.is_paused {
-                    if pause.until > 0 && chrono::Local::now().timestamp() > pause.until {
-                        false
-                    } else { true }
-                } else { false }
+                (pause.is_paused, pause.until)
             };
 
-            if !is_paused {
-                if let Ok(current) = watcher_clone.run_once().await {
-                    if let Some(curr) = current {
-                        let mut state_curr = watcher_state.current_tracking.lock().await;
-                        
-                        let msg = serde_json::json!({
-                            "type": "activity",
-                            "wm_class": curr.wm_class,
-                            "title": curr.title,
-                            "timestamp": curr.timestamp,
-                            "is_idle": curr.is_idle,
-                        });
-                        
-                        *state_curr = Some(msg.clone());
-                        let _ = watcher_state.tx.send(msg.to_string());
-                    }
+            let mut effectively_paused = is_paused;
+            if is_paused && until > 0 {
+                if chrono::Utc::now().timestamp() > until {
+                    effectively_paused = false;
+                    let mut pause = watcher_state.pause_state.lock().await;
+                    pause.is_paused = false;
+                    pause.until = 0;
+                    let _ = watcher_state.tx.send(serde_json::json!({ "type": "pause_state", "is_paused": false }).to_string());
                 }
             }
-            sleep(Duration::from_secs(5)).await; // Poll every 5s
+
+            if let Ok(current) = watcher_clone.run_once(effectively_paused).await {
+                if let Some(curr) = current {
+                    let mut state_curr = watcher_state.current_tracking.lock().await;
+                    *state_curr = Some(serde_json::json!({
+                        "wm_class": curr.wm_class,
+                        "title": curr.title,
+                        "timestamp": curr.timestamp,
+                        "is_idle": curr.is_idle,
+                    }));
+                }
+            }
+
+            let poll_interval = db::get_setting(&watcher_state.pool, "poll_interval", &config.tracking.poll_interval.to_string()).await.parse::<u64>().unwrap_or(config.tracking.poll_interval);
+            sleep(Duration::from_secs(poll_interval)).await;
         }
     });
 

@@ -1,23 +1,28 @@
-# Android Tracker
+# Android Tracker Guide
 
-The Android version of `atracker` is designed to be low-impact and reliable, filling the gap for mobile activity tracking.
+The `atracker-android` app allows you to integrate your mobile usage patterns into your centralized dashboard.
 
-## Usage Access
-Android requires explicit permission for an app to see which other apps are running.
-1. Open terminal on your phone (or wait for the app prompt).
-2. Go to **Settings > Security > Usage Access**.
-3. Enable **atracker**.
+## Setup
 
-## Background Reliability
-Android often kills background services to save battery. `atracker` uses several techniques to stay alive:
-1. **Foreground Service**: Runs with a "Running in background" notification (minimized importance).
-2. **Watchdog Worker**: A `PeriodicWorkRequest` that runs every 15 minutes to check if the main tracker service is still running and restarts it if necessary.
-3. **Start Sticky**: Tells the OS to recreate the service if it gets killed by the low-memory killer.
+1.  **Build**: Open the `atracker-android` directory in Android Studio.
+2.  **Install**: Build and install the APK on your device.
+3.  **Permissions**: 
+    - The app requires **Usage Stats Access**. It will guide you to the system settings on first launch.
+    - This permission allows the app to see which apps are in the foreground and for how long.
 
-## Synchronization
-1. Open the **Settings** screen in the Android app.
-2. Enter the **Sync URL**: `http://<your-desktop-ip>:8932`.
-3. Tap **Sync Now** or let it sync automatically in the background.
+## Syncing to Desktop (v2)
 
-## Database
-The app uses **Room Persistence Library** with an SQLite database. Data is stored locally and marked as "synced" once successfully sent to the desktop.
+To see your Android stats in the new Rust-based dashboard:
+
+1.  **Server Address**: Open settings in the Android app.
+2.  **API URL**: Enter your desktop's local IP address and port **8933**.
+    - Example: `http://192.168.1.5:8933`
+3.  **Frequency**: The app syncs data periodically in the background (roughly every 15-30 minutes when on Wi-Fi).
+
+## Data Isolation
+
+The Android sync uses the `/api/sync/android` endpoint. Events from Android are stored in the `android_events` table in the Rust database, keeping them distinct from your local desktop activity while allowing for unified reporting.
+
+## Privacy
+
+Like the desktop version, the Android app only sends data to the URL you specify. No data is sent to external servers or cloud services.

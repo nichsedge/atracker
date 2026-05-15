@@ -1,46 +1,54 @@
-# Architecture
+# System Architecture (v2)
 
-`atracker` is designed as a modular, local-first system. It consists of several components working together to track, store, and visualize activity.
+This document describes the modern Rust-based architecture of `atracker`.
 
-## Component Overview
+## Overview
+
+The system consists of three main components running on the user's machine, plus an optional Android client.
 
 ```mermaid
 graph TD
-    A[Watcher Daemon] -->|SQL| B[(SQLite Database)]
-    C[FastAPI Server] -->|Query| B
-    D[Web Dashboard] -->|REST API| C
-    E[GNOME Extension] -->|D-Bus| A
-    F[Windows API] -->|Polling| A
-    G[Android App] -->|HTTPS Sync| C
+    GNOME[GNOME Shell / Mutter] -- D-Bus --> RS[atracker-rs Daemon]
+    RS -- SQLx --> DB[(SQLite DB)]
+    RS -- WebSocket --> UI[React Dashboard]
+    Android[Android App] -- REST API --> RS
 ```
 
-### 1. Watcher Daemon (`src/atracker/watcher.py` & `watcher_windows.py`)
-The heart of the system. It runs an asynchronous loop that polls for the active window and idle state every 5 seconds (configurable).
-- **Linux**: Uses the GNOME Shell extension via D-Bus as the primary source. Falls back to `xdotool` for XWayland windows if the extension is unavailable.
-- **Windows**: Uses native Win32 APIs (`GetForegroundWindow`, `GetLastInputInfo`).
+## 1. Backend: `atracker-rs`
 
-### 2. API Server (`src/atracker/api.py`)
-A FastAPI server that runs on port `8932`. It serves the web dashboard and handles requests for event data, summaries, and history. It also acts as the sync target for the Android app.
+Built with Rust, the backend is a single binary that serves multiple roles:
 
-### 3. Database (`src/atracker/db.py`)
-A local SQLite database located at `~/.local/share/atracker/atracker.db`. It stores all events with UUID-based IDs to support future multi-device synchronization.
+-   **Activity Watcher**: Polls active window information via D-Bus.
+-   **Idle Monitor**: Communicates with `org.gnome.Mutter.IdleMonitor` to detect user inactivity.
+-   **REST API**: Handles data queries, settings updates, and manual event creation using **Axum**.
+-   **WebSocket Server**: Broadcasts real-time activity changes to the dashboard.
+-   **Static File Server**: Serves the compiled React dashboard assets.
 
-### 4. Web Dashboard (`dashboard/`)
-A pure JavaScript/CSS/HTML dashboard that provides:
-- **Timeline View**: Visual representation of the day's activity.
-- **Usage Stats**: Top apps and categories.
-- **History**: Activity trends over time.
-- **Settings**: Manage categories and regex rules.
+### Key Technologies
+- **Axum**: High-performance web framework.
+- **SQLx**: Asynchronous, type-safe SQL queries for SQLite.
+- **ZBus**: Type-safe D-Bus communication.
+- **Tokio**: Asynchronous runtime.
 
-### 5. GNOME Extension (`gnome-extension/`)
-Required for Wayland support. Standard window trackers cannot access window information in Wayland for security reasons. The extension exposes a D-Bus service that `atracker` queries.
+## 2. Frontend: `dashboard-v2`
 
-### 6. Android App (`atracker-android/`)
-A companion app that tracks foreground application changes on Android. It stores data locally and can sync to the desktop API.
+A modern React application built with Vite.
 
-## Data Flow
-1. **Detection**: Watcher identifies active window + idle state.
-2. **Buffering**: Watcher tracks how long the same window stays active.
-3. **Commit**: When the active window changes or the app shuts down, the event is saved to SQLite.
-4. **Visualization**: Dashboard polls the API for the latest events and renders them.
-5. **Sync**: Android app periodically sends its events to the Desktop API.
+-   **State Management**: React Hooks (`useTracker`) for data fetching and WebSocket synchronization.
+-   **Visualizations**: Recharts for history and usage trends.
+-   **Real-time**: Instant UI updates when window changes occur or idle state is detected.
+-   **Aesthetics**: High-density "wealth management" design with a focus on data clarity and premium feel.
+
+## 3. Data Storage
+
+- **Database**: SQLite, stored at `~/.local/share/atracker-rs/atracker-rs.db`.
+- **Isolation**: The Rust version uses a separate database from the legacy Python version, ensuring zero data contamination during migration.
+
+## 4. Platform Integration (Linux)
+
+- **GNOME Extension**: A minimal GJS extension (`gnome-extension/`) that exposes the current active window via a private D-Bus interface (`org.atracker.WindowTracker`).
+- **Idle Tracking**: Uses the native Mutter D-Bus interface, requiring no additional setup on GNOME.
+
+## 5. Android Integration
+
+The Android app (`atracker-android`) periodically pushes usage data to the `/api/sync/android` endpoint. The backend merges this data into the same history views, allowing for a unified "Total Digital Usage" report.
