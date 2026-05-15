@@ -1,6 +1,6 @@
 use sqlx::{sqlite::SqliteConnectOptions, SqlitePool, Row};
 use crate::config::{resolve_path, Config};
-use chrono::{NaiveDate, Local, Duration};
+use chrono::{NaiveDate, Local, Duration, TimeZone, NaiveTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -94,6 +94,12 @@ pub async fn init_db(config: &Config) -> SqlitePool {
         .create_if_missing(true);
 
     let pool = SqlitePool::connect_with(opt).await.expect("Failed to connect to database");
+
+    // Read/write tuning for dashboard-heavy workloads.
+    sqlx::query("PRAGMA journal_mode = WAL").execute(&pool).await.ok();
+    sqlx::query("PRAGMA synchronous = NORMAL").execute(&pool).await.ok();
+    sqlx::query("PRAGMA temp_store = MEMORY").execute(&pool).await.ok();
+    sqlx::query("PRAGMA cache_size = -20000").execute(&pool).await.ok();
 
     // Primary tables
     sqlx::query(
@@ -199,7 +205,11 @@ pub async fn init_db(config: &Config) -> SqlitePool {
     sqlx::query("CREATE INDEX IF NOT EXISTS idx_events_timestamp ON events(timestamp)").execute(&pool).await.unwrap();
     sqlx::query("CREATE INDEX IF NOT EXISTS idx_events_wm_class ON events(wm_class)").execute(&pool).await.unwrap();
     sqlx::query("CREATE INDEX IF NOT EXISTS idx_events_time_idle ON events(timestamp, is_idle)").execute(&pool).await.unwrap();
+    sqlx::query("CREATE INDEX IF NOT EXISTS idx_events_device_id ON events(device_id)").execute(&pool).await.unwrap();
+    sqlx::query("CREATE INDEX IF NOT EXISTS idx_events_device_time ON events(device_id, timestamp)").execute(&pool).await.unwrap();
     sqlx::query("CREATE INDEX IF NOT EXISTS idx_android_events_timestamp ON android_events(timestamp)").execute(&pool).await.unwrap();
+    sqlx::query("CREATE INDEX IF NOT EXISTS idx_android_events_device_id ON android_events(device_id)").execute(&pool).await.unwrap();
+    sqlx::query("CREATE INDEX IF NOT EXISTS idx_android_events_device_time ON android_events(device_id, timestamp)").execute(&pool).await.unwrap();
 
     // Default settings
     let settings_defaults = [
@@ -250,6 +260,25 @@ pub fn get_local_device_id() -> String {
     id
 }
 
+fn utc_bounds_for_local_dates(start_date: &str, end_date: &str) -> (String, String) {
+    let start = NaiveDate::parse_from_str(start_date, "%Y-%m-%d").unwrap();
+    let end_plus_one = NaiveDate::parse_from_str(end_date, "%Y-%m-%d").unwrap() + Duration::days(1);
+
+    let local_start = Local
+        .from_local_datetime(&start.and_time(NaiveTime::MIN))
+        .earliest()
+        .unwrap();
+    let local_end = Local
+        .from_local_datetime(&end_plus_one.and_time(NaiveTime::MIN))
+        .earliest()
+        .unwrap();
+
+    (
+        local_start.with_timezone(&Utc).to_rfc3339(),
+        local_end.with_timezone(&Utc).to_rfc3339(),
+    )
+}
+
 // --- Events ---
 pub async fn insert_event(pool: &SqlitePool, event: Event) -> Result<(), sqlx::Error> {
     sqlx::query(
@@ -272,9 +301,7 @@ pub async fn insert_event(pool: &SqlitePool, event: Event) -> Result<(), sqlx::E
 }
 
 pub async fn get_events(pool: &SqlitePool, target_date: &str, device_ids: Option<Vec<String>>) -> Vec<serde_json::Value> {
-    let day_start = format!("{}T00:00:00", target_date);
-    let next_day = NaiveDate::parse_from_str(target_date, "%Y-%m-%d").unwrap() + Duration::days(1);
-    let next_day_start = format!("{}T00:00:00", next_day.format("%Y-%m-%d"));
+    let (day_start, next_day_start) = utc_bounds_for_local_dates(target_date, target_date);
 
     let device_filter_active = device_ids.is_some();
     let device_json = serde_json::to_string(&(device_ids.unwrap_or_default())).unwrap();
@@ -320,9 +347,7 @@ pub async fn get_events(pool: &SqlitePool, target_date: &str, device_ids: Option
 }
 
 pub async fn get_summary_range(pool: &SqlitePool, start_date: &str, end_date: &str, device_ids: Option<Vec<String>>) -> Vec<AppSummary> {
-    let range_start = format!("{}T00:00:00", start_date);
-    let next_day = NaiveDate::parse_from_str(end_date, "%Y-%m-%d").unwrap() + Duration::days(1);
-    let range_end = format!("{}T00:00:00", next_day.format("%Y-%m-%d"));
+    let (range_start, range_end) = utc_bounds_for_local_dates(start_date, end_date);
 
     let device_filter_active = device_ids.is_some();
     let device_json = serde_json::to_string(&(device_ids.unwrap_or_default())).unwrap();
@@ -371,9 +396,7 @@ pub async fn get_summary_range(pool: &SqlitePool, start_date: &str, end_date: &s
 }
 
 pub async fn get_timeline_range(pool: &SqlitePool, start_date: &str, end_date: &str, device_ids: Option<Vec<String>>) -> Vec<Event> {
-    let range_start = format!("{}T00:00:00", start_date);
-    let next_day = NaiveDate::parse_from_str(end_date, "%Y-%m-%d").unwrap() + Duration::days(1);
-    let range_end = format!("{}T00:00:00", next_day.format("%Y-%m-%d"));
+    let (range_start, range_end) = utc_bounds_for_local_dates(start_date, end_date);
 
     let device_filter_active = device_ids.is_some();
     let device_json = serde_json::to_string(&(device_ids.unwrap_or_default())).unwrap();
@@ -418,18 +441,8 @@ pub async fn get_timeline_range(pool: &SqlitePool, start_date: &str, end_date: &
     .collect()
 }
 
-pub async fn get_summary(pool: &SqlitePool, date: &str) -> Vec<AppSummary> {
-    get_summary_range(pool, date, date, None).await
-}
-
-pub async fn get_timeline(pool: &SqlitePool, date: &str) -> Vec<Event> {
-    get_timeline_range(pool, date, date, None).await
-}
-
 pub async fn get_daily_totals_range(pool: &SqlitePool, start_date: &str, end_date: &str, device_ids: Option<Vec<String>>) -> Vec<DailyTotal> {
-    let range_start = format!("{}T00:00:00", start_date);
-    let next_day = NaiveDate::parse_from_str(end_date, "%Y-%m-%d").unwrap() + Duration::days(1);
-    let range_end = format!("{}T00:00:00", next_day.format("%Y-%m-%d"));
+    let (range_start, range_end) = utc_bounds_for_local_dates(start_date, end_date);
 
     let device_filter_active = device_ids.is_some();
     let device_json = serde_json::to_string(&(device_ids.unwrap_or_default())).unwrap();
@@ -458,32 +471,6 @@ pub async fn get_daily_totals_range(pool: &SqlitePool, start_date: &str, end_dat
     .bind(range_end)
     .bind(if device_filter_active { 1 } else { 0 })
     .bind(device_json)
-    .fetch_all(pool)
-    .await
-    .unwrap_or_default()
-}
-
-pub async fn get_daily_totals(pool: &SqlitePool, days: i64) -> Vec<DailyTotal> {
-    sqlx::query_as::<_, DailyTotal>(
-        "WITH combined_events AS (
-            SELECT COALESCE(m.target_id, e.device_id) as device_id, timestamp, duration_secs, is_idle 
-            FROM events e
-            LEFT JOIN device_merges m ON e.device_id = m.original_id
-            UNION ALL
-            SELECT COALESCE(m.target_id, ae.device_id) as device_id, timestamp, duration_secs, is_idle 
-            FROM android_events ae
-            LEFT JOIN device_merges m ON ae.device_id = m.original_id
-        )
-        SELECT DATE(timestamp) as day,
-               SUM(CASE WHEN is_idle = 0 THEN duration_secs ELSE 0 END) as active_secs,
-               SUM(CASE WHEN is_idle = 1 THEN duration_secs ELSE 0 END) as idle_secs,
-               COUNT(*) as event_count
-        FROM combined_events
-        WHERE timestamp >= DATE('now', ?)
-        GROUP BY day
-        ORDER BY day DESC"
-    )
-    .bind(format!("-{} days", days))
     .fetch_all(pool)
     .await
     .unwrap_or_default()
@@ -809,4 +796,3 @@ pub async fn sync_android_day(pool: &SqlitePool, _day: &str, events: Vec<Android
     }
     Ok(count)
 }
-

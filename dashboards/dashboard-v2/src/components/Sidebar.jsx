@@ -22,8 +22,8 @@ const Sidebar = ({ status = {}, devices = [], selectedDevices, setSelectedDevice
   };
 
   const filteredDevices = devices.filter(d => 
-    d.name.toLowerCase().includes(deviceSearch.toLowerCase()) || 
-    d.platform.toLowerCase().includes(deviceSearch.toLowerCase())
+    (d?.name || '').toLowerCase().includes(deviceSearch.toLowerCase()) || 
+    (d?.platform || '').toLowerCase().includes(deviceSearch.toLowerCase())
   );
 
   return (
@@ -75,8 +75,8 @@ const Sidebar = ({ status = {}, devices = [], selectedDevices, setSelectedDevice
                   style={{ width: 14, height: 14, cursor: 'pointer', accentColor: 'var(--accent-color)' }}
                 />
                 <div className="device-info">
-                  <div className="device-name" style={{ fontSize: '0.8rem', fontWeight: 600, color: isActive ? '#1e293b' : '#64748b' }}>{dev.name}</div>
-                  <div className="device-id-hint" style={{ fontSize: '0.65rem', opacity: 0.5 }}>{dev.platform}</div>
+                  <div className="device-name" style={{ fontSize: '0.8rem', fontWeight: 600, color: isActive ? '#1e293b' : '#64748b' }}>{dev.name || dev.id || 'Unknown Device'}</div>
+                  <div className="device-id-hint" style={{ fontSize: '0.65rem', opacity: 0.5 }}>{dev.platform || 'Unknown'}</div>
                 </div>
               </label>
             );

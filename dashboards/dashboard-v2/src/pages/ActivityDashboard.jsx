@@ -1,14 +1,11 @@
 import { useMemo, useState, useEffect, useCallback, Fragment } from 'react';
-import { formatDuration, formatTime } from '../utils/formatters';
+import { formatDuration, formatTime, formatLocalDateISO } from '../utils/formatters';
 import { Plus, Calendar, Target, AlertCircle, RefreshCw } from 'lucide-react';
 import Flatpickr from 'react-flatpickr';
 import 'flatpickr/dist/themes/light.css';
 import ManualActivityModal from '../components/ManualActivityModal';
 
-const ActivityDashboard = ({ summary = [], timeline = [], currentApp, date, setDate, loading, categories = [], submitManualEvent }) => {
-  const [expandedCategories, setExpandedCategories] = useState({});
-  const [tooltip, setTooltip] = useState({ visible: false, x: 0, y: 0, content: null });
-  const [isManualModalOpen, setIsManualModalOpen] = useState(false);
+const NowTrackingCard = ({ currentApp }) => {
   const [localElapsed, setLocalElapsed] = useState(0);
 
   useEffect(() => {
@@ -27,6 +24,27 @@ const ActivityDashboard = ({ summary = [], timeline = [], currentApp, date, setD
     const timer = setInterval(update, 1000);
     return () => clearInterval(timer);
   }, [currentApp]);
+
+  if (!currentApp) {
+    return <div className="now-tracking-card-light idle"><h3>System Idle</h3></div>;
+  }
+
+  return (
+    <div className="now-tracking-card-light">
+      <div className="app-icon-large">🌐</div>
+      <div className="app-details">
+        <h3>{currentApp.wm_class}</h3>
+        <p>{currentApp.title}</p>
+      </div>
+      <div className="now-tracking-timer">{formatDuration(localElapsed)}</div>
+    </div>
+  );
+};
+
+const ActivityDashboard = ({ summary = [], timeline = [], currentApp, date, setDate, loading, categories = [], submitManualEvent }) => {
+  const [expandedCategories, setExpandedCategories] = useState({});
+  const [tooltip, setTooltip] = useState({ visible: false, x: 0, y: 0, content: null });
+  const [isManualModalOpen, setIsManualModalOpen] = useState(false);
 
   const totalTracked = useMemo(() => {
     if (!Array.isArray(summary)) return 0;
@@ -93,18 +111,6 @@ const ActivityDashboard = ({ summary = [], timeline = [], currentApp, date, setD
     });
   };
 
-  // Only show full loading if we have no data at all
-  const isInitialLoad = loading && summary.length === 0 && timeline.length === 0 && Array.isArray(categories) && categories.length === 0;
-
-  if (isInitialLoad) {
-    return (
-      <div className="loading-container" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '80vh', gap: '1rem' }}>
-        <div style={{ fontSize: '1.2rem', color: '#64748b', fontWeight: 600 }}>Loading track records...</div>
-        <p style={{ fontSize: '0.85rem', color: '#94a3b8' }}>Establishing connection to Atracker service</p>
-      </div>
-    );
-  }
-
   // Pre-calculate app colors for fast lookup in timeline
   const appColorMap = useMemo(() => {
     const map = {};
@@ -141,6 +147,18 @@ const ActivityDashboard = ({ summary = [], timeline = [], currentApp, date, setD
     };
   }, [appColorMap]);
 
+  // Only show full loading if we have no data at all
+  const isInitialLoad = loading && summary.length === 0 && timeline.length === 0 && Array.isArray(categories) && categories.length === 0;
+
+  if (isInitialLoad) {
+    return (
+      <div className="loading-container" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '80vh', gap: '1rem' }}>
+        <div style={{ fontSize: '1.2rem', color: '#64748b', fontWeight: 600 }}>Loading track records...</div>
+        <p style={{ fontSize: '0.85rem', color: '#94a3b8' }}>Establishing connection to Atracker service</p>
+      </div>
+    );
+  }
+
   return (
     <div className="view-content fade-in">
       <header className="main-header">
@@ -153,8 +171,7 @@ const ActivityDashboard = ({ summary = [], timeline = [], currentApp, date, setD
                     value={date} 
                     onChange={([d]) => {
                       if (d) {
-                        const localDate = d.toLocaleDateString('en-CA');
-                        setDate(localDate);
+                        setDate(formatLocalDateISO(d));
                       }
                     }}
                     options={{
@@ -181,18 +198,7 @@ const ActivityDashboard = ({ summary = [], timeline = [], currentApp, date, setD
         <div className="main-column" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           <section className="glass-card now-tracking-section">
             <div className="section-label">NOW TRACKING</div>
-            {currentApp ? (
-              <div className="now-tracking-card-light">
-                <div className="app-icon-large">🌐</div>
-                <div className="app-details">
-                  <h3>{currentApp.wm_class}</h3>
-                  <p>{currentApp.title}</p>
-                </div>
-                <div className="now-tracking-timer">{formatDuration(localElapsed)}</div>
-                </div>
-            ) : (
-              <div className="now-tracking-card-light idle"><h3>System Idle</h3></div>
-            )}
+            <NowTrackingCard currentApp={currentApp} />
           </section>
 
           <section className="glass-card">

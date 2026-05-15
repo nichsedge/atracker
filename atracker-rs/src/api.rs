@@ -1,6 +1,6 @@
 use axum::{
     extract::{State, WebSocketUpgrade, ws::{Message, WebSocket}, Query, Path},
-    response::{IntoResponse, Response, Html},
+    response::{IntoResponse, Response},
     routing::{get, post, delete, put},
     Router, Json,
 };
@@ -13,6 +13,7 @@ use tower_http::cors::CorsLayer;
 use axum::http::{StatusCode, header, Uri};
 use serde::Deserialize;
 use chrono::{Local, DateTime, Utc};
+use regex::Regex;
 
 use uuid::Uuid;
 
@@ -83,6 +84,14 @@ pub struct AndroidSyncPayload {
 pub struct DeviceMergeRequest {
     pub original_id: String,
     pub target_id: String,
+}
+
+struct CompiledCategoryMatcher {
+    name: String,
+    color: String,
+    is_case_sensitive: bool,
+    title_re: Option<Regex>,
+    wm_class_re: Option<Regex>,
 }
 
 pub async fn run_api(state: Arc<AppState>) {
@@ -189,12 +198,13 @@ async fn get_summary(State(state): State<Arc<AppState>>, Query(q): Query<DateQue
     }
 
     let categories = db::get_categories(&state.pool).await;
+    let compiled_categories = compile_category_matchers(&categories);
     let min_secs = db::get_setting(&state.pool, "min_app_usage_secs", "120").await.parse::<f64>().unwrap_or(120.0);
 
     let mut filtered_rows = Vec::new();
     for mut row in rows {
         if row.total_secs < min_secs { continue; }
-        let (cat_name, cat_color) = match_category(&row.wm_class, &row.title, &categories);
+        let (cat_name, cat_color) = match_category(&row.wm_class, &row.title, &compiled_categories);
         row.category_name = cat_name;
         row.color = cat_color;
         filtered_rows.push(row);
@@ -235,9 +245,10 @@ async fn get_timeline(State(state): State<Arc<AppState>>, Query(q): Query<DateQu
     }
 
     let categories = db::get_categories(&state.pool).await;
+    let compiled_categories = compile_category_matchers(&categories);
     let mut timeline_with_color = Vec::new();
     for row in rows {
-        let (_, color) = match_category(&row.wm_class, &row.title, &categories);
+        let (_, color) = match_category(&row.wm_class, &row.title, &compiled_categories);
         let mut row_json = serde_json::to_value(&row).unwrap();
         row_json["color"] = serde_json::json!(color);
         timeline_with_color.push(row_json);
@@ -262,12 +273,13 @@ async fn get_range_summary(State(state): State<Arc<AppState>>, Query(q): Query<R
     let rows = db::get_summary_range(&state.pool, &q.start, &q.end, device_ids).await;
 
     let categories = db::get_categories(&state.pool).await;
+    let compiled_categories = compile_category_matchers(&categories);
     let min_secs = db::get_setting(&state.pool, "min_app_usage_secs", "120").await.parse::<f64>().unwrap_or(120.0);
 
     let mut filtered_rows = Vec::new();
     for mut row in rows {
         if row.total_secs < min_secs { continue; }
-        let (cat_name, cat_color) = match_category(&row.wm_class, &row.title, &categories);
+        let (cat_name, cat_color) = match_category(&row.wm_class, &row.title, &compiled_categories);
         row.category_name = cat_name;
         row.color = cat_color;
         filtered_rows.push(row);
@@ -506,34 +518,52 @@ async fn add_manual_event(State(state): State<Arc<AppState>>, Json(req): Json<Ma
     }
 }
 
-fn match_category(wm_class: &str, title: &str, categories: &[db::Category]) -> (String, String) {
+fn compile_category_matchers(categories: &[db::Category]) -> Vec<CompiledCategoryMatcher> {
+    categories.iter().map(|cat| {
+        let title_re = if cat.title_pattern.is_empty() {
+            None
+        } else {
+            regex::RegexBuilder::new(&cat.title_pattern)
+                .case_insensitive(!cat.is_case_sensitive)
+                .build()
+                .ok()
+        };
+        let wm_class_re = if cat.wm_class_pattern.is_empty() {
+            None
+        } else {
+            regex::RegexBuilder::new(&cat.wm_class_pattern)
+                .case_insensitive(!cat.is_case_sensitive)
+                .build()
+                .ok()
+        };
+        CompiledCategoryMatcher {
+            name: cat.name.clone(),
+            color: cat.color.clone(),
+            is_case_sensitive: cat.is_case_sensitive,
+            title_re,
+            wm_class_re,
+        }
+    }).collect()
+}
+
+fn match_category(wm_class: &str, title: &str, categories: &[CompiledCategoryMatcher]) -> (String, String) {
     let wm_lower = wm_class.to_lowercase();
     let title_lower = title.to_lowercase();
 
     // First pass: title patterns
     for cat in categories {
-        if !cat.title_pattern.is_empty() {
-            let re = regex::RegexBuilder::new(&cat.title_pattern)
-                .case_insensitive(!cat.is_case_sensitive)
-                .build();
-            if let Ok(r) = re {
-                if r.is_match(if cat.is_case_sensitive { title } else { &title_lower }) {
-                    return (cat.name.clone(), cat.color.clone());
-                }
+        if let Some(r) = &cat.title_re {
+            if r.is_match(if cat.is_case_sensitive { title } else { &title_lower }) {
+                return (cat.name.clone(), cat.color.clone());
             }
         }
     }
 
     // Second pass: wm_class patterns
     for cat in categories {
-        if !cat.wm_class_pattern.is_empty() {
-            let re = regex::RegexBuilder::new(&cat.wm_class_pattern)
-                .case_insensitive(!cat.is_case_sensitive)
-                .build();
-            if let Ok(r) = re {
-                if r.is_match(if cat.is_case_sensitive { wm_class } else { &wm_lower }) {
-                    return (cat.name.clone(), cat.color.clone());
-                }
+        if let Some(r) = &cat.wm_class_re {
+            if r.is_match(if cat.is_case_sensitive { wm_class } else { &wm_lower }) {
+                return (cat.name.clone(), cat.color.clone());
             }
         }
     }
@@ -547,15 +577,10 @@ async fn static_handler(uri: Uri) -> impl IntoResponse {
         path = "index.html".to_string();
     }
 
-    // Try to find the dist folder in a few common locations
-    let possible_paths = [
-        format!("dashboards/dashboard-v2/dist/{}", path),
-        format!("../dashboards/dashboard-v2/dist/{}", path),
-        format!("../../dashboards/dashboard-v2/dist/{}", path),
-    ];
+    let possible_paths = get_static_candidates(&path);
 
     let is_asset = path.starts_with("assets/");
-    for p in possible_paths {
+    for p in &possible_paths {
         let dist_path = std::path::Path::new(&p);
         if let Ok(content) = std::fs::read(dist_path) {
             let mime = mime_guess::from_path(dist_path).first_or_octet_stream();
@@ -572,19 +597,16 @@ async fn static_handler(uri: Uri) -> impl IntoResponse {
         }
     }
     if is_asset {
+        tracing::warn!("Asset not found: {} (checked: {:?})", path, possible_paths);
         return (StatusCode::NOT_FOUND, "Asset not found").into_response();
     }
     index_html().await
 }
 
 async fn index_html() -> Response {
-    let possible_indices = [
-        "dashboards/dashboard-v2/dist/index.html",
-        "../dashboards/dashboard-v2/dist/index.html",
-        "../../dashboards/dashboard-v2/dist/index.html",
-    ];
+    let possible_indices = get_static_candidates("index.html");
 
-    for p in possible_indices {
+    for p in &possible_indices {
         if let Ok(content) = std::fs::read(p) {
             return Response::builder()
                 .header(header::CONTENT_TYPE, "text/html; charset=utf-8")
@@ -594,7 +616,24 @@ async fn index_html() -> Response {
         }
     }
 
+    tracing::error!("Static assets not found (checked: {:?})", possible_indices);
     (StatusCode::NOT_FOUND, "Static assets not found. Ensure dashboards/dashboard-v2/dist exists.").into_response()
+}
+
+fn get_static_candidates(path: &str) -> Vec<String> {
+    let mut candidates = Vec::new();
+    // 1) explicit override for deployment
+    if let Ok(dist) = std::env::var("ATRACKER_DASHBOARD_DIST") {
+        candidates.push(format!("{}/{}", dist.trim_end_matches('/'), path));
+    }
+    // 2) repository path relative to crate root at build time
+    let manifest_root = env!("CARGO_MANIFEST_DIR");
+    candidates.push(format!("{}/../dashboards/dashboard-v2/dist/{}", manifest_root, path));
+    // 3) relative to current working directory (legacy behavior)
+    candidates.push(format!("dashboards/dashboard-v2/dist/{}", path));
+    candidates.push(format!("../dashboards/dashboard-v2/dist/{}", path));
+    candidates.push(format!("../../dashboards/dashboard-v2/dist/{}", path));
+    candidates
 }
 
 async fn ws_handler(ws: WebSocketUpgrade, State(state): State<Arc<AppState>>) -> impl IntoResponse {

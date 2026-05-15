@@ -5,10 +5,11 @@ import SettingsView from './pages/SettingsView';
 import HistoryView from './pages/HistoryView';
 import DevicesView from './pages/DevicesView';
 import { useTracker } from './hooks/useTracker';
+import { formatLocalDateISO } from './utils/formatters';
 import './index.css';
 
 const App = () => {
-  const tracker = useTracker(new Date().toLocaleDateString('en-CA')); // YYYY-MM-DD
+  const tracker = useTracker(formatLocalDateISO());
 
   return (
     <Router>

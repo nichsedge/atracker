@@ -7,8 +7,7 @@ trigger: always_on
 - Both systems run in parallel to ensure stability.
 - After updating **Python** files: restart with `systemctl --user restart atracker`.
 - After updating **Rust** files:
-    1. Rebuild: `cargo build --release` (in `atracker-rs` directory)
-    2. Restart: `systemctl --user restart atracker-rs`
+    1. Run: `./scripts/deploy-rs-dashboard.sh`
 - After updating **Frontend** (Dashboard V2) files:
-    1. Rebuild: `npm run build` (in `dashboards/dashboard-v2` directory)
-    2. The Rust backend serves the static files from `dist/`.
+    1. Run: `./scripts/deploy-rs-dashboard.sh`
+    2. The Rust backend serves static files from `ATRACKER_DASHBOARD_DIST` (systemd env), defaulting to `dashboards/dashboard-v2/dist`.

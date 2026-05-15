@@ -1,21 +1,19 @@
 import { useState, useEffect } from 'react';
-import { Plus, Trash2, Edit2, Shield, Settings as SettingsIcon, Download, Upload, Smartphone, GitMerge, Info, Cpu } from 'lucide-react';
+import { Plus, Trash2, Edit2, Shield, Download, Upload, Smartphone, Cpu } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import CategoryModal from '../components/CategoryModal';
 import RuleModal from '../components/RuleModal';
 
 const SettingsView = ({ 
   categories, saveCategory, deleteCategory, 
   rules, saveRule, deleteRule, 
-  settings, saveSettings,
-  devices, merges, mergeDevice, deleteMerge 
+  settings, saveSettings
 }) => {
+  const navigate = useNavigate();
   const [isCatModalOpen, setIsCatModalOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState(null);
   const [isRuleModalOpen, setIsRuleModalOpen] = useState(false);
   const [tuningData, setTuningData] = useState(settings);
-  
-  const [originalId, setOriginalId] = useState('');
-  const [targetId, setTargetId] = useState('');
 
   useEffect(() => {
     setTuningData(settings);
@@ -29,24 +27,6 @@ const SettingsView = ({
   const handleAddCategory = () => {
     setEditingCategory(null);
     setIsCatModalOpen(true);
-  };
-
-  const handleMerge = (e) => {
-    e.preventDefault();
-    if (originalId && targetId && originalId !== targetId) {
-      const sourceName = devices.find(d => d.id === originalId)?.name || originalId;
-      const targetName = devices.find(d => d.id === targetId)?.name || targetId;
-      if (window.confirm(`Merge "${sourceName}" into "${targetName}"? This will move all data and link future events.`)) {
-        mergeDevice(originalId, targetId);
-        setOriginalId('');
-        setTargetId('');
-      }
-    }
-  };
-
-  const getDeviceName = (id) => {
-    const dev = devices.find(d => d.id === id);
-    return dev ? dev.name : id;
   };
 
   const handleExportCategories = () => {
@@ -174,35 +154,12 @@ const SettingsView = ({
             <div className="section-label" style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '1.25rem' }}>
               <Smartphone size={16} color="#64748b" /> DEVICES & MERGING
             </div>
-            <div className="item-list" style={{ marginBottom: '1.5rem' }}>
-              {merges.map(m => (
-                <div key={m.original_id} className="item-row" style={{ minWidth: 0, padding: '0.6rem 0', borderBottom: '1px dashed #e2e8f0' }}>
-                  <div className="item-info" style={{ fontSize: '0.85rem', flex: 1, minWidth: 0 }}>
-                    <GitMerge size={14} className="text-secondary" />
-                    <span style={{ fontWeight: 600 }}>{getDeviceName(m.original_id)}</span>
-                    <span style={{ color: '#94a3b8' }}>→</span>
-                    <span style={{ fontWeight: 600 }}>{getDeviceName(m.target_id)}</span>
-                  </div>
-                  <button className="btn-icon-soft" onClick={() => deleteMerge(m.original_id)} style={{ color: '#ef4444' }}><Trash2 size={14} /></button>
-                </div>
-              ))}
-            </div>
-
-            <form onSubmit={handleMerge} style={{ display: 'flex', flexDirection: 'column', gap: '1rem', background: '#f8fafc', padding: '1rem', borderRadius: '12px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-                <select className="date-picker" value={originalId} onChange={e => setOriginalId(e.target.value)} style={{ width: '100%', height: '40px' }}>
-                  <option value="">Merge From...</option>
-                  {devices.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-                </select>
-                <select className="date-picker" value={targetId} onChange={e => setTargetId(e.target.value)} style={{ width: '100%', height: '40px' }}>
-                  <option value="">Merge Into...</option>
-                  {devices.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-                </select>
-              </div>
-              <button className="btn-outline" type="submit" disabled={!originalId || !targetId || originalId === targetId} style={{ justifyContent: 'center' }}>
-                <GitMerge size={16} /> Link Devices
-              </button>
-            </form>
+            <p style={{ fontSize: '0.9rem', color: '#64748b', lineHeight: 1.5, marginBottom: '1rem' }}>
+              Device identity resolution is managed in a dedicated view.
+            </p>
+            <button className="btn-outline" onClick={() => navigate('/devices')} style={{ width: '100%', justifyContent: 'center', padding: '0.75rem' }}>
+              Open Device Management
+            </button>
           </section>
 
           <section className="glass-card" style={{ margin: 0 }}>

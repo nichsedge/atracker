@@ -18,6 +18,7 @@ pub struct Watcher {
     filter_rules: Arc<Mutex<Vec<db::FilterRule>>>,
     last_settings_refresh: Arc<Mutex<i64>>,
     last_poll_time: Arc<Mutex<Option<DateTime<Utc>>>>,
+    missing_window_since: Arc<Mutex<Option<DateTime<Utc>>>>,
 }
 
 pub struct CurrentEvent {
@@ -46,6 +47,7 @@ impl Watcher {
             filter_rules: Arc::new(Mutex::new(Vec::new())),
             last_settings_refresh: Arc::new(Mutex::new(0)),
             last_poll_time: Arc::new(Mutex::new(None)),
+            missing_window_since: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -119,7 +121,27 @@ impl Watcher {
 
         let window = self.get_active_window(conn).await?;
         if let Some(win) = window {
+            let mut missing = self.missing_window_since.lock().await;
+            *missing = None;
             return self.handle_window_change(win.wm_class, win.title, win.pid, false).await;
+        }
+
+        // Keep parity with atracker-py: if active window is unavailable for too long,
+        // flush the current event to avoid inflating previous app durations.
+        let now = Utc::now();
+        let mut missing = self.missing_window_since.lock().await;
+        match *missing {
+            None => {
+                *missing = Some(now);
+            }
+            Some(since) => {
+                if (now - since).num_seconds() >= 60 {
+                    let mut current = self.current_event.lock().await;
+                    if let Some(curr) = current.take() {
+                        self.flush_event_internal(curr, Some(now)).await?;
+                    }
+                }
+            }
         }
 
         Ok(None)
@@ -167,6 +189,11 @@ impl Watcher {
     }
 
     async fn flush_event_internal(&self, mut curr: CurrentEvent, end_time: Option<DateTime<Utc>>) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        // Keep parity with atracker-py: never persist events without wm_class.
+        if curr.wm_class.trim().is_empty() {
+            return Ok(());
+        }
+
         let end_ts = end_time.unwrap_or_else(Utc::now);
         let duration = (end_ts - curr.start_time).to_std().unwrap_or(std::time::Duration::ZERO).as_secs_f64();
 

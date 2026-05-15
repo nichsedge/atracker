@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { formatLocalDateISO } from '../utils/formatters';
 
 const API_BASE = window.location.origin;
 
@@ -20,6 +21,7 @@ export const useTracker = (initialDate) => {
   
   const hasLoadedRef = useRef(false);
   const isFetchingRef = useRef(false);
+  const lastWsRefreshMsRef = useRef(0);
 
   const fetchStaticData = useCallback(async () => {
     try {
@@ -36,10 +38,10 @@ export const useTracker = (initialDate) => {
       ]);
       
       setCategories(cats.categories || []);
-      setRules(rls);
-      setDevices(devs);
-      setSettings(sets);
-      setMerges(mrgs);
+      setRules(Array.isArray(rls) ? rls : []);
+      setDevices(Array.isArray(devs) ? devs : []);
+      setSettings(sets && typeof sets === 'object' ? sets : {});
+      setMerges(Array.isArray(mrgs) ? mrgs : []);
     } catch (err) {
       console.error('Static fetch error:', err);
     }
@@ -58,7 +60,6 @@ export const useTracker = (initialDate) => {
       const endpoints = [
         fetch(`${API_BASE}/api/summary?date=${date}${devicesParam}`),
         fetch(`${API_BASE}/api/timeline?date=${date}${devicesParam}`),
-        fetch(`${API_BASE}/api/history?days=14${devicesParam}`),
         fetch(`${API_BASE}/api/status`),
         fetch(`${API_BASE}/api/pause_status`)
       ];
@@ -66,11 +67,10 @@ export const useTracker = (initialDate) => {
       const responses = await Promise.all(endpoints);
       if (responses.some(r => !r.ok)) throw new Error('API request failed');
       
-      const [sumData, timeData, histData, statusData, pauseData] = await Promise.all(responses.map(r => r.json()));
+      const [sumData, timeData, statusData, pauseData] = await Promise.all(responses.map(r => r.json()));
 
       setSummary(sumData.summary || []);
       setTimeline(timeData.timeline || []);
-      setHistory(histData.history || []);
       setStatus(statusData);
       setIsPaused(pauseData.is_paused);
       if (statusData.current) setCurrentApp(statusData.current);
@@ -84,9 +84,25 @@ export const useTracker = (initialDate) => {
     }
   }, [date, selectedDevices]);
 
+  const fetchHistory = useCallback(async () => {
+    try {
+      const devicesParam = selectedDevices.length > 0 ? `&devices=${selectedDevices.join(',')}` : '';
+      const res = await fetch(`${API_BASE}/api/history?days=14${devicesParam}`);
+      if (!res.ok) throw new Error('History API request failed');
+      const data = await res.json();
+      setHistory(data.history || []);
+    } catch (err) {
+      console.error('History fetch error:', err);
+    }
+  }, [selectedDevices]);
+
   useEffect(() => {
     fetchStaticData();
   }, [fetchStaticData]);
+
+  useEffect(() => {
+    fetchHistory();
+  }, [fetchHistory]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -110,9 +126,13 @@ export const useTracker = (initialDate) => {
         } else if (data.timestamp) {
           setCurrentApp(data);
           // Refresh data if looking at today
-          const today = new Date().toLocaleDateString('en-CA');
+          const today = formatLocalDateISO();
           if (date === today) {
-             fetchData(true);
+            const now = Date.now();
+            if (now - lastWsRefreshMsRef.current >= 3000) {
+              lastWsRefreshMsRef.current = now;
+              fetchData(true);
+            }
           }
         }
       } catch (e) { console.error('WS Error:', e); }
@@ -123,6 +143,11 @@ export const useTracker = (initialDate) => {
       ws.close();
     };
   }, [date, fetchData]);
+
+  useEffect(() => {
+    const interval = setInterval(() => fetchHistory(), 60000);
+    return () => clearInterval(interval);
+  }, [fetchHistory]);
 
   const togglePause = async (minutes = 0) => {
     const endpoint = isPaused ? '/api/resume' : '/api/pause';

@@ -15,7 +15,7 @@ use tokio::time::{sleep, Duration};
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::registry()
         .with(tracing_subscriber::EnvFilter::new(
-            std::env::var("RUST_LOG").unwrap_or_else(|_| "atracker_rs=debug,info".into()),
+            std::env::var("RUST_LOG").unwrap_or_else(|_| "atracker_rs=info".into()),
         ))
         .with(tracing_subscriber::fmt::layer())
         .init();
@@ -76,14 +76,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
 
             if let Ok(current) = watcher_clone.run_once(effectively_paused).await {
+                let mut state_curr = watcher_state.current_tracking.lock().await;
                 if let Some(curr) = current {
-                    let mut state_curr = watcher_state.current_tracking.lock().await;
                     *state_curr = Some(serde_json::json!({
                         "wm_class": curr.wm_class,
                         "title": curr.title,
                         "timestamp": curr.timestamp,
                         "is_idle": curr.is_idle,
                     }));
+                } else {
+                    *state_curr = None;
                 }
             }
 

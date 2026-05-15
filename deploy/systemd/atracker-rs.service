@@ -10,6 +10,7 @@ Restart=on-failure
 RestartSec=5
 Environment=DISPLAY=:0
 Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/%U/bus
+Environment=ATRACKER_DASHBOARD_DIST=/home/al/Projects/atracker/dashboards/dashboard-v2/dist
 
 [Install]
 WantedBy=default.target
