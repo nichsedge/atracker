@@ -453,27 +453,26 @@ async def import_categories(data: CategoryImport, replace: bool = Query(False)):
     if replace:
         await db.clear_categories()
 
-    imported = 0
+    to_import = []
     for cat in data.categories:
         name = cat.get("name")
         pattern = cat.get("wm_class_pattern", "")
         title_pattern = cat.get("title_pattern", "")
-        color = cat.get("color", "#64748b")
-        goal = cat.get("daily_goal_secs", 0)
-        limit = cat.get("daily_limit_secs", 0)
-        is_cs = cat.get("is_case_sensitive", False)
 
         if name and (pattern or title_pattern):
-            await db.add_category(
-                name=name,
-                wm_class_pattern=pattern,
-                color=color,
-                title_pattern=title_pattern,
-                daily_goal_secs=goal,
-                daily_limit_secs=limit,
-                is_case_sensitive=is_cs,
-            )
-            imported += 1
+            to_import.append({
+                "name": name,
+                "wm_class_pattern": pattern,
+                "title_pattern": title_pattern,
+                "color": cat.get("color", "#64748b"),
+                "daily_goal_secs": cat.get("daily_goal_secs", 0),
+                "daily_limit_secs": cat.get("daily_limit_secs", 0),
+                "is_case_sensitive": cat.get("is_case_sensitive", False),
+            })
+
+    imported = 0
+    if to_import:
+        imported = await db.add_categories(to_import)
 
     return {"message": f"Imported {imported} categories."}
 
