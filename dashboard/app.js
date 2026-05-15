@@ -244,7 +244,7 @@ function renderGoals(summary) {
 
             let html = `<div class="goal-row">
                 <div class="goal-header">
-                    <div class="goal-name"><span class="category-color-small" style="background: ${cat.color}; width: 10px; height: 10px; border-radius: 50%; display: inline-block;"></span> ${escapeHtml(cat.name)}</div>
+                    <div class="goal-name"><span class="category-color-small" style="background: ${escapeHtml(cat.color)}; width: 10px; height: 10px; border-radius: 50%; display: inline-block;"></span> ${escapeHtml(cat.name)}</div>
                     <div class="goal-status">`;
 
             if (cat.daily_goal_secs > 0) {
@@ -253,7 +253,7 @@ function renderGoals(summary) {
                 const barColor = pct >= 100 ? '#10b981' : cat.color;
                 html += `</div></div>
                     <div class="goal-bar-container">
-                        <div class="goal-bar" style="width: ${pct}%; background: ${barColor}"></div>
+                        <div class="goal-bar" style="width: ${pct}%; background: ${escapeHtml(barColor)}"></div>
                     </div>`;
             } else if (cat.daily_limit_secs > 0) {
                 const pct = (usageSecs / cat.daily_limit_secs * 100).toFixed(0);
@@ -262,7 +262,7 @@ function renderGoals(summary) {
                 const barColor = isOver ? '#ef4444' : cat.color;
                 html += `</div></div>
                     <div class="goal-bar-container">
-                        <div class="goal-bar ${isOver ? 'over-limit' : ''}" style="width: ${Math.min(100, pct)}%; background: ${barColor}"></div>
+                        <div class="goal-bar ${isOver ? 'over-limit' : ''}" style="width: ${Math.min(100, pct)}%; background: ${escapeHtml(barColor)}"></div>
                     </div>`;
             }
 
@@ -303,11 +303,11 @@ function generateGroupedSummaryHtml(summary) {
                         <polyline points="9 18 15 12 9 6"></polyline>
                     </svg>
                 </div>
-                <div class="usage-color" style="background: ${cat.color}; width: 12px; height: 12px; border-radius: 50%;"></div>
+                <div class="usage-color" style="background: ${escapeHtml(cat.color)}; width: 12px; height: 12px; border-radius: 50%;"></div>
                 <div class="usage-info">
                     <div class="usage-app-name" style="font-weight: 600;">${escapeHtml(cat.name)}</div>
                     <div class="usage-bar-container" style="background: rgba(255,255,255,0.03);">
-                        <div class="usage-bar" style="width: ${(cat.total_secs / Math.max(1, maxCategorySecs) * 100).toFixed(1)}%; background: ${cat.color}; height: 4px;"></div>
+                        <div class="usage-bar" style="width: ${(cat.total_secs / Math.max(1, maxCategorySecs) * 100).toFixed(1)}%; background: ${escapeHtml(cat.color)}; height: 4px;"></div>
                     </div>
                 </div>
                 <div class="usage-time" style="font-weight: 600;">${formatDuration(cat.total_secs)}</div>
@@ -380,7 +380,7 @@ function renderTimeline(timeline) {
 
         return `
             <div class="timeline-block ${isIdle ? 'idle' : ''}"
-                 style="left: ${left}%; width: ${width}%; background: ${block.color || '#64748b'}"
+                 style="left: ${left}%; width: ${width}%; background: ${escapeHtml(block.color || '#64748b')}"
                  data-app="${escapeHtml(label)}"
                  data-time="${startLabel} — ${endLabel} (${durationMin}m)">
             </div>
@@ -428,7 +428,9 @@ function updateNowTracking(timeline) {
         document.getElementById('now-app').textContent = last.wm_class || 'Unknown';
         document.getElementById('now-title').textContent = last.title || '—';
         document.getElementById('now-icon').textContent = getAppEmoji(last.wm_class);
-        document.getElementById('now-icon').style.background = `linear-gradient(135deg, ${last.color || '#3b82f6'}, ${last.color || '#8b5cf6'}80)`;
+        const color1 = last.color || '#3b82f6';
+        const color2 = addAlphaToHex(last.color || '#8b5cf6', '80');
+        document.getElementById('now-icon').style.background = `linear-gradient(135deg, ${escapeHtml(color1)}, ${escapeHtml(color2)})`;
         document.getElementById('now-duration').textContent = formatDuration(last.duration_secs);
     }
 }
@@ -613,7 +615,7 @@ function renderCategories(categories) {
 
     container.innerHTML = categories.map(cat => `
         <div class="category-row">
-            <div class="category-color" style="background: ${cat.color}"></div>
+            <div class="category-color" style="background: ${escapeHtml(cat.color)}"></div>
             <div class="category-info">
                 <div class="category-name">${escapeHtml(cat.name)} ${cat.is_case_sensitive ? '<span class="badge-cs">CS</span>' : ''}</div>
                 <div class="category-patterns">
@@ -1180,6 +1182,15 @@ function escapeHtml(str) {
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
+}
+
+function addAlphaToHex(hex, alphaHex) {
+    if (!hex || !hex.startsWith('#')) return hex;
+    let h = hex.substring(1);
+    if (h.length === 3) {
+        h = h.split('').map(c => c + c).join('');
+    }
+    return `#${h}${alphaHex}`;
 }
 
 function clearRegexErrors() {
