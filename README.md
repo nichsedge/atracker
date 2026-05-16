@@ -32,8 +32,8 @@ cargo build --release
 
 # Build the React dashboard
 cd ../dashboards/dashboard-v2
-npm install
-npm run build
+bun install
+bun run build
 ```
 
 ### 2. Start the Service

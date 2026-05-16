@@ -7,7 +7,8 @@ RUST_DIR="$ROOT_DIR/atracker-rs"
 
 printf "[1/4] Building dashboard-v2...\n"
 cd "$FRONTEND_DIR"
-npm run build
+bun install
+bun run build
 
 printf "[2/4] Building atracker-rs release...\n"
 cd "$RUST_DIR"
