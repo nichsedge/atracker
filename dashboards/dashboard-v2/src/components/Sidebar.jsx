@@ -29,7 +29,7 @@ const Sidebar = ({ status = {}, devices = [], selectedDevices, setSelectedDevice
   return (
     <aside className="sidebar" style={{ background: '#ffffff', boxShadow: '1px 0 10px rgba(0,0,0,0.02)' }}>
       <div className="sidebar-brand" style={{ padding: '2rem 1.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-        <div style={{ width: 32, height: 32, background: 'var(--accent-color)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyCenter: 'center', color: 'white', fontWeight: 900, fontSize: '1.2rem' }}>A</div>
+        <img src="/logo.png" style={{ width: 32, height: 32, borderRadius: 8 }} alt="Atracker Logo" />
         <div style={{ display: 'flex', flexDirection: 'column' }}>
           <span style={{ fontSize: '1.1rem', fontWeight: 800, color: '#1e293b', lineHeight: 1 }}>Atracker</span>
           <span style={{ fontSize: '0.65rem', fontWeight: 700, color: '#94a3b8', letterSpacing: '0.05em' }}>QUANTIFIED SELF</span>
