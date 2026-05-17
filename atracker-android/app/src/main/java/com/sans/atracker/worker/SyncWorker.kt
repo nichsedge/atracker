@@ -2,8 +2,12 @@ package com.sans.atracker.worker
 
 import android.content.Context
 import androidx.hilt.work.HiltWorker
+import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.Data
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.sans.atracker.data.repository.EventRepository
@@ -22,6 +26,7 @@ import io.ktor.http.isSuccess
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.util.concurrent.TimeUnit
 
 @HiltWorker
 class SyncWorker @AssistedInject constructor(
@@ -41,6 +46,15 @@ class SyncWorker @AssistedInject constructor(
             .withZone(ZoneId.systemDefault())
 
     override suspend fun doWork(): Result {
+        val connectivityManager = appContext.getSystemService(Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+        val activeNetwork = connectivityManager.activeNetwork
+        val networkCapabilities = connectivityManager.getNetworkCapabilities(activeNetwork)
+        val isConnected = networkCapabilities?.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
+
+        if (!isConnected) {
+            return Result.retry()
+        }
+
         return try {
             val baseUrl = settingsRepository.getBackendUrl().trimEnd('/')
             if (baseUrl.isBlank()) {
@@ -118,6 +132,25 @@ class SyncWorker @AssistedInject constructor(
 
     companion object {
         private const val SYNC_WORK_NAME = "atracker_auto_sync"
+
+        fun scheduleAutoSync(context: Context) {
+            val constraints = Constraints.Builder()
+                .setRequiredNetworkType(NetworkType.UNMETERED)
+                .setRequiresCharging(true)
+                .build()
+
+            val syncRequest = PeriodicWorkRequestBuilder<SyncWorker>(
+                4, TimeUnit.HOURS
+            )
+                .setConstraints(constraints)
+                .build()
+
+            WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+                SYNC_WORK_NAME,
+                ExistingPeriodicWorkPolicy.KEEP,
+                syncRequest
+            )
+        }
 
         fun cancelAutoSync(context: Context) {
             WorkManager.getInstance(context).cancelUniqueWork(SYNC_WORK_NAME)

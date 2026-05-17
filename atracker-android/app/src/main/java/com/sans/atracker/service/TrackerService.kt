@@ -16,6 +16,7 @@ import androidx.core.app.NotificationCompat
 import com.sans.atracker.data.local.Event
 import com.sans.atracker.data.repository.EventRepository
 import com.sans.atracker.receiver.ServiceRestartReceiver
+import com.sans.atracker.data.repository.SettingsRepository
 import com.sans.atracker.ui.MainActivity
 import com.sans.atracker.util.AppLabelProvider
 import dagger.hilt.android.AndroidEntryPoint
@@ -41,6 +42,9 @@ class TrackerService : Service() {
     @Inject
     lateinit var appLabelProvider: AppLabelProvider
 
+    @Inject
+    lateinit var settingsRepository: SettingsRepository
+
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var pollingJob: Job? = null
 
@@ -48,6 +52,8 @@ class TrackerService : Service() {
     private var currentStartTime: Long = 0L
     private var isIdle: Boolean = false
     private var lastQueryTime: Long = 0L
+    private var ignoredPackages = setOf<String>()
+    private var customExcludedPackages = setOf<String>()
 
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -67,6 +73,14 @@ class TrackerService : Service() {
         // so this alarm fires even after our process is killed by "Clear All".
         ServiceRestartReceiver.schedule(this)
 
+        ignoredPackages = getIgnoredSystemPackages()
+
+        serviceScope.launch {
+            settingsRepository.excludedPackagesFlow.collect { packages ->
+                customExcludedPackages = packages
+            }
+        }
+
         val filter = IntentFilter().apply {
             addAction(Intent.ACTION_SCREEN_OFF)
             addAction(Intent.ACTION_SCREEN_ON)
@@ -76,6 +90,19 @@ class TrackerService : Service() {
         startPolling()
     }
 
+    private fun getIgnoredSystemPackages(): Set<String> {
+        val pm = packageManager
+        val intent = Intent(Intent.ACTION_MAIN).apply {
+            addCategory(Intent.CATEGORY_HOME)
+        }
+        val launchers = try {
+            pm.queryIntentActivities(intent, 0).map { it.activityInfo.packageName }.toSet()
+        } catch (e: Exception) {
+            emptySet()
+        }
+        return launchers + setOf(packageName, "com.android.systemui", "com.android.settings")
+    }
+
     private fun startPolling() {
         pollingJob = serviceScope.launch {
             while (isActive) {
@@ -83,8 +110,13 @@ class TrackerService : Service() {
                     val now = System.currentTimeMillis()
                     val foregroundEvent = getForegroundApp(lastQueryTime, now)
                     lastQueryTime = now
-                    if (foregroundEvent != null && foregroundEvent.packageName != currentPackage) {
-                        flushPreviousEvent(foregroundEvent.packageName, foregroundEvent.timestamp)
+                    if (foregroundEvent != null) {
+                        val pkg = foregroundEvent.packageName
+                        val isIgnored = ignoredPackages.contains(pkg) || customExcludedPackages.contains(pkg)
+                        val mappedPkg = if (isIgnored) "__idle__" else pkg
+                        if (mappedPkg != currentPackage) {
+                            flushPreviousEvent(mappedPkg, foregroundEvent.timestamp)
+                        }
                     }
                 }
                 delay(15_000)

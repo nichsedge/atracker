@@ -74,14 +74,16 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         lifecycleScope.launch {
-            SyncWorker.cancelAutoSync(this@MainActivity)
             if (settingsRepository.isTrackingEnabled()) {
                 WatchdogWorker.schedule(this@MainActivity)
                 ServiceRestartReceiver.schedule(this@MainActivity)
+                SyncWorker.scheduleAutoSync(this@MainActivity)
 
                 if (!serviceStateManager.isServiceRunningFlow.value) {
                     handleStartTracking()
                 }
+            } else {
+                SyncWorker.cancelAutoSync(this@MainActivity)
             }
         }
 
@@ -203,6 +205,7 @@ class MainActivity : ComponentActivity() {
         viewModel.setTrackingEnabled(true)
         WatchdogWorker.schedule(this)
         ServiceRestartReceiver.schedule(this)
+        SyncWorker.scheduleAutoSync(this)
         updatePermissions()
         Toast.makeText(this, "Tracker Started", Toast.LENGTH_SHORT).show()
     }

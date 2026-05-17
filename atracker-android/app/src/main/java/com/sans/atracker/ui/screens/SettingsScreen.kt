@@ -15,11 +15,25 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.BatteryChargingFull
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -155,6 +169,105 @@ fun SettingsScreen(
                         steps = 22, // intervals of 30 mins: (720-30)/30 - 1 = 22
                         modifier = Modifier.fillMaxWidth()
                     )
+                }
+            }
+
+            // App Exclusions Section
+            Column {
+                SectionHeader("App Exclusions")
+                AtrackerCard {
+                    Text(
+                        "Custom Blocklist",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        "Prevent specific apps from being tracked",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.secondary
+                    )
+
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    var newPackageInput by remember { mutableStateOf("") }
+                    val keyboardController = LocalSoftwareKeyboardController.current
+
+                    OutlinedTextField(
+                        value = newPackageInput,
+                        onValueChange = { newPackageInput = it },
+                        label = { Text("Add Package Name") },
+                        placeholder = { Text("e.g. com.android.chrome") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = MaterialTheme.shapes.medium,
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                        keyboardActions = KeyboardActions(onDone = {
+                            if (newPackageInput.isNotBlank()) {
+                                viewModel.addExcludedPackage(newPackageInput)
+                                newPackageInput = ""
+                            }
+                            keyboardController?.hide()
+                        }),
+                        trailingIcon = {
+                            IconButton(onClick = {
+                                if (newPackageInput.isNotBlank()) {
+                                    viewModel.addExcludedPackage(newPackageInput)
+                                    newPackageInput = ""
+                                }
+                                keyboardController?.hide()
+                            }) {
+                                Icon(
+                                    Icons.Default.Add,
+                                    contentDescription = "Add Exclusion",
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+                    )
+
+                    if (state.excludedPackages.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        state.excludedPackages.sorted().forEach { pkg ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = viewModel.getAppLabel(pkg),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                    Text(
+                                        text = pkg,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.secondary
+                                    )
+                                }
+                                IconButton(
+                                    onClick = { viewModel.toggleExcludedPackage(pkg) },
+                                    modifier = Modifier.size(36.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Delete,
+                                        contentDescription = "Remove",
+                                        tint = MaterialTheme.colorScheme.error.copy(alpha = 0.8f),
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                        }
+                    } else {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            "No custom excluded apps",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.secondary
+                        )
+                    }
                 }
             }
 

@@ -3,7 +3,11 @@ package com.sans.atracker.ui.screens
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInHorizontally
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -516,6 +520,16 @@ fun UsageSummaryCard(totalSecs: Double, dailyGoalMinutes: Int) {
 fun UsageHeatmap(hourlyUsage: List<Double>) {
     val maxUsage = hourlyUsage.maxOfOrNull { it } ?: 1.0
     val normalized = hourlyUsage.map { if (maxUsage > 0) it / maxUsage else 0.0 }
+    var selectedHour by remember { mutableStateOf<Int?>(null) }
+
+    fun formatHour(hour: Int): String {
+        return when {
+            hour == 0 -> "12 AM"
+            hour < 12 -> "$hour AM"
+            hour == 12 -> "12 PM"
+            else -> "${hour - 12} PM"
+        }
+    }
 
     AtrackerCard(
         modifier = Modifier
@@ -538,8 +552,11 @@ fun UsageHeatmap(hourlyUsage: List<Double>) {
                 horizontalArrangement = Arrangement.spacedBy(3.dp),
                 verticalAlignment = Alignment.Bottom
             ) {
-                normalized.forEachIndexed { _, intensity ->
-                    val color = if (intensity > 0) {
+                normalized.forEachIndexed { index, intensity ->
+                    val isSelected = selectedHour == index
+                    val color = if (isSelected) {
+                        MaterialTheme.colorScheme.tertiary
+                    } else if (intensity > 0) {
                         MaterialTheme.colorScheme.primary.copy(alpha = (0.2f + (intensity * 0.8f)).toFloat())
                     } else {
                         MaterialTheme.colorScheme.secondary.copy(alpha = 0.05f)
@@ -549,8 +566,14 @@ fun UsageHeatmap(hourlyUsage: List<Double>) {
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxHeight((intensity.coerceAtLeast(0.1)).toFloat())
-                            .clip(RoundedCornerShape(1.dp))
+                            .clip(RoundedCornerShape(2.dp))
                             .background(color)
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null
+                            ) {
+                                selectedHour = if (isSelected) null else index
+                            }
                     )
                 }
             }
@@ -584,6 +607,45 @@ fun UsageHeatmap(hourlyUsage: List<Double>) {
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.secondary
                 )
+            }
+
+            AnimatedVisibility(
+                visible = selectedHour != null,
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically()
+            ) {
+                if (selectedHour != null) {
+                    val hr = selectedHour!!
+                    val secs = hourlyUsage[hr]
+                    val nextHr = (hr + 1) % 24
+                    val label = "${formatHour(hr)} – ${formatHour(nextHr)}"
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 16.dp)
+                            .background(
+                                color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.08f),
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = label,
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.secondary
+                        )
+                        Text(
+                            text = if (secs > 0) formatDuration(secs) else "No activity",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Black,
+                            color = if (secs > 0) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.secondary
+                        )
+                    }
+                }
             }
         }
     }

@@ -9,6 +9,7 @@ import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
@@ -38,6 +39,10 @@ interface SettingsRepository {
 
     val deviceIdFlow: Flow<String>
     suspend fun getDeviceId(): String
+
+    val excludedPackagesFlow: Flow<Set<String>>
+    suspend fun setExcludedPackages(packages: Set<String>)
+    suspend fun getExcludedPackages(): Set<String>
 }
 
 class SettingsRepositoryImpl(
@@ -50,6 +55,7 @@ class SettingsRepositoryImpl(
         val LAST_SYNC_TIME = longPreferencesKey("last_sync_time")
         val DAILY_GOAL_MINUTES = intPreferencesKey("daily_goal_minutes")
         val DEVICE_ID = stringPreferencesKey("device_id")
+        val EXCLUDED_PACKAGES = stringSetPreferencesKey("excluded_packages")
     }
 
     override val backendUrlFlow: Flow<String> = dataStore.data
@@ -154,4 +160,24 @@ class SettingsRepositoryImpl(
         }
         return newId
     }
+
+    override val excludedPackagesFlow: Flow<Set<String>> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.EXCLUDED_PACKAGES] ?: emptySet()
+        }
+
+    override suspend fun setExcludedPackages(packages: Set<String>) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.EXCLUDED_PACKAGES] = packages
+        }
+    }
+
+    override suspend fun getExcludedPackages(): Set<String> = excludedPackagesFlow.first()
 }

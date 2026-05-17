@@ -54,7 +54,8 @@ data class MainUiState(
     val todayUsage: List<TodayAppUsage> = emptyList(),
     val hourlyUsage: List<Double> = List(24) { 0.0 },
     val history: List<DayUsage> = emptyList(),
-    val dailyGoalMinutes: Int = 240
+    val dailyGoalMinutes: Int = 240,
+    val excludedPackages: Set<String> = emptySet()
 )
 
 @HiltViewModel
@@ -95,6 +96,11 @@ class MainViewModel @Inject constructor(
         viewModelScope.launch {
             serviceStateManager.isServiceRunningFlow.collect { isRunning ->
                 _uiState.update { it.copy(isTrackerRunning = isRunning) }
+            }
+        }
+        viewModelScope.launch {
+            settingsRepository.excludedPackagesFlow.collect { packages ->
+                _uiState.update { it.copy(excludedPackages = packages) }
             }
         }
         viewModelScope.launch {
@@ -307,5 +313,30 @@ class MainViewModel @Inject constructor(
                 isSyncSuccess = success
             )
         }
+    }
+
+    fun toggleExcludedPackage(packageName: String) {
+        viewModelScope.launch {
+            val current = settingsRepository.getExcludedPackages()
+            val next = if (current.contains(packageName)) {
+                current - packageName
+            } else {
+                current + packageName
+            }
+            settingsRepository.setExcludedPackages(next)
+        }
+    }
+
+    fun addExcludedPackage(packageName: String) {
+        val trimmed = packageName.trim()
+        if (trimmed.isEmpty()) return
+        viewModelScope.launch {
+            val current = settingsRepository.getExcludedPackages()
+            settingsRepository.setExcludedPackages(current + trimmed)
+        }
+    }
+
+    fun getAppLabel(packageName: String): String {
+        return appLabelProvider.getAppLabel(packageName)
     }
 }
