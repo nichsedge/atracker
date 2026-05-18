@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { Smartphone, GitMerge, Trash2, Plus, Info } from 'lucide-react';
+import { Smartphone, GitMerge, Trash2, Plus, Info, Edit2 } from 'lucide-react';
 
-const DevicesView = ({ devices, merges, mergeDevice, deleteMerge }) => {
+const DevicesView = ({ devices, merges, mergeDevice, deleteMerge, renameDevice }) => {
   const [originalId, setOriginalId] = useState('');
   const [targetId, setTargetId] = useState('');
 
@@ -16,17 +16,44 @@ const DevicesView = ({ devices, merges, mergeDevice, deleteMerge }) => {
     }
   };
 
+  const handleRename = (id, currentName) => {
+    const defaultName = currentName.endsWith(' (*)') ? currentName.slice(0, -4) : currentName;
+    const newName = window.prompt(`Rename device (ID: ${id}):`, defaultName);
+    if (newName !== null) {
+      const trimmed = newName.trim();
+      if (trimmed) {
+        renameDevice(id, trimmed);
+      }
+    }
+  };
+
   const getDeviceName = (id) => {
     const dev = devices.find(d => d.id === id);
     return dev ? dev.name : id;
+  };
+
+  const formatLastSeen = (ts) => {
+    if (!ts) return 'Never';
+    try {
+      const date = new Date(ts);
+      if (isNaN(date.getTime())) return ts;
+      return date.toLocaleString(undefined, {
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch (e) {
+      return ts;
+    }
   };
 
   return (
     <div className="view-content fade-in" style={{ maxWidth: '1200px', margin: '0 auto' }}>
       <header className="main-header" style={{ marginBottom: '2.5rem' }}>
         <div className="header-title">
-          <h1 style={{ fontSize: '2.25rem', fontWeight: 900, letterSpacing: '-0.03em', color: '#0f172a' }}>Device Management</h1>
-          <p style={{ fontSize: '1rem', color: '#64748b', fontWeight: 500 }}>Monitor active trackers and resolve duplicate identities</p>
+          <h1 style={{ fontSize: '2.25rem', fontWeight: 900, fontFamily: "'Outfit', sans-serif", letterSpacing: '-0.03em', color: 'var(--text-primary)' }}>Device Management</h1>
+          <p style={{ fontSize: '1rem', color: 'var(--text-secondary)', fontWeight: 500 }}>Monitor active trackers and resolve duplicate identities</p>
         </div>
       </header>
 
@@ -36,19 +63,36 @@ const DevicesView = ({ devices, merges, mergeDevice, deleteMerge }) => {
             <div className="section-label">ACTIVE TRACKING SOURCES</div>
             <div className="item-list">
               {Array.isArray(devices) && devices.map((dev) => (
-                <div key={dev.id} className="item-row" style={{ padding: '1rem 0', borderBottom: '1px solid #f1f5f9' }}>
+                <div key={dev.id} className="item-row" style={{ padding: '1rem 0', borderBottom: '1px solid var(--border-subtle)' }}>
                   <div className="item-info">
-                    <div style={{ width: 40, height: 40, background: '#eff6ff', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#2563eb' }}>
+                    <div style={{ width: 40, height: 40, background: 'var(--accent-light)', border: '1px solid rgba(99, 102, 241, 0.15)', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent-color)' }}>
                       <Smartphone size={20} />
                     </div>
                     <div>
-                      <div style={{ fontWeight: 700, color: '#1e293b' }}>{dev.name}</div>
-                      <div className="pattern" style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{dev.platform} • ID: {dev.id}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <div style={{ fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Outfit', sans-serif" }}>{dev.name}</div>
+                        <button 
+                          className="btn-icon-soft" 
+                          onClick={() => handleRename(dev.id, dev.name)} 
+                          title="Rename device"
+                          style={{ padding: '2px', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                        >
+                          <Edit2 size={12} />
+                        </button>
+                      </div>
+                      <div className="pattern" style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{dev.platform} • ID: {dev.id}</div>
                     </div>
                   </div>
-                  <div className="status-indicator">
-                    <div className="status-dot running"></div>
-                    <span style={{ fontWeight: 700, fontSize: '0.7rem', color: '#10b981', textTransform: 'uppercase' }}>Active</span>
+                  <div className="status-indicator" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <div className="status-dot running"></div>
+                      <span style={{ fontWeight: 700, fontSize: '0.7rem', color: 'var(--success-color)', textTransform: 'uppercase' }}>Active</span>
+                    </div>
+                    {dev.last_seen && (
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 500, opacity: 0.8 }}>
+                        Last sync: {formatLastSeen(dev.last_seen)}
+                      </span>
+                    )}
                   </div>
                 </div>
               ))}
@@ -57,14 +101,14 @@ const DevicesView = ({ devices, merges, mergeDevice, deleteMerge }) => {
           </section>
 
           <section className="glass-card" style={{ margin: 0 }}>
-            <div className="section-label">IDENTITIY MERGE RULES</div>
+            <div className="section-label">IDENTITY MERGE RULES</div>
             <div className="item-list">
               {Array.isArray(merges) && merges.map((m) => (
-                <div key={m.original_id} className="item-row" style={{ padding: '0.75rem 0', borderBottom: '1px dashed #e2e8f0' }}>
+                <div key={m.original_id} className="item-row" style={{ padding: '0.75rem 0', borderBottom: '1px solid var(--border-subtle)' }}>
                   <div className="item-info">
-                    <GitMerge size={16} className="text-secondary" />
-                    <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>
-                      {getDeviceName(m.original_id)} <span style={{ color: '#94a3b8', margin: '0 4px' }}>→</span> {getDeviceName(m.target_id)}
+                    <GitMerge size={16} className="text-secondary" style={{ color: 'var(--accent-color)' }} />
+                    <div style={{ fontWeight: 600, fontSize: '0.9rem', color: 'var(--text-primary)' }}>
+                      {getDeviceName(m.original_id)} <span style={{ color: 'var(--text-secondary)', margin: '0 4px', opacity: 0.5 }}>→</span> {getDeviceName(m.target_id)}
                     </div>
                   </div>
                   <button className="btn-icon-soft" onClick={() => deleteMerge(m.original_id)} style={{ color: '#ef4444' }}>
@@ -73,7 +117,7 @@ const DevicesView = ({ devices, merges, mergeDevice, deleteMerge }) => {
                 </div>
               ))}
               {merges.length === 0 && (
-                <div style={{ textAlign: 'center', padding: '2rem 0', background: '#f8fafc', borderRadius: 12, color: '#94a3b8' }}>
+                <div style={{ textAlign: 'center', padding: '2rem 0', background: 'rgba(255,255,255,0.01)', border: '1px dashed var(--border-color)', borderRadius: 12, color: 'var(--text-secondary)' }}>
                   <Info size={24} style={{ marginBottom: '0.5rem', opacity: 0.5 }} />
                   <p style={{ fontSize: '0.85rem' }}>No merge rules defined.</p>
                 </div>
@@ -84,24 +128,24 @@ const DevicesView = ({ devices, merges, mergeDevice, deleteMerge }) => {
 
         <section className="glass-card" style={{ margin: 0, height: 'fit-content' }}>
           <div className="section-label" style={{ marginBottom: '1.5rem' }}>RESOLVE DUPLICATES</div>
-          <p style={{ fontSize: '0.9rem', color: '#64748b', lineHeight: 1.5, marginBottom: '2rem' }}>
+          <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: '2rem' }}>
             If a single physical device appears with multiple IDs (e.g. after a reinstall), select them below to merge their history into one identity.
           </p>
           
           <form onSubmit={handleMerge} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
             <div className="form-group">
-              <label style={{ fontSize: '0.75rem', fontWeight: 800, color: '#64748b', marginBottom: '0.5rem', display: 'block' }}>MERGE FROM (LEGACY ID)</label>
-              <select className="date-picker" value={originalId} onChange={(e) => setOriginalId(e.target.value)} style={{ width: '100%', height: '48px', fontWeight: 600 }}>
-                <option value="">Select source device...</option>
-                {Array.isArray(devices) && devices.map(d => <option key={d.id} value={d.id}>{d.name} ({d.id})</option>)}
+              <label style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text-secondary)', marginBottom: '0.5rem', display: 'block' }}>MERGE FROM (LEGACY ID)</label>
+              <select className="date-picker" value={originalId} onChange={(e) => setOriginalId(e.target.value)} style={{ width: '100%', height: '48px', fontWeight: 600, background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '0 1rem' }}>
+                <option value="" style={{ background: '#0b1120', color: 'var(--text-secondary)' }}>Select source device...</option>
+                {Array.isArray(devices) && devices.map(d => <option key={d.id} value={d.id} style={{ background: '#0b1120', color: 'var(--text-primary)' }}>{d.name} ({d.id})</option>)}
               </select>
             </div>
 
             <div className="form-group">
-              <label style={{ fontSize: '0.75rem', fontWeight: 800, color: '#64748b', marginBottom: '0.5rem', display: 'block' }}>MERGE INTO (PRIMARY ID)</label>
-              <select className="date-picker" value={targetId} onChange={(e) => setTargetId(e.target.value)} style={{ width: '100%', height: '48px', fontWeight: 600 }}>
-                <option value="">Select target device...</option>
-                {Array.isArray(devices) && devices.map(d => <option key={d.id} value={d.id}>{d.name} ({d.id})</option>)}
+              <label style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text-secondary)', marginBottom: '0.5rem', display: 'block' }}>MERGE INTO (PRIMARY ID)</label>
+              <select className="date-picker" value={targetId} onChange={(e) => setTargetId(e.target.value)} style={{ width: '100%', height: '48px', fontWeight: 600, background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '0 1rem' }}>
+                <option value="" style={{ background: '#0b1120', color: 'var(--text-secondary)' }}>Select target device...</option>
+                {Array.isArray(devices) && devices.map(d => <option key={d.id} value={d.id} style={{ background: '#0b1120', color: 'var(--text-primary)' }}>{d.name} ({d.id})</option>)}
               </select>
             </div>
 
@@ -119,8 +163,8 @@ const DevicesView = ({ devices, merges, mergeDevice, deleteMerge }) => {
       </div>
       
       <style dangerouslySetInnerHTML={{ __html: `
-        .btn-icon-soft { background: transparent; border: none; padding: 0.5rem; border-radius: 8px; cursor: pointer; color: #94a3b8; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
-        .btn-icon-soft:hover { background: #f1f5f9; color: var(--accent-color); }
+        .btn-icon-soft { background: transparent; border: none; padding: 0.5rem; border-radius: 8px; cursor: pointer; color: var(--text-secondary); display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
+        .btn-icon-soft:hover { background: rgba(255,255,255,0.05); color: var(--accent-color); }
       `}} />
     </div>
   );

@@ -28,9 +28,12 @@ pub struct AndroidEvent {
     pub duration_secs: f64,
     pub is_idle: bool,
     pub source_type: String,
-    pub domain: String,
-    pub page_title: String,
-    pub browser_package: String,
+    #[serde(default)]
+    pub domain: Option<String>,
+    #[serde(default)]
+    pub page_title: Option<String>,
+    #[serde(default)]
+    pub browser_package: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, sqlx::FromRow, Clone)]
@@ -629,22 +632,27 @@ pub async fn prune_events(pool: &SqlitePool, days_to_keep: i64) -> Result<u64, s
 // --- Devices ---
 pub async fn get_devices(pool: &SqlitePool) -> Vec<serde_json::Value> {
     let local_id = get_local_device_id();
+    let now_ts = Local::now().to_rfc3339();
     let rows = sqlx::query(
         "SELECT ids.device_id, 
                COALESCE(NULLIF(d.name, ''), d.platform, 
                         CASE WHEN ids.device_id LIKE 'android-%' THEN 'Android Device' 
                              ELSE 'Local Device' END) as name,
-               d.platform
+               d.platform,
+               COALESCE(d.last_seen, ids.max_ts) as last_seen
         FROM (
-            SELECT device_id FROM events
-            UNION
-            SELECT device_id FROM android_events
-            UNION
-            SELECT ? -- ensure local device is always included
+            SELECT device_id, MAX(max_ts) as max_ts FROM (
+                SELECT device_id, MAX(timestamp) as max_ts FROM events GROUP BY device_id
+                UNION ALL
+                SELECT device_id, MAX(timestamp) as max_ts FROM android_events GROUP BY device_id
+                UNION ALL
+                SELECT ? as device_id, ? as max_ts
+            ) GROUP BY device_id
         ) ids
         LEFT JOIN devices d ON ids.device_id = d.id"
     )
     .bind(&local_id)
+    .bind(&now_ts)
     .fetch_all(pool)
     .await
     .unwrap_or_default();
@@ -654,12 +662,14 @@ pub async fn get_devices(pool: &SqlitePool) -> Vec<serde_json::Value> {
             let device_id: String = row.get("device_id");
             let name: String = row.get("name");
             let platform: String = row.get::<Option<String>, _>("platform").unwrap_or_else(|| "Unknown".to_string());
+            let last_seen: Option<String> = row.get("last_seen");
             let label = if device_id == local_id { format!("{} (*)", name) } else { name };
             serde_json::json!({ 
                 "id": device_id, 
                 "device_id": device_id, 
                 "name": label,
-                "platform": platform
+                "platform": platform,
+                "last_seen": last_seen
             })
         })
         .collect()
@@ -735,12 +745,34 @@ pub async fn update_device(pool: &SqlitePool, id: &str, name: &str, platform: &s
     Ok(())
 }
 
+pub async fn rename_device(pool: &SqlitePool, id: &str, name: &str) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "INSERT INTO devices (id, name, platform, last_seen)
+         VALUES (?, ?, 'Unknown', ?)
+         ON CONFLICT(id) DO UPDATE SET name = ?"
+    )
+    .bind(id)
+    .bind(name)
+    .bind(Local::now().to_rfc3339())
+    .bind(name)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
 pub async fn get_last_event_timestamp(pool: &SqlitePool, device_id: &str) -> Option<String> {
-    sqlx::query_scalar("SELECT MAX(timestamp) FROM events WHERE device_id = ?")
-        .bind(device_id)
-        .fetch_one(pool)
-        .await
-        .unwrap_or(None)
+    sqlx::query_scalar(
+        "SELECT MAX(timestamp) FROM (
+            SELECT timestamp FROM events WHERE device_id = ?
+            UNION ALL
+            SELECT timestamp FROM android_events WHERE device_id = ?
+         )"
+    )
+    .bind(device_id)
+    .bind(device_id)
+    .fetch_one(pool)
+    .await
+    .unwrap_or(None)
 }
 
 pub async fn sync_events(pool: &SqlitePool, device_id: &str, events: Vec<Event>) -> Result<usize, sqlx::Error> {
@@ -787,9 +819,9 @@ pub async fn sync_android_day(pool: &SqlitePool, _day: &str, events: Vec<Android
         .bind(e.duration_secs)
         .bind(e.is_idle)
         .bind(e.source_type)
-        .bind(e.domain)
-        .bind(e.page_title)
-        .bind(e.browser_package)
+        .bind(e.domain.unwrap_or_default())
+        .bind(e.page_title.unwrap_or_default())
+        .bind(e.browser_package.unwrap_or_default())
         .execute(pool)
         .await?;
         count += 1;

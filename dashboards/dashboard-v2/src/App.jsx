@@ -16,9 +16,6 @@ const App = () => {
       <div className="app-container">
         <Sidebar 
             status={tracker.status} 
-            devices={tracker.devices} 
-            selectedDevices={tracker.selectedDevices}
-            setSelectedDevices={tracker.setSelectedDevices}
             isPaused={tracker.isPaused}
             togglePause={tracker.togglePause}
         />
@@ -35,6 +32,9 @@ const App = () => {
                 loading={tracker.loading}
                 categories={tracker.categories}
                 submitManualEvent={tracker.submitManualEvent}
+                devices={tracker.devices}
+                selectedDevices={tracker.selectedDevices}
+                setSelectedDevices={tracker.setSelectedDevices}
               />
             } />
             <Route path="/categories" element={
@@ -53,13 +53,21 @@ const App = () => {
                     deleteMerge={tracker.deleteMerge}
                 />
             } />
-            <Route path="/history" element={<HistoryView history={tracker.history} />} />
+            <Route path="/history" element={
+              <HistoryView 
+                history={tracker.history} 
+                devices={tracker.devices}
+                selectedDevices={tracker.selectedDevices}
+                setSelectedDevices={tracker.setSelectedDevices}
+              />
+            } />
             <Route path="/devices" element={
               <DevicesView 
                 devices={tracker.devices} 
                 merges={tracker.merges}
                 mergeDevice={tracker.mergeDevice}
                 deleteMerge={tracker.deleteMerge}
+                renameDevice={tracker.renameDevice}
               />
             } />
             <Route path="*" element={<div className="placeholder-view">Coming Soon</div>} />

@@ -25,12 +25,13 @@ export const useTracker = (initialDate) => {
 
   const fetchStaticData = useCallback(async () => {
     try {
+      const cacheBust = `?_t=${Date.now()}`;
       const [catRes, rulesRes, devRes, settingsRes, mergeRes] = await Promise.all([
-        fetch(`${API_BASE}/api/categories`),
-        fetch(`${API_BASE}/api/rules`),
-        fetch(`${API_BASE}/api/devices`),
-        fetch(`${API_BASE}/api/settings`),
-        fetch(`${API_BASE}/api/devices/merges`)
+        fetch(`${API_BASE}/api/categories${cacheBust}`),
+        fetch(`${API_BASE}/api/rules${cacheBust}`),
+        fetch(`${API_BASE}/api/devices${cacheBust}`),
+        fetch(`${API_BASE}/api/settings${cacheBust}`),
+        fetch(`${API_BASE}/api/devices/merges${cacheBust}`)
       ]);
       
       const [cats, rls, devs, sets, mrgs] = await Promise.all([
@@ -215,6 +216,15 @@ export const useTracker = (initialDate) => {
     fetchStaticData();
   };
 
+  const renameDevice = async (id, name) => {
+    await fetch(`${API_BASE}/api/devices/${encodeURIComponent(id)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name })
+    });
+    fetchStaticData();
+  };
+
   const submitManualEvent = async (event) => {
     await fetch(`${API_BASE}/api/events/manual`, {
         method: 'POST',
@@ -230,7 +240,7 @@ export const useTracker = (initialDate) => {
     categories, rules, devices, selectedDevices, setSelectedDevices,
     currentApp, isPaused, togglePause,
     settings, saveSettings,
-    merges, mergeDevice, deleteMerge,
+    merges, mergeDevice, deleteMerge, renameDevice,
     loading, saveCategory, deleteCategory, saveRule, deleteRule,
     submitManualEvent
   };

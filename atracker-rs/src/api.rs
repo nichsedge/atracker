@@ -86,6 +86,11 @@ pub struct DeviceMergeRequest {
     pub target_id: String,
 }
 
+#[derive(Deserialize)]
+pub struct RenameDeviceRequest {
+    pub name: String,
+}
+
 struct CompiledCategoryMatcher {
     name: String,
     color: String,
@@ -116,6 +121,7 @@ pub async fn run_api(state: Arc<AppState>) {
         .route("/api/pause", post(pause_tracking))
         .route("/api/resume", post(resume_tracking))
         .route("/api/devices", get(get_devices))
+        .route("/api/devices/:id", put(rename_device))
         .route("/api/devices/merges", get(get_device_merges).post(add_device_merge))
         .route("/api/devices/merges/:id", delete(delete_device_merge))
         .route("/api/sync/status/:device_id", get(sync_status))
@@ -449,6 +455,20 @@ async fn delete_device_merge(State(state): State<Arc<AppState>>, Path(id): Path<
     match db::delete_device_merge(&state.pool, &id).await {
         Ok(_) => StatusCode::NO_CONTENT,
         Err(_) => StatusCode::INTERNAL_SERVER_ERROR,
+    }
+}
+
+async fn rename_device(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+    Json(req): Json<RenameDeviceRequest>,
+) -> impl IntoResponse {
+    match db::rename_device(&state.pool, &id, &req.name).await {
+        Ok(_) => StatusCode::OK,
+        Err(e) => {
+            eprintln!("Error renaming device: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        }
     }
 }
 

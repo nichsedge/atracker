@@ -1,9 +1,8 @@
 import { useMemo, useState, useEffect, useCallback, Fragment } from 'react';
 import { formatDuration, formatTime, formatLocalDateISO } from '../utils/formatters';
 import { Plus, Calendar, Target, AlertCircle, RefreshCw } from 'lucide-react';
-import Flatpickr from 'react-flatpickr';
-import 'flatpickr/dist/themes/light.css';
 import ManualActivityModal from '../components/ManualActivityModal';
+import DeviceFilterPill from '../components/DeviceFilterPill';
 
 const NowTrackingCard = ({ currentApp }) => {
   const [localElapsed, setLocalElapsed] = useState(0);
@@ -26,22 +25,66 @@ const NowTrackingCard = ({ currentApp }) => {
   }, [currentApp]);
 
   if (!currentApp) {
-    return <div className="now-tracking-card-light idle"><h3>System Idle</h3></div>;
+    return (
+      <div className="now-tracking-card-light idle" style={{ display: 'flex', flexDirection: 'column', padding: '2rem', justifyContent: 'center', alignItems: 'center', background: 'rgba(255,255,255,0.01)', border: '1px dashed var(--border-color)', borderRadius: 'var(--radius-lg)' }}>
+        <div className="pulse-dot" style={{ width: 12, height: 12, borderRadius: '50%', background: '#94a3b8', marginBottom: '0.75rem', opacity: 0.5 }}></div>
+        <h3 style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--text-secondary)' }}>System Idle</h3>
+        <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', opacity: 0.6, marginTop: '0.25rem' }}>No activity is currently being recorded</p>
+      </div>
+    );
   }
 
+  const getAppIcon = (wm_class = '') => {
+    const lower = wm_class.toLowerCase();
+    if (lower.includes('chrome') || lower.includes('firefox') || lower.includes('browser') || lower.includes('safari') || lower.includes('brave')) return '🌐';
+    if (lower.includes('terminal') || lower.includes('code') || lower.includes('kitty') || lower.includes('alacritty') || lower.includes('tmux') || lower.includes('nvim')) return '💻';
+    if (lower.includes('slack') || lower.includes('discord') || lower.includes('signal') || lower.includes('telegram') || lower.includes('chat')) return '💬';
+    if (lower.includes('spotify') || lower.includes('music') || lower.includes('player')) return '🎵';
+    if (lower.includes('system') || lower.includes('setting')) return '⚙️';
+    if (lower.includes('figma') || lower.includes('gimp') || lower.includes('inkscape') || lower.includes('paint')) return '🎨';
+    return '📱';
+  };
+
   return (
-    <div className="now-tracking-card-light">
-      <div className="app-icon-large">🌐</div>
-      <div className="app-details">
-        <h3>{currentApp.wm_class}</h3>
-        <p>{currentApp.title}</p>
+    <div className="now-tracking-card-light glow" style={{ position: 'relative', overflow: 'hidden', display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
+      <div className="live-badge" style={{ position: 'absolute', top: '1rem', right: '1rem', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.7rem', fontWeight: 800, color: '#10b981', background: 'rgba(16, 185, 129, 0.1)', padding: '4px 10px', borderRadius: '20px', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
+        <span className="live-pulse-dot" style={{ width: 6, height: 6, borderRadius: '50%', background: '#10b981' }}></span>
+        LIVE
       </div>
-      <div className="now-tracking-timer">{formatDuration(localElapsed)}</div>
+      <div className="app-icon-large" style={{ fontSize: '2.2rem', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255, 255, 255, 0.03)', border: '1px solid var(--border-color)', borderRadius: '14px', width: '60px', height: '60px', flexShrink: 0 }}>
+        {getAppIcon(currentApp.wm_class)}
+      </div>
+      <div className="app-details" style={{ minWidth: 0, flex: 1 }}>
+        <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-primary)', fontFamily: "'Outfit', sans-serif", marginBottom: '0.25rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          {currentApp.wm_class}
+        </h3>
+        <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%', opacity: 0.8 }} title={currentApp.title}>
+          {currentApp.title}
+        </p>
+      </div>
+      <div className="now-tracking-timer-container" style={{ marginLeft: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', flexShrink: 0 }}>
+        <div className="now-tracking-timer" style={{ fontSize: '2.5rem', fontWeight: 900, fontFamily: "'Outfit', monospace", letterSpacing: '-0.03em', color: 'var(--accent-color)', textShadow: '0 0 20px rgba(99, 102, 241, 0.2)' }}>
+          {formatDuration(localElapsed)}
+        </div>
+        <span style={{ fontSize: '0.65rem', fontWeight: 800, color: 'var(--text-secondary)', letterSpacing: '0.05em', opacity: 0.5 }}>ELAPSED</span>
+      </div>
     </div>
   );
 };
 
-const ActivityDashboard = ({ summary = [], timeline = [], currentApp, date, setDate, loading, categories = [], submitManualEvent }) => {
+const ActivityDashboard = ({ 
+  summary = [], 
+  timeline = [], 
+  currentApp, 
+  date, 
+  setDate, 
+  loading, 
+  categories = [], 
+  submitManualEvent,
+  devices = [],
+  selectedDevices = [],
+  setSelectedDevices
+}) => {
   const [expandedCategories, setExpandedCategories] = useState({});
   const [tooltip, setTooltip] = useState({ visible: false, x: 0, y: 0, content: null });
   const [isManualModalOpen, setIsManualModalOpen] = useState(false);
@@ -161,54 +204,54 @@ const ActivityDashboard = ({ summary = [], timeline = [], currentApp, date, setD
 
   return (
     <div className="view-content fade-in">
-      <header className="main-header">
+      <header className="main-header" style={{ marginBottom: '2.5rem' }}>
         <div className="header-title">
-          <h1>Activity Dashboard</h1>
-          <div className="header-meta">
-            <div className="date-picker-pill" style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <Calendar size={16} />
-                <Flatpickr 
+          <h1 style={{ fontSize: '2.25rem', fontWeight: 900, fontFamily: "'Outfit', sans-serif", letterSpacing: '-0.03em', color: 'var(--text-primary)' }}>Activity Dashboard</h1>
+          <div className="header-meta" style={{ display: 'flex', gap: '1.2rem', marginTop: '0.5rem', alignItems: 'center' }}>
+            <div className="date-picker-pill" style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0.6rem 1.2rem', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '24px' }}>
+                <Calendar size={16} style={{ color: 'var(--accent-color)' }} />
+                <input 
+                    type="date" 
                     value={date} 
-                    onChange={([d]) => {
-                      if (d) {
-                        setDate(formatLocalDateISO(d));
-                      }
+                    onChange={e => {
+                        if (e.target.value) setDate(e.target.value);
                     }}
-                    options={{
-                      altInput: true,
-                      altFormat: "F j, Y",
-                      dateFormat: "Y-m-d",
-                      disableMobile: true
-                    }}
-                    className="flatpickr-input-custom"
+                    style={{ background: 'none', border: 'none', outline: 'none', fontSize: '0.85rem', color: 'var(--text-primary)', fontWeight: 600, cursor: 'pointer' }}
                 />
             </div>
-            <div className="total-time-pill">
+
+            <DeviceFilterPill 
+              devices={devices} 
+              selectedDevices={selectedDevices} 
+              setSelectedDevices={setSelectedDevices} 
+            />
+
+            <div className="total-time-pill" style={{ display: 'flex', alignItems: 'center', padding: '0.6rem 1.2rem', background: 'var(--accent-light)', border: '1px solid rgba(99, 102, 241, 0.2)', borderRadius: '24px', color: 'var(--accent-color)', fontWeight: 700, fontSize: '0.85rem' }}>
               {loading && <RefreshCw size={14} className="spin" style={{ marginRight: 6 }} />}
               {formatDuration(totalTracked)} tracked
             </div>
           </div>
         </div>
-        <button className="btn-primary" onClick={() => setIsManualModalOpen(true)}>
+        <button className="btn-primary" onClick={() => setIsManualModalOpen(true)} style={{ padding: '0.6rem 1.5rem', borderRadius: '12px', fontSize: '0.9rem', fontWeight: 700, gap: '0.5rem', height: '44px', boxShadow: '0 4px 14px rgba(99, 102, 241, 0.3)' }}>
           <Plus size={18} /> Log Activity
         </button>
       </header>
 
       <div className="dashboard-grid" style={{ display: 'grid', gridTemplateColumns: goals.length > 0 ? '2fr 1fr' : '1fr', gap: '1.5rem' }}>
         <div className="main-column" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-          <section className="glass-card now-tracking-section">
+          <section className="glass-card now-tracking-section" style={{ margin: 0 }}>
             <div className="section-label">NOW TRACKING</div>
             <NowTrackingCard currentApp={currentApp} />
           </section>
 
-          <section className="glass-card">
+          <section className="glass-card" style={{ margin: 0 }}>
             <div className="section-label">TIMELINE</div>
             <div className="timeline-outer">
               <div className="timeline-labels">
                 {timelineLabels.map(l => <span key={l}>{l}</span>)}
               </div>
-              <div className="timeline-track">
-                {timeline.length === 0 && <div className="timeline-empty">No activity recorded for this day</div>}
+              <div className="timeline-track" style={{ height: '60px', background: 'rgba(255, 255, 255, 0.02)', borderRadius: '10px', border: '1px solid var(--border-color)', overflow: 'hidden', position: 'relative' }}>
+                {timeline.length === 0 && <div className="timeline-empty" style={{ background: 'transparent' }}>No activity recorded for this day</div>}
                 {timeline.map((block, i) => (
                   <div 
                     key={i} 
@@ -222,28 +265,30 @@ const ActivityDashboard = ({ summary = [], timeline = [], currentApp, date, setD
             </div>
           </section>
 
-          <section className="glass-card">
+          <section className="glass-card" style={{ margin: 0 }}>
             <div className="section-label">APP USAGE</div>
             <div className="usage-table-modern">
-              {summary.length === 0 && <div className="empty-container">No activity recorded for {date}</div>}
+              {summary.length === 0 && <div className="empty-container" style={{ color: 'var(--text-secondary)', textAlign: 'center', padding: '2rem 0' }}>No activity recorded for {date}</div>}
               {categoryBreakdown.map((cat, i) => (
                 <Fragment key={i}>
-                  <div className="usage-row-modern" onClick={() => toggleCategory(cat.name)} style={{ cursor: 'pointer' }}>
-                    <span className={`expand-icon ${expandedCategories[cat.name] ? 'open' : ''}`} style={{ transition: 'transform 0.2s', display: 'inline-block', transform: expandedCategories[cat.name] ? 'rotate(90deg)' : 'none' }}>›</span>
-                    <div className="cat-dot" style={{ backgroundColor: cat.color, width: '12px', height: '12px', borderRadius: '50%' }}></div>
-                    <div className="cat-name">{cat.name}</div>
-                    <div className="cat-progress-track">
-                      <div className="cat-progress-fill" style={{ width: `${(cat.total_secs / totalTracked) * 100}%`, backgroundColor: cat.color }}></div>
+                  <div className="usage-row-modern" onClick={() => toggleCategory(cat.name)} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', padding: '1rem 0', borderBottom: '1px solid var(--border-subtle)', gap: '1.5rem' }}>
+                    <span className={`expand-icon ${expandedCategories[cat.name] ? 'open' : ''}`} style={{ transition: 'transform 0.2s', display: 'inline-block', transform: expandedCategories[cat.name] ? 'rotate(90deg)' : 'none', color: 'var(--text-secondary)', fontSize: '1.2rem', fontWeight: 'bold' }}>›</span>
+                    <div className="cat-dot" style={{ backgroundColor: cat.color, width: '12px', height: '12px', borderRadius: '50%', boxShadow: `0 0 10px ${cat.color}66` }}></div>
+                    <div className="cat-name" style={{ width: '150px', fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Outfit', sans-serif" }}>{cat.name}</div>
+                    <div className="cat-progress-track" style={{ flex: 1, height: '10px', background: 'rgba(255, 255, 255, 0.03)', borderRadius: '5px', overflow: 'hidden', border: '1px solid var(--border-subtle)' }}>
+                      <div className="cat-progress-fill" style={{ width: `${(cat.total_secs / totalTracked) * 100}%`, backgroundColor: cat.color, height: '100%', borderRadius: '5px', boxShadow: `0 0 8px ${cat.color}55` }}></div>
                     </div>
-                    <div className="cat-time">{formatDuration(cat.total_secs)}</div>
+                    <div className="cat-time" style={{ width: '100px', textAlign: 'right', fontWeight: 800, color: 'var(--accent-color)' }}>{formatDuration(cat.total_secs)}</div>
                   </div>
                   {expandedCategories[cat.name] && cat.apps.map((app, j) => (
-                    <div key={`${i}-${j}`} className="app-detail-row-modern" style={{ display: 'flex', justifyContent: 'space-between', padding: '0.75rem 0 0.75rem 3rem', borderBottom: '1px solid #f8fafc', fontSize: '0.9rem' }}>
-                      <div className="app-name-cell">
-                        <div style={{ fontWeight: 500 }}>{app.wm_class}</div>
-                        {app.title && <div style={{ fontSize: '0.75rem', color: '#94a3b8', maxWidth: '400px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{app.title}</div>}
+                    <div key={`${i}-${j}`} className="app-detail-row-modern" style={{ display: 'flex', justifyContent: 'space-between', padding: '0.8rem 1rem 0.8rem 3.5rem', borderBottom: '1px solid rgba(255,255,255,0.02)', fontSize: '0.85rem', background: 'rgba(255, 255, 255, 0.005)' }}>
+                      <div className="app-name-cell" style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+                        <div style={{ fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <span style={{ color: 'var(--text-secondary)', opacity: 0.3 }}>└</span> {app.wm_class}
+                        </div>
+                        {app.title && <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', maxWidth: '500px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', paddingLeft: '1rem', opacity: 0.7 }}>{app.title}</div>}
                       </div>
-                      <div className="app-time-cell" style={{ fontWeight: 600, color: '#64748b' }}>{formatDuration(app.total_secs)}</div>
+                      <div className="app-time-cell" style={{ fontWeight: 700, color: 'var(--text-secondary)' }}>{formatDuration(app.total_secs)}</div>
                     </div>
                   ))}
                 </Fragment>
@@ -254,25 +299,25 @@ const ActivityDashboard = ({ summary = [], timeline = [], currentApp, date, setD
 
         {goals.length > 0 && (
           <aside className="goals-column">
-            <section className="glass-card">
+            <section className="glass-card" style={{ margin: 0 }}>
               <div className="section-label">GOALS & LIMITS</div>
               <div className="goals-list" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                 {goals.map(goal => (
                   <div key={goal.id} className="goal-item">
                     <div className="goal-info" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', fontSize: '0.85rem' }}>
-                      <div style={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <div style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: goal.color }}></div>
+                      <div style={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-primary)', fontFamily: "'Outfit', sans-serif" }}>
+                        <div style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: goal.color, boxShadow: `0 0 8px ${goal.color}aa` }}></div>
                         {goal.name}
                       </div>
-                      <div style={{ color: goal.isOverLimit ? '#ef4444' : '#64748b', fontWeight: 600 }}>
-                        {goal.isGoal ? <Target size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} /> : <AlertCircle size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} />}
+                      <div style={{ color: goal.isOverLimit ? '#ef4444' : 'var(--text-secondary)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                        {goal.isGoal ? <Target size={14} style={{ color: goal.pct >= 100 ? '#10b981' : 'var(--accent-color)' }} /> : <AlertCircle size={14} style={{ color: goal.isOverLimit ? '#ef4444' : 'var(--text-secondary)' }} />}
                         {Math.round(goal.pct)}%
                       </div>
                     </div>
-                    <div className="goal-progress" style={{ height: 8, backgroundColor: '#f1f5f9', borderRadius: 4, overflow: 'hidden', marginBottom: '0.25rem' }}>
-                      <div style={{ height: '100%', width: `${goal.pct}%`, backgroundColor: goal.isOverLimit ? '#ef4444' : (goal.pct >= 100 && goal.isGoal ? '#10b981' : goal.color), borderRadius: 4 }}></div>
+                    <div className="goal-progress" style={{ height: 8, backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-subtle)', borderRadius: 4, overflow: 'hidden', marginBottom: '0.25rem' }}>
+                      <div style={{ height: '100%', width: `${goal.pct}%`, backgroundColor: goal.isOverLimit ? '#ef4444' : (goal.pct >= 100 && goal.isGoal ? '#10b981' : goal.color), borderRadius: 4, boxShadow: `0 0 10px ${goal.isOverLimit ? '#ef4444' : goal.color}44` }}></div>
                     </div>
-                    <div style={{ fontSize: '0.75rem', color: '#94a3b8', display: 'flex', justifyContent: 'space-between' }}>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'flex', justifyContent: 'space-between', opacity: 0.8 }}>
                       <span>{formatDuration(goal.usageSecs)}</span>
                       <span>{goal.isGoal ? 'Goal' : 'Limit'}: {formatDuration(goal.targetSecs)}</span>
                     </div>

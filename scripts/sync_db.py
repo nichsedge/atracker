@@ -31,7 +31,13 @@ def merge_databases(master_path: str, source_paths: list[str]):
                 with sqlite3.connect(source) as src_conn:
                     src_conn.row_factory = sqlite3.Row
 
-                    tables_to_sync = ["events"]
+                    tables_to_sync = [
+                        "events",
+                        "android_events",
+                        "devices",
+                        "categories",
+                        "filter_rules",
+                    ]
 
                     for table in tables_to_sync:
                         try:

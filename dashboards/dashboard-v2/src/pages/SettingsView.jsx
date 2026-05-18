@@ -73,11 +73,11 @@ const SettingsView = ({
     <div className="view-content fade-in" style={{ paddingBottom: '5rem' }}>
       <header className="main-header" style={{ marginBottom: '2.5rem' }}>
         <div className="header-title">
-          <h1 style={{ fontSize: '2.25rem', fontWeight: 900, letterSpacing: '-0.03em', color: '#0f172a' }}>Configuration</h1>
-          <p style={{ fontSize: '1rem', color: '#64748b', fontWeight: 500 }}>System tuning, activity rules, and device management</p>
+          <h1 style={{ fontSize: '2.25rem', fontWeight: 900, fontFamily: "'Outfit', sans-serif", letterSpacing: '-0.03em', color: 'var(--text-primary)' }}>Configuration</h1>
+          <p style={{ fontSize: '1rem', color: 'var(--text-secondary)', fontWeight: 500 }}>System tuning, activity rules, and device management</p>
         </div>
         <div style={{ display: 'flex', gap: '0.75rem' }}>
-          <div style={{ display: 'flex', background: 'white', padding: '4px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+          <div style={{ display: 'flex', background: 'var(--bg-secondary)', padding: '4px', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
             <button className="btn-ghost" onClick={handleExportCategories} title="Export JSON"><Download size={18} /></button>
             <button className="btn-ghost" onClick={handleImportCategories} title="Import JSON"><Upload size={18} /></button>
           </div>
@@ -93,21 +93,21 @@ const SettingsView = ({
           <section className="glass-card" style={{ margin: 0 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
               <div className="section-label" style={{ margin: 0 }}>ACTIVITY CATEGORIES</div>
-              <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#2563eb', background: '#eff6ff', padding: '3px 10px', borderRadius: '20px' }}>
+              <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--accent-color)', background: 'var(--accent-light)', border: '1px solid rgba(99, 102, 241, 0.15)', padding: '3px 10px', borderRadius: '20px' }}>
                 {categories.length} total
               </span>
             </div>
             
             <div className="item-list">
               {categories.map((cat) => (
-                <div key={cat.id} className="item-row" style={{ minWidth: 0, padding: '1rem 0', borderBottom: '1px solid #f1f5f9' }}>
+                <div key={cat.id} className="item-row" style={{ minWidth: 0, padding: '1rem 0', borderBottom: '1px solid var(--border-subtle)' }}>
                   <div className="item-info" style={{ flex: 1, minWidth: 0 }}>
-                    <div className="color-dot" style={{ width: 12, height: 12, backgroundColor: cat.color, flexShrink: 0, boxShadow: `0 0 10px ${cat.color}66` }}></div>
+                    <div className="color-dot" style={{ width: 12, height: 12, backgroundColor: cat.color, flexShrink: 0, boxShadow: `0 0 10px ${cat.color}aa` }}></div>
                     <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
-                      <div style={{ fontWeight: 700, fontSize: '0.95rem', color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                         {cat.name}
                       </div>
-                      <div className="pattern" style={{ fontSize: '0.75rem', color: '#94a3b8', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      <div className="pattern" style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                         {cat.wm_class_pattern || '*'}
                         {cat.title_pattern && ` • ${cat.title_pattern}`}
                       </div>
@@ -124,7 +124,7 @@ const SettingsView = ({
 
           <section className="glass-card" style={{ margin: 0 }}>
             <div className="section-label" style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '1.25rem' }}>
-              <Shield size={16} color="#64748b" /> PRIVACY RULES
+              <Shield size={16} color="var(--text-secondary)" /> PRIVACY RULES
             </div>
             <div className="item-list">
               {rules.map((rule) => (
@@ -132,11 +132,11 @@ const SettingsView = ({
                   <div className="item-info" style={{ flex: 1, minWidth: 0 }}>
                     <span style={{
                       fontSize: '0.6rem', fontWeight: 900, textTransform: 'uppercase',
-                      background: rule.rule_type === 'ignore' ? '#fee2e2' : '#fef3c7',
-                      color: rule.rule_type === 'ignore' ? '#ef4444' : '#d97706',
+                      background: rule.rule_type === 'ignore' ? 'rgba(239, 68, 68, 0.15)' : 'rgba(217, 119, 6, 0.15)',
+                      color: rule.rule_type === 'ignore' ? '#ef4444' : '#fbbf24',
                       padding: '2px 6px', borderRadius: '4px', flexShrink: 0
                     }}>{rule.rule_type}</span>
-                    <div className="pattern" style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{rule.wm_class_pattern || '*Any App*'}</div>
+                    <div className="pattern" style={{ fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{rule.wm_class_pattern || '*Any App*'}</div>
                   </div>
                   <button className="btn-icon-soft" onClick={() => deleteRule(rule.id)} style={{ color: '#ef4444' }}><Trash2 size={16} /></button>
                 </div>
@@ -152,9 +152,9 @@ const SettingsView = ({
         <div>
           <section className="glass-card" style={{ margin: 0 }}>
             <div className="section-label" style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '1.25rem' }}>
-              <Smartphone size={16} color="#64748b" /> DEVICES & MERGING
+              <Smartphone size={16} color="var(--text-secondary)" /> DEVICES & MERGING
             </div>
-            <p style={{ fontSize: '0.9rem', color: '#64748b', lineHeight: 1.5, marginBottom: '1rem' }}>
+            <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: '1rem' }}>
               Device identity resolution is managed in a dedicated view.
             </p>
             <button className="btn-outline" onClick={() => navigate('/devices')} style={{ width: '100%', justifyContent: 'center', padding: '0.75rem' }}>
@@ -164,22 +164,22 @@ const SettingsView = ({
 
           <section className="glass-card" style={{ margin: 0 }}>
             <div className="section-label" style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '1.5rem' }}>
-              <Cpu size={16} color="#64748b" /> ENGINE TUNING
+              <Cpu size={16} color="var(--text-secondary)" /> ENGINE TUNING
             </div>
             <form onSubmit={handleTuningSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
                 <div className="form-group">
-                  <label style={{ fontSize: '0.75rem', fontWeight: 800, color: '#64748b', display: 'block', marginBottom: '0.5rem' }}>POLL INTERVAL</label>
+                  <label style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text-secondary)', display: 'block', marginBottom: '0.5rem' }}>POLL INTERVAL</label>
                   <div style={{ position: 'relative' }}>
                     <input type="number" className="date-picker" value={tuningData.poll_interval || ''} onChange={e => setTuningData({...tuningData, poll_interval: e.target.value})} style={{ width: '100%', paddingRight: '2.5rem', fontWeight: 700 }} />
-                    <span style={{ position: 'absolute', right: '0.75rem', top: '50%', transform: 'translateY(-50%)', fontSize: '0.65rem', fontWeight: 800, opacity: 0.4 }}>SEC</span>
+                    <span style={{ position: 'absolute', right: '0.75rem', top: '50%', transform: 'translateY(-50%)', fontSize: '0.65rem', fontWeight: 800, opacity: 0.4, color: 'var(--text-secondary)' }}>SEC</span>
                   </div>
                 </div>
                 <div className="form-group">
-                  <label style={{ fontSize: '0.75rem', fontWeight: 800, color: '#64748b', display: 'block', marginBottom: '0.5rem' }}>IDLE THRESHOLD</label>
+                  <label style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text-secondary)', display: 'block', marginBottom: '0.5rem' }}>IDLE THRESHOLD</label>
                   <div style={{ position: 'relative' }}>
                     <input type="number" className="date-picker" value={tuningData.idle_threshold || ''} onChange={e => setTuningData({...tuningData, idle_threshold: e.target.value})} style={{ width: '100%', paddingRight: '2.5rem', fontWeight: 700 }} />
-                    <span style={{ position: 'absolute', right: '0.75rem', top: '50%', transform: 'translateY(-50%)', fontSize: '0.65rem', fontWeight: 800, opacity: 0.4 }}>SEC</span>
+                    <span style={{ position: 'absolute', right: '0.75rem', top: '50%', transform: 'translateY(-50%)', fontSize: '0.65rem', fontWeight: 800, opacity: 0.4, color: 'var(--text-secondary)' }}>SEC</span>
                   </div>
                 </div>
               </div>
@@ -194,22 +194,6 @@ const SettingsView = ({
       <CategoryModal isOpen={isCatModalOpen} onClose={() => setIsCatModalOpen(false)} category={editingCategory} onSave={saveCategory} />
       <RuleModal isOpen={isRuleModalOpen} onClose={() => setIsRuleModalOpen(false)} onSave={saveRule} />
       
-      <style dangerouslySetInnerHTML={{ __html: `
-        .settings-grid { 
-          display: grid; 
-          grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr); 
-          gap: 2rem; 
-        }
-        .btn-ghost { background: transparent; border: none; padding: 0.6rem; border-radius: 8px; cursor: pointer; color: #64748b; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
-        .btn-ghost:hover { background: #f1f5f9; color: var(--accent-color); }
-        .btn-icon-soft { background: transparent; border: none; padding: 0.5rem; border-radius: 8px; cursor: pointer; color: #94a3b8; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
-        .btn-icon-soft:hover { background: #f1f5f9; color: var(--accent-color); }
-        .btn-outline { background: white; border: 1px solid #e2e8f0; border-radius: 10px; cursor: pointer; color: #475569; font-weight: 700; font-size: 0.85rem; display: flex; align-items: center; gap: 0.5rem; transition: all 0.2s; }
-        .btn-outline:hover { border-color: var(--accent-color); color: var(--accent-color); background: #eff6ff; }
-        .btn-outline:disabled { opacity: 0.4; cursor: not-allowed; border-color: #e2e8f0; color: #94a3b8; background: #f8fafc; }
-        .item-row { display: flex; justify-content: space-between; align-items: center; gap: 1rem; width: 100%; overflow: hidden; }
-        .pattern { max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
-      `}} />
     </div>
   );
 };
