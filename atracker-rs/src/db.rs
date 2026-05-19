@@ -282,16 +282,47 @@ fn utc_bounds_for_local_dates(start_date: &str, end_date: &str) -> (String, Stri
     )
 }
 
+// Helper to normalize any incoming timestamp (naive local or UTC) to a UTC RFC3339 string
+fn normalize_timestamp(ts: &str) -> String {
+    if ts.contains('Z') || ts.contains('+') || (ts.matches('-').count() >= 3 && ts.contains(':')) {
+        let ts_clean = ts.replace("Z", "+00:00");
+        if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(&ts_clean) {
+            return dt.with_timezone(&Utc).to_rfc3339();
+        }
+    }
+
+    let ndt = chrono::NaiveDateTime::parse_from_str(ts, "%Y-%m-%dT%H:%M:%S%.f")
+        .or_else(|_| chrono::NaiveDateTime::parse_from_str(ts, "%Y-%m-%dT%H:%M:%S"))
+        .or_else(|_| chrono::NaiveDateTime::parse_from_str(ts, "%Y-%m-%d %H:%M:%S%.f"))
+        .or_else(|_| chrono::NaiveDateTime::parse_from_str(ts, "%Y-%m-%d %H:%M:%S"));
+
+    match ndt {
+        Ok(ndt) => {
+            let local_dt = Local.from_local_datetime(&ndt)
+                .earliest()
+                .or_else(|| Local.from_local_datetime(&ndt).latest());
+            match local_dt {
+                Some(ldt) => ldt.with_timezone(&Utc).to_rfc3339(),
+                None => Utc.from_utc_datetime(&ndt).to_rfc3339(),
+            }
+        }
+        Err(_) => ts.to_string(),
+    }
+}
+
 // --- Events ---
 pub async fn insert_event(pool: &SqlitePool, event: Event) -> Result<(), sqlx::Error> {
+    let timestamp = normalize_timestamp(&event.timestamp);
+    let end_timestamp = normalize_timestamp(&event.end_timestamp);
+
     sqlx::query(
         "INSERT INTO events (id, device_id, timestamp, end_timestamp, wm_class, title, pid, duration_secs, is_idle)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
     )
     .bind(event.id)
     .bind(event.device_id)
-    .bind(event.timestamp)
-    .bind(event.end_timestamp)
+    .bind(timestamp)
+    .bind(end_timestamp)
     .bind(event.wm_class)
     .bind(event.title)
     .bind(event.pid)
@@ -311,11 +342,11 @@ pub async fn get_events(pool: &SqlitePool, target_date: &str, device_ids: Option
 
     sqlx::query(
         "WITH combined_events AS (
-            SELECT id, COALESCE(m.target_id, e.device_id) as device_id, 'local' as platform, timestamp, end_timestamp, wm_class, title, pid, duration_secs, is_idle 
+            SELECT e.id, COALESCE(m.target_id, e.device_id) as device_id, 'local' as platform, timestamp, end_timestamp, wm_class, title, pid, duration_secs, is_idle 
             FROM events e
             LEFT JOIN device_merges m ON e.device_id = m.original_id
             UNION ALL
-            SELECT id, COALESCE(m.target_id, ae.device_id) as device_id, 'android' as platform, timestamp, end_timestamp, package_name as wm_class, CASE WHEN source_type = 'BROWSER_TAB' THEN COALESCE(NULLIF(page_title, ''), NULLIF(domain, ''), app_label) ELSE app_label END as title, 0 as pid, duration_secs, is_idle 
+            SELECT ae.id, COALESCE(m.target_id, ae.device_id) as device_id, 'android' as platform, timestamp, end_timestamp, package_name as wm_class, CASE WHEN source_type = 'BROWSER_TAB' THEN COALESCE(NULLIF(page_title, ''), NULLIF(domain, ''), app_label) ELSE app_label END as title, 0 as pid, duration_secs, is_idle 
             FROM android_events ae
             LEFT JOIN device_merges m ON ae.device_id = m.original_id
         )
@@ -406,11 +437,11 @@ pub async fn get_timeline_range(pool: &SqlitePool, start_date: &str, end_date: &
 
     sqlx::query(
         "WITH combined_events AS (
-            SELECT id, COALESCE(m.target_id, e.device_id) as device_id, timestamp, end_timestamp, wm_class, title, pid, duration_secs, is_idle 
+            SELECT e.id, COALESCE(m.target_id, e.device_id) as device_id, timestamp, end_timestamp, wm_class, title, pid, duration_secs, is_idle 
             FROM events e
             LEFT JOIN device_merges m ON e.device_id = m.original_id
             UNION ALL
-            SELECT id, COALESCE(m.target_id, ae.device_id) as device_id, timestamp, end_timestamp, package_name as wm_class, CASE WHEN source_type = 'BROWSER_TAB' THEN COALESCE(NULLIF(page_title, ''), NULLIF(domain, ''), app_label) ELSE app_label END as title, 0 as pid, duration_secs, is_idle 
+            SELECT ae.id, COALESCE(m.target_id, ae.device_id) as device_id, timestamp, end_timestamp, package_name as wm_class, CASE WHEN source_type = 'BROWSER_TAB' THEN COALESCE(NULLIF(page_title, ''), NULLIF(domain, ''), app_label) ELSE app_label END as title, 0 as pid, duration_secs, is_idle 
             FROM android_events ae
             LEFT JOIN device_merges m ON ae.device_id = m.original_id
         )
@@ -779,14 +810,17 @@ pub async fn sync_events(pool: &SqlitePool, device_id: &str, events: Vec<Event>)
     let mut count = 0;
     for mut event in events {
         event.device_id = device_id.to_string();
+        let timestamp = normalize_timestamp(&event.timestamp);
+        let end_timestamp = normalize_timestamp(&event.end_timestamp);
+
         let res = sqlx::query(
             "INSERT OR IGNORE INTO events (id, device_id, timestamp, end_timestamp, wm_class, title, pid, duration_secs, is_idle)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
         )
         .bind(&event.id)
         .bind(&event.device_id)
-        .bind(&event.timestamp)
-        .bind(&event.end_timestamp)
+        .bind(timestamp)
+        .bind(end_timestamp)
         .bind(&event.wm_class)
         .bind(&event.title)
         .bind(event.pid)
@@ -805,6 +839,9 @@ pub async fn sync_events(pool: &SqlitePool, device_id: &str, events: Vec<Event>)
 pub async fn sync_android_day(pool: &SqlitePool, _day: &str, events: Vec<AndroidEvent>) -> Result<usize, sqlx::Error> {
     let mut count = 0;
     for e in events {
+        let timestamp = normalize_timestamp(&e.timestamp);
+        let end_timestamp = normalize_timestamp(&e.end_timestamp);
+
         sqlx::query(
             "INSERT OR REPLACE INTO android_events
                (id, device_id, timestamp, end_timestamp, package_name, app_label, duration_secs, is_idle, source_type, domain, page_title, browser_package)
@@ -812,8 +849,8 @@ pub async fn sync_android_day(pool: &SqlitePool, _day: &str, events: Vec<Android
         )
         .bind(e.id)
         .bind(e.device_id)
-        .bind(e.timestamp)
-        .bind(e.end_timestamp)
+        .bind(timestamp)
+        .bind(end_timestamp)
         .bind(e.package_name)
         .bind(e.app_label)
         .bind(e.duration_secs)
