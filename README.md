@@ -23,35 +23,41 @@ This version (v2) is built with **Rust** for the backend and **React** for the d
 
 ---
 
-## 🚀 Quick Start (Rust Stack)
+## 🚀 Installation & Setup
 
-### 1. Build & Install
+You can install, build, and configure both the frontend dashboard and backend service automatically with a single command.
+
+### 🐧 On Linux
+
+Run the unified installer script:
 ```bash
-# Build the Rust backend
-cd atracker-rs
-cargo build --release
-
-# Build the React dashboard
-cd ../dashboards/dashboard-v2
-bun install
-bun run build
+./install.sh
 ```
 
-### 2. Start the Service
-You can run it directly:
-```bash
-./atracker-rs/target/release/atracker-rs
-```
-Or install as a systemd user service (recommended):
-```bash
-mkdir -p ~/.config/systemd/user/
-cp deploy/systemd/atracker-rs.service ~/.config/systemd/user/
-systemctl --user daemon-reload
-systemctl --user enable --now atracker-rs
+This script will:
+1. Verify system dependencies (`cargo`, `bun` or `npm`).
+2. Build the React dashboard and Rust backend in release mode.
+3. Automatically template and register the systemd user service `atracker-rs.service` with your actual workspace path.
+4. Enable and start the background activity watcher.
+
+### 🪟 On Windows
+
+Run the PowerShell installer script:
+```powershell
+./install.ps1
 ```
 
-### 3. Open Dashboard
-Visit [http://localhost:8933](http://localhost:8933) in your browser.
+This script will:
+1. Verify system dependencies (`cargo`, `bun` or `npm`).
+2. Build the React dashboard and Rust backend.
+3. Set up the local configuration at `~/.config/atracker-rs/config-rs.yaml`.
+4. Install a silent startup script in your Windows **Startup folder** (`start-atracker.vbs`), launching the tracker completely hidden in the background on logon.
+
+---
+
+## 📊 Open Dashboard
+
+Once the installation is complete, visit **[http://localhost:8933](http://localhost:8933)** in your web browser.
 
 ---
 
