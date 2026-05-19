@@ -89,7 +89,7 @@ const SettingsView = ({
 
       <div className="settings-grid">
         {/* Left Column: Categories & Rules */}
-        <div>
+        <div style={{ minWidth: 0 }}>
           <section className="glass-card" style={{ margin: 0 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
               <div className="section-label" style={{ margin: 0 }}>ACTIVITY CATEGORIES</div>
@@ -149,7 +149,7 @@ const SettingsView = ({
         </div>
 
         {/* Right Column: Devices & Engine */}
-        <div>
+        <div style={{ minWidth: 0 }}>
           <section className="glass-card" style={{ margin: 0 }}>
             <div className="section-label" style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '1.25rem' }}>
               <Smartphone size={16} color="var(--text-secondary)" /> DEVICES & MERGING
