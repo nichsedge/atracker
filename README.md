@@ -61,20 +61,6 @@ Visit [http://localhost:8933](http://localhost:8933) in your browser.
 - **Watcher**: D-Bus integration with GNOME Shell and Mutter.
 - **Android**: Kotlin app syncing via REST API.
 
----
-
-## 🐍 Legacy Python Stack (Isolated)
-
-The original Python implementation is still available in `atracker-py`. It runs independently on port **8932** and uses a separate database.
-
-To run the legacy stack:
-```bash
-cd atracker-py
-uv sync
-uv run atracker start
-```
-
----
 
 ## ⚙️ Configuration
 

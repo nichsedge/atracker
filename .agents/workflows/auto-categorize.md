@@ -13,7 +13,7 @@ This workflow helps you automatically categorize activities that the system hasn
 > - Already-escaped patterns in the DB (shown as `com\\.whatsapp` in raw SQL) are correct — don't double-escape.
 
 1. **Fetch Uncategorized Events**
-   Create a python script (e.g., `list_uncategorized.py`) that performs a `GET` request to `http://localhost:8932/api/range/summary?start={start_date}&end={end_date}`, where `start_date` is 30 days ago (`YYYY-MM-DD` format) and `end_date` is today (`YYYY-MM-DD` format).
+   Create a python script (e.g., `list_uncategorized.py`) that performs a `GET` request to `http://localhost:8933/api/range/summary?start={start_date}&end={end_date}`, where `start_date` is 30 days ago (`YYYY-MM-DD` format) and `end_date` is today (`YYYY-MM-DD` format).
    - Parse the JSON response. *Note*: The JSON structure returns an object containing a `"summary"` array. Iterate over `data.get("summary", [])`.
    - Identify candidate items for categorization. This includes items with `"category_name": "Uncategorized"`, as well as top items from generic fallback categories (like `"Browser"`) that could be mapped more specifically based on their `title`.
    - Print the top candidate items (include `wm_class`, `title`, `category_name`, and `total_secs`), sorted descending by `total_secs`.
@@ -34,7 +34,7 @@ This workflow helps you automatically categorize activities that the system hasn
 
 4. **Prepare the Category Updates**
    Create a second python script (e.g., `update_categories.py`) to programmatically apply the missing or adjusted categorizations:
-   - First, fetch current categories with `GET http://localhost:8932/api/categories`.
+   - First, fetch current categories with `GET http://localhost:8933/api/categories`.
    - **Guideline**:
      - Prefer `wm_class_pattern` for Android packages and desktop app classes.
      - Prefer `title_pattern` for specific browser tabs (e.g., `YouTube`, `GitHub`).
@@ -44,7 +44,7 @@ This workflow helps you automatically categorize activities that the system hasn
      - Use `\\.` for file extensions or dotted titles: `Stream\\.mp3`, `X\\.com`.
      - Genuine wildcards like `Meet -.*Google Chrome` are fine — the `.*` is intentional regex.
      - For new categories, use vibrant, distinct hex colors.
-   - Update via `PUT http://localhost:8932/api/categories/{id}` or create via `POST http://localhost:8932/api/categories`.
+   - Update via `PUT http://localhost:8933/api/categories/{id}` or create via `POST http://localhost:8933/api/categories`.
 
 // turbo
 5. **Apply Updates and Clean Up**

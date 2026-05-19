@@ -8,7 +8,34 @@ import sqlite3
 from datetime import datetime
 from pathlib import Path
 
-from atracker.config import config
+def get_default_db_path() -> Path:
+    config_path = Path("~/.config/atracker-rs/config-rs.yaml").expanduser()
+    if config_path.exists():
+        try:
+            with open(config_path) as f:
+                content = f.read()
+                # Try parsing with yaml if available
+                try:
+                    import yaml
+                    cfg = yaml.safe_load(content)
+                    db_path = cfg.get("database", {}).get("path")
+                    if db_path:
+                        if db_path.startswith("~/"):
+                            return Path(db_path).expanduser()
+                        return Path(db_path)
+                except ImportError:
+                    pass
+                # Fallback to simple line parsing
+                for line in content.splitlines():
+                    if "path:" in line:
+                        val = line.split("path:")[1].strip().strip('"').strip("'")
+                        if val.startswith("~/"):
+                            return Path(val).expanduser()
+                        return Path(val)
+        except Exception:
+            pass
+    return Path("~/.local/share/atracker-rs/atracker-rs.db").expanduser()
+
 
 
 def _parse_ts(ts: str) -> datetime:
@@ -82,8 +109,8 @@ def main() -> None:
     parser.add_argument(
         "--db",
         type=Path,
-        default=config.db_path,
-        help="Path to atracker.db (default from config)",
+        default=get_default_db_path(),
+        help="Path to atracker-rs.db (default from config)",
     )
     parser.add_argument(
         "--max-end-delta-secs",

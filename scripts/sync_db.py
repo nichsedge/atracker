@@ -115,8 +115,8 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--master",
-        default="~/.local/share/atracker/atracker.db",
-        help="Path to the master database (default: ~/.local/share/atracker/atracker.db)",
+        default="~/.local/share/atracker-rs/atracker-rs.db",
+        help="Path to the master database (default: ~/.local/share/atracker-rs/atracker-rs.db)",
     )
     parser.add_argument(
         "sources",
