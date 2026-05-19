@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**atracker** is a local-first activity watcher & tracker for Linux (GNOME/Wayland). It monitors active windows and idle time, stores data in SQLite, and provides a web dashboard for visualization.
+**atracker** is a local-first activity watcher & tracker for Linux (GNOME/Wayland) and Windows. It monitors active windows and idle time, stores data in SQLite, and provides a web dashboard for visualization.
 
 This repository uses a single unified stack:
 - **Backend (`atracker-rs`)**: Rust core daemon with real-time broadcast and REST/WebSocket API.

@@ -1,6 +1,6 @@
 # 🕒 atracker (v2)
 
-**High-performance, local-first activity watcher & tracker for Linux (GNOME/Wayland).**
+**High-performance, local-first activity watcher & tracker for Linux (GNOME/Wayland) and Windows.**
 
 `atracker` is a privacy-focused tool that automatically monitors your active windows and apps, helps you understand where your time goes, and provides beautiful visualizations—all while keeping your data strictly local.
 
@@ -19,6 +19,7 @@ This version (v2) is built with **Rust** for the backend and **React** for the d
     - 🏷️ **Smart Categorization**: Auto-categorize apps using regex patterns.
 - 📱 **Android Sync**: Companion app to track mobile usage.
 - 🐧 **Linux Native**: Optimized for GNOME/Wayland via a dedicated shell extension.
+- 🪟 **Windows Native**: Integrated natively using direct Win32 APIs for foreground window and idle monitoring.
 
 ---
 

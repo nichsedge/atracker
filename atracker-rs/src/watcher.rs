@@ -1,5 +1,6 @@
 use std::sync::Arc;
 use tokio::sync::{Mutex, broadcast};
+#[cfg(target_os = "linux")]
 use zbus::{Connection, Proxy};
 use crate::config::Config;
 use crate::db::{self, Event};
@@ -13,6 +14,7 @@ pub struct Watcher {
     config: Config,
     pool: SqlitePool,
     current_event: Arc<Mutex<Option<CurrentEvent>>>,
+    #[cfg(target_os = "linux")]
     dbus_conn: Arc<Mutex<Option<Connection>>>,
     tx: broadcast::Sender<String>,
     filter_rules: Arc<Mutex<Vec<db::FilterRule>>>,
@@ -36,12 +38,101 @@ pub struct CurrentState {
     pub is_idle: bool,
 }
 
+#[cfg(target_os = "windows")]
+mod win32 {
+    use std::ffi::c_void;
+    use std::path::Path;
+
+    type HWND = *mut c_void;
+    type HANDLE = *mut c_void;
+    type BOOL = i32;
+    type DWORD = u32;
+
+    #[repr(C)]
+    struct LASTINPUTINFO {
+        cbSize: u32,
+        dwTime: u32,
+    }
+
+    extern "system" {
+        fn GetForegroundWindow() -> HWND;
+        fn GetWindowTextLengthW(hWnd: HWND) -> i32;
+        fn GetWindowTextW(hWnd: HWND, lpString: *mut u16, nMaxCount: i32) -> i32;
+        fn GetWindowThreadProcessId(hWnd: HWND, lpdwProcessId: *mut DWORD) -> DWORD;
+        fn OpenProcess(dwDesiredAccess: DWORD, bInheritHandle: BOOL, dwProcessId: DWORD) -> HANDLE;
+        fn QueryFullProcessImageNameW(hProcess: HANDLE, dwFlags: DWORD, lpExeName: *mut u16, lpdwSize: *mut DWORD) -> BOOL;
+        fn CloseHandle(hObject: HANDLE) -> BOOL;
+        fn GetLastInputInfo(plii: *mut LASTINPUTINFO) -> BOOL;
+        fn GetTickCount64() -> u64;
+    }
+
+    pub fn get_idle_time_ms() -> u64 {
+        let mut lii = LASTINPUTINFO {
+            cbSize: std::mem::size_of::<LASTINPUTINFO>() as u32,
+            dwTime: 0,
+        };
+        unsafe {
+            if GetLastInputInfo(&mut lii) != 0 {
+                let tick_count = GetTickCount64();
+                return tick_count.saturating_sub(lii.dwTime as u64);
+            }
+        }
+        0
+    }
+
+    pub fn get_active_window_info() -> Option<(String, String, i32)> {
+        unsafe {
+            let hwnd = GetForegroundWindow();
+            if hwnd.is_null() {
+                return None;
+            }
+
+            // Get Window Title
+            let length = GetWindowTextLengthW(hwnd);
+            let mut title = String::new();
+            if length > 0 {
+                let mut buf = vec![0u16; (length + 1) as usize];
+                let written = GetWindowTextW(hwnd, buf.as_mut_ptr(), length + 1);
+                if written > 0 {
+                    title = String::from_utf16_lossy(&buf[..written as usize]);
+                }
+            }
+
+            // Get Process ID
+            let mut pid: DWORD = 0;
+            GetWindowThreadProcessId(hwnd, &mut pid);
+
+            // Get Process Name
+            let mut wm_class = String::new();
+            let h_process = OpenProcess(0x1000, 0, pid); // PROCESS_QUERY_LIMITED_INFORMATION
+            if !h_process.is_null() {
+                let mut exe_buf = vec![0u16; 1024];
+                let mut size: DWORD = 1024;
+                if QueryFullProcessImageNameW(h_process, 0, exe_buf.as_mut_ptr(), &mut size) != 0 {
+                    let path_str = String::from_utf16_lossy(&exe_buf[..size as usize]);
+                    if let Some(filename) = Path::new(&path_str).file_name() {
+                        let mut name = filename.to_string_lossy().to_lowercase();
+                        if name.endswith(".exe") {
+                            name.truncate(name.len() - 4);
+                        }
+                        wm_class = name;
+                    }
+                }
+                CloseHandle(h_process);
+            }
+
+            Some((wm_class, title, pid as i32))
+        }
+    }
+}
+
 impl Watcher {
     pub fn new(config: Config, pool: SqlitePool, tx: broadcast::Sender<String>) -> Self {
         Self {
             config,
             pool,
             current_event: Arc::new(Mutex::new(None)),
+            #[cfg(target_os = "linux")]
             dbus_conn: Arc::new(Mutex::new(None)),
             tx,
             filter_rules: Arc::new(Mutex::new(Vec::new())),
@@ -74,25 +165,7 @@ impl Watcher {
             return self.handle_window_change("__paused__".to_string(), "Paused".to_string(), 0, false).await;
         }
 
-        let mut conn_lock = self.dbus_conn.lock().await;
-        if conn_lock.is_none() {
-            match Connection::session().await {
-                Ok(c) => *conn_lock = Some(c),
-                Err(e) => return Err(Box::new(e)),
-            }
-        }
-        let conn = conn_lock.as_ref().unwrap();
-
-        // Self-healing poll
-        match self.poll(conn).await {
-            Ok(state) => Ok(state),
-            Err(_) => {
-                if let Ok(mut lock) = self.dbus_conn.try_lock() {
-                    *lock = None;
-                }
-                Ok(None)
-            }
-        }
+        self.poll().await
     }
 
     async fn refresh_settings_if_needed(&self) {
@@ -109,24 +182,64 @@ impl Watcher {
         debug!("Refreshed filter rules from DB");
     }
 
-    async fn poll(&self, conn: &Connection) -> Result<Option<CurrentState>, Box<dyn std::error::Error + Send + Sync>> {
-        let idle_ms = self.get_idle_time(conn).await.unwrap_or(0);
-        let threshold_ms = db::get_setting(&self.pool, "idle_threshold", &self.config.tracking.idle_threshold.to_string()).await.parse::<u64>().unwrap_or(self.config.tracking.idle_threshold) * 1000;
-        
-        let is_idle = idle_ms > threshold_ms;
+    async fn poll(&self) -> Result<Option<CurrentState>, Box<dyn std::error::Error + Send + Sync>> {
+        #[cfg(target_os = "linux")]
+        {
+            let mut conn_lock = self.dbus_conn.lock().await;
+            if conn_lock.is_none() {
+                match Connection::session().await {
+                    Ok(c) => *conn_lock = Some(c),
+                    Err(e) => return Err(Box::new(e)),
+                }
+            }
+            let conn = conn_lock.as_ref().unwrap();
 
-        if is_idle {
-            return self.handle_window_change("__idle__".to_string(), "Idle".to_string(), 0, true).await;
+            let idle_ms = self.get_idle_time(conn).await.unwrap_or(0);
+            let threshold_ms = db::get_setting(&self.pool, "idle_threshold", &self.config.tracking.idle_threshold.to_string()).await.parse::<u64>().unwrap_or(self.config.tracking.idle_threshold) * 1000;
+            
+            let is_idle = idle_ms > threshold_ms;
+
+            if is_idle {
+                return self.handle_window_change("__idle__".to_string(), "Idle".to_string(), 0, true).await;
+            }
+
+            let window = self.get_active_window(conn).await;
+            match window {
+                Ok(Some(win)) => {
+                    let mut missing = self.missing_window_since.lock().await;
+                    *missing = None;
+                    return self.handle_window_change(win.wm_class, win.title, win.pid, false).await;
+                }
+                _ => {
+                    if window.is_err() {
+                        if let Ok(mut lock) = self.dbus_conn.try_lock() {
+                            *lock = None;
+                        }
+                    }
+                }
+            }
         }
 
-        let window = self.get_active_window(conn).await?;
-        if let Some(win) = window {
-            let mut missing = self.missing_window_since.lock().await;
-            *missing = None;
-            return self.handle_window_change(win.wm_class, win.title, win.pid, false).await;
+        #[cfg(target_os = "windows")]
+        {
+            let idle_ms = win32::get_idle_time_ms();
+            let threshold_ms = db::get_setting(&self.pool, "idle_threshold", &self.config.tracking.idle_threshold.to_string()).await.parse::<u64>().unwrap_or(self.config.tracking.idle_threshold) * 1000;
+            
+            let is_idle = idle_ms > threshold_ms;
+
+            if is_idle {
+                return self.handle_window_change("__idle__".to_string(), "Idle".to_string(), 0, true).await;
+            }
+
+            let window = win32::get_active_window_info();
+            if let Some((wm_class, title, pid)) = window {
+                let mut missing = self.missing_window_since.lock().await;
+                *missing = None;
+                return self.handle_window_change(wm_class, title, pid, false).await;
+            }
         }
 
-        // Keep parity with atracker-py: if active window is unavailable for too long,
+        // Keep parity: if active window is unavailable for too long,
         // flush the current event to avoid inflating previous app durations.
         let now = Utc::now();
         let mut missing = self.missing_window_since.lock().await;
@@ -189,7 +302,7 @@ impl Watcher {
     }
 
     async fn flush_event_internal(&self, mut curr: CurrentEvent, end_time: Option<DateTime<Utc>>) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        // Keep parity with atracker-py: never persist events without wm_class.
+        // Keep parity: never persist events without wm_class.
         if curr.wm_class.trim().is_empty() {
             return Ok(());
         }
@@ -244,6 +357,7 @@ impl Watcher {
         self.flush_event_internal(curr, None).await
     }
 
+    #[cfg(target_os = "linux")]
     async fn get_active_window(&self, conn: &Connection) -> Result<Option<WindowInfo>, Box<dyn std::error::Error + Send + Sync>> {
         let proxy = Proxy::new(conn, "org.atracker.WindowTracker", "/org/atracker/WindowTracker", "org.atracker.WindowTracker").await.map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
         let result: String = proxy.call("GetActiveWindow", &()).await.map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
@@ -251,6 +365,7 @@ impl Watcher {
         Ok(Some(info))
     }
 
+    #[cfg(target_os = "linux")]
     async fn get_idle_time(&self, conn: &Connection) -> Result<u64, Box<dyn std::error::Error + Send + Sync>> {
         let proxy = Proxy::new(conn, "org.gnome.Mutter.IdleMonitor", "/org/gnome/Mutter/IdleMonitor/Core", "org.gnome.Mutter.IdleMonitor").await.map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
         let idle_time: u64 = proxy.call("GetIdletime", &()).await.map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
@@ -264,6 +379,7 @@ impl Watcher {
     }
 }
 
+#[cfg(target_os = "linux")]
 #[derive(Deserialize)]
 struct WindowInfo {
     wm_class: String,
