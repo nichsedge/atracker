@@ -8,7 +8,7 @@ use sqlx::SqlitePool;
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 use tracing::{info, debug};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 
 pub struct Watcher {
     config: Config,
@@ -50,11 +50,11 @@ mod win32 {
 
     #[repr(C)]
     struct LASTINPUTINFO {
-        cbSize: u32,
-        dwTime: u32,
+        cb_size: u32,
+        dw_time: u32,
     }
 
-    extern "system" {
+    unsafe extern "system" {
         fn GetForegroundWindow() -> HWND;
         fn GetWindowTextLengthW(hWnd: HWND) -> i32;
         fn GetWindowTextW(hWnd: HWND, lpString: *mut u16, nMaxCount: i32) -> i32;
@@ -68,13 +68,13 @@ mod win32 {
 
     pub fn get_idle_time_ms() -> u64 {
         let mut lii = LASTINPUTINFO {
-            cbSize: std::mem::size_of::<LASTINPUTINFO>() as u32,
-            dwTime: 0,
+            cb_size: std::mem::size_of::<LASTINPUTINFO>() as u32,
+            dw_time: 0,
         };
         unsafe {
             if GetLastInputInfo(&mut lii) != 0 {
                 let tick_count = GetTickCount64();
-                return tick_count.saturating_sub(lii.dwTime as u64);
+                return tick_count.saturating_sub(lii.dw_time as u64);
             }
         }
         0
@@ -112,7 +112,7 @@ mod win32 {
                     let path_str = String::from_utf16_lossy(&exe_buf[..size as usize]);
                     if let Some(filename) = Path::new(&path_str).file_name() {
                         let mut name = filename.to_string_lossy().to_lowercase();
-                        if name.endswith(".exe") {
+                        if name.ends_with(".exe") {
                             name.truncate(name.len() - 4);
                         }
                         wm_class = name;
@@ -122,6 +122,99 @@ mod win32 {
             }
 
             Some((wm_class, title, pid as i32))
+        }
+    }
+}
+
+#[cfg(target_os = "macos")]
+mod macos {
+    use std::ffi::{c_char, c_void, CStr};
+
+    type ObjcId = *mut c_void;
+    type ObjcSel = *mut c_void;
+
+    #[link(name = "objc", kind = "dylib")]
+    unsafe extern "C" {
+        fn objc_getClass(name: *const c_char) -> ObjcId;
+        fn sel_registerName(name: *const c_char) -> ObjcSel;
+        #[link_name = "objc_msgSend"]
+        fn msg_send_id(receiver: ObjcId, sel: ObjcSel) -> ObjcId;
+        #[link_name = "objc_msgSend"]
+        fn msg_send_pid(receiver: ObjcId, sel: ObjcSel) -> i32;
+        #[link_name = "objc_msgSend"]
+        fn msg_send_cstr(receiver: ObjcId, sel: ObjcSel) -> *const c_char;
+    }
+
+    #[link(name = "CoreGraphics", kind = "framework")]
+    unsafe extern "C" {
+        fn CGEventSourceSecondsSinceLastEventType(source_state: i32, event_type: u32) -> f64;
+    }
+
+    unsafe fn ns_string_to_string(ns: ObjcId) -> Option<String> {
+        if ns.is_null() {
+            return None;
+        }
+        let utf8_sel = sel_registerName(b"UTF8String\0".as_ptr() as *const c_char);
+        let cstr = msg_send_cstr(ns, utf8_sel);
+        if cstr.is_null() {
+            return None;
+        }
+        CStr::from_ptr(cstr).to_str().ok().map(|s| s.to_string())
+    }
+
+    unsafe fn cls(name: &[u8]) -> ObjcId {
+        objc_getClass(name.as_ptr() as *const c_char)
+    }
+
+    unsafe fn sel(name: &[u8]) -> ObjcSel {
+        sel_registerName(name.as_ptr() as *const c_char)
+    }
+
+    pub fn get_idle_time_ms() -> u64 {
+        // HIDSystemState = 1, kCGAnyInputEventType = u32::MAX
+        let secs = unsafe { CGEventSourceSecondsSinceLastEventType(1, !0u32) };
+        if secs.is_nan() || secs < 0.0 {
+            0
+        } else {
+            (secs * 1000.0) as u64
+        }
+    }
+
+    pub fn get_active_window_info() -> Option<(String, String, i32)> {
+        unsafe {
+            let ws_class = cls(b"NSWorkspace\0");
+            if ws_class.is_null() {
+                return None;
+            }
+            let shared_workspace = msg_send_id(ws_class, sel(b"sharedWorkspace\0"));
+            if shared_workspace.is_null() {
+                return None;
+            }
+            let app = msg_send_id(shared_workspace, sel(b"frontmostApplication\0"));
+            if app.is_null() {
+                return None;
+            }
+
+            let bundle_id = ns_string_to_string(msg_send_id(app, sel(b"bundleIdentifier\0")));
+            let localized_name = ns_string_to_string(msg_send_id(app, sel(b"localizedName\0")));
+            let pid = msg_send_pid(app, sel(b"processIdentifier\0"));
+
+            let wm_class = bundle_id
+                .clone()
+                .or_else(|| localized_name.clone())
+                .unwrap_or_default()
+                .to_lowercase();
+
+            if wm_class.is_empty() {
+                return None;
+            }
+
+            // Per-window titles require Screen Recording permission via
+            // CGWindowListCopyWindowInfo; fall back to the app name so the
+            // timeline still has a useful label without that prompt.
+            let title = localized_name.unwrap_or_default();
+
+            Some((wm_class, title, pid))
         }
     }
 }
@@ -232,6 +325,25 @@ impl Watcher {
             }
 
             let window = win32::get_active_window_info();
+            if let Some((wm_class, title, pid)) = window {
+                let mut missing = self.missing_window_since.lock().await;
+                *missing = None;
+                return self.handle_window_change(wm_class, title, pid, false).await;
+            }
+        }
+
+        #[cfg(target_os = "macos")]
+        {
+            let idle_ms = macos::get_idle_time_ms();
+            let threshold_ms = db::get_setting(&self.pool, "idle_threshold", &self.config.tracking.idle_threshold.to_string()).await.parse::<u64>().unwrap_or(self.config.tracking.idle_threshold) * 1000;
+
+            let is_idle = idle_ms > threshold_ms;
+
+            if is_idle {
+                return self.handle_window_change("__idle__".to_string(), "Idle".to_string(), 0, true).await;
+            }
+
+            let window = macos::get_active_window_info();
             if let Some((wm_class, title, pid)) = window {
                 let mut missing = self.missing_window_since.lock().await;
                 *missing = None;
