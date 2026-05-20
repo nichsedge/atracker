@@ -14,6 +14,8 @@ The path is set in `~/.config/atracker-rs/config-rs.yaml` under `database.path`.
 
 If you changed it, check the file or hit `http://localhost:8933/api/...` while the daemon runs — `db_path` is reported.
 
+Do `sqlite3 yourfile.db "PRAGMA wal_checkpoint(TRUNCATE);"`
+
 ## 2. Copy the source DB to the master machine
 
 You only need the `.db` file. `sync_db.py` handles WAL safety by snapshotting on the source side, so you do **not** need to stop the daemon or copy `*-wal` / `*-shm`.
