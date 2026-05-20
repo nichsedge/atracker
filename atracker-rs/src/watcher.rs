@@ -132,6 +132,7 @@ mod macos {
 
     type ObjcId = *mut c_void;
     type ObjcSel = *mut c_void;
+    type CFTypeRef = *const c_void;
 
     #[link(name = "objc", kind = "dylib")]
     unsafe extern "C" {
@@ -143,24 +144,35 @@ mod macos {
         fn msg_send_pid(receiver: ObjcId, sel: ObjcSel) -> i32;
         #[link_name = "objc_msgSend"]
         fn msg_send_cstr(receiver: ObjcId, sel: ObjcSel) -> *const c_char;
+        #[link_name = "objc_msgSend"]
+        fn msg_send_void(receiver: ObjcId, sel: ObjcSel);
     }
 
     #[link(name = "CoreGraphics", kind = "framework")]
     unsafe extern "C" {
         fn CGEventSourceSecondsSinceLastEventType(source_state: i32, event_type: u32) -> f64;
+        fn CGWindowListCopyWindowInfo(option: u32, relative_to_window: u32) -> CFTypeRef;
     }
 
-    unsafe fn ns_string_to_string(ns: ObjcId) -> Option<String> {
-        if ns.is_null() {
-            return None;
-        }
-        let utf8_sel = sel_registerName(b"UTF8String\0".as_ptr() as *const c_char);
-        let cstr = msg_send_cstr(ns, utf8_sel);
-        if cstr.is_null() {
-            return None;
-        }
-        CStr::from_ptr(cstr).to_str().ok().map(|s| s.to_string())
+    #[link(name = "CoreFoundation", kind = "framework")]
+    unsafe extern "C" {
+        fn CFArrayGetCount(arr: CFTypeRef) -> isize;
+        fn CFArrayGetValueAtIndex(arr: CFTypeRef, idx: isize) -> CFTypeRef;
+        fn CFDictionaryGetValue(dict: CFTypeRef, key: CFTypeRef) -> CFTypeRef;
+        fn CFNumberGetValue(num: CFTypeRef, number_type: i64, value_ptr: *mut c_void) -> bool;
+        fn CFStringCreateWithCString(
+            allocator: CFTypeRef,
+            c_str: *const c_char,
+            encoding: u32,
+        ) -> CFTypeRef;
+        fn CFRelease(cf: CFTypeRef);
     }
+
+    const KCG_WINDOW_LIST_OPTION_ON_SCREEN_ONLY: u32 = 1;
+    const KCG_WINDOW_LIST_EXCLUDE_DESKTOP_ELEMENTS: u32 = 1 << 4;
+    const KCG_NULL_WINDOW_ID: u32 = 0;
+    const KCF_NUMBER_SINT32_TYPE: i64 = 3;
+    const KCF_STRING_ENCODING_UTF8: u32 = 0x08000100;
 
     unsafe fn cls(name: &[u8]) -> ObjcId {
         objc_getClass(name.as_ptr() as *const c_char)
@@ -168,6 +180,26 @@ mod macos {
 
     unsafe fn sel(name: &[u8]) -> ObjcSel {
         sel_registerName(name.as_ptr() as *const c_char)
+    }
+
+    unsafe fn ns_string_to_string(ns: ObjcId) -> Option<String> {
+        if ns.is_null() {
+            return None;
+        }
+        let cstr = msg_send_cstr(ns, sel(b"UTF8String\0"));
+        if cstr.is_null() {
+            return None;
+        }
+        let s = CStr::from_ptr(cstr).to_str().ok()?.to_string();
+        if s.is_empty() { None } else { Some(s) }
+    }
+
+    unsafe fn cf_string(literal: &[u8]) -> CFTypeRef {
+        CFStringCreateWithCString(
+            std::ptr::null(),
+            literal.as_ptr() as *const c_char,
+            KCF_STRING_ENCODING_UTF8,
+        )
     }
 
     pub fn get_idle_time_ms() -> u64 {
@@ -182,40 +214,121 @@ mod macos {
 
     pub fn get_active_window_info() -> Option<(String, String, i32)> {
         unsafe {
-            let ws_class = cls(b"NSWorkspace\0");
-            if ws_class.is_null() {
-                return None;
+            // Drain autoreleased NSStrings returned from NSRunningApplication accessors.
+            let pool_cls = cls(b"NSAutoreleasePool\0");
+            let pool = if pool_cls.is_null() {
+                std::ptr::null_mut()
+            } else {
+                msg_send_id(msg_send_id(pool_cls, sel(b"alloc\0")), sel(b"init\0"))
+            };
+
+            let result = collect_active_window();
+
+            if !pool.is_null() {
+                msg_send_void(pool, sel(b"drain\0"));
             }
-            let shared_workspace = msg_send_id(ws_class, sel(b"sharedWorkspace\0"));
-            if shared_workspace.is_null() {
-                return None;
-            }
-            let app = msg_send_id(shared_workspace, sel(b"frontmostApplication\0"));
-            if app.is_null() {
-                return None;
-            }
-
-            let bundle_id = ns_string_to_string(msg_send_id(app, sel(b"bundleIdentifier\0")));
-            let localized_name = ns_string_to_string(msg_send_id(app, sel(b"localizedName\0")));
-            let pid = msg_send_pid(app, sel(b"processIdentifier\0"));
-
-            let wm_class = bundle_id
-                .clone()
-                .or_else(|| localized_name.clone())
-                .unwrap_or_default()
-                .to_lowercase();
-
-            if wm_class.is_empty() {
-                return None;
-            }
-
-            // Per-window titles require Screen Recording permission via
-            // CGWindowListCopyWindowInfo; fall back to the app name so the
-            // timeline still has a useful label without that prompt.
-            let title = localized_name.unwrap_or_default();
-
-            Some((wm_class, title, pid))
+            result
         }
+    }
+
+    unsafe fn collect_active_window() -> Option<(String, String, i32)> {
+        let ws_class = cls(b"NSWorkspace\0");
+        if ws_class.is_null() {
+            return None;
+        }
+        let shared = msg_send_id(ws_class, sel(b"sharedWorkspace\0"));
+        if shared.is_null() {
+            return None;
+        }
+        let app = msg_send_id(shared, sel(b"frontmostApplication\0"));
+        if app.is_null() {
+            return None;
+        }
+
+        let bundle_id = ns_string_to_string(msg_send_id(app, sel(b"bundleIdentifier\0")));
+        let localized_name = ns_string_to_string(msg_send_id(app, sel(b"localizedName\0")));
+        let pid = msg_send_pid(app, sel(b"processIdentifier\0"));
+
+        let wm_class = bundle_id
+            .clone()
+            .or_else(|| localized_name.clone())
+            .unwrap_or_default()
+            .to_lowercase();
+
+        if wm_class.is_empty() {
+            return None;
+        }
+
+        // Real window title requires Screen Recording permission; falls back to
+        // the app's localized name when CGWindowListCopyWindowInfo returns no name.
+        let title = read_window_title(pid)
+            .or(localized_name)
+            .unwrap_or_default();
+
+        Some((wm_class, title, pid))
+    }
+
+    unsafe fn read_window_title(target_pid: i32) -> Option<String> {
+        let arr = CGWindowListCopyWindowInfo(
+            KCG_WINDOW_LIST_OPTION_ON_SCREEN_ONLY | KCG_WINDOW_LIST_EXCLUDE_DESKTOP_ELEMENTS,
+            KCG_NULL_WINDOW_ID,
+        );
+        if arr.is_null() {
+            return None;
+        }
+
+        let key_pid = cf_string(b"kCGWindowOwnerPID\0");
+        let key_layer = cf_string(b"kCGWindowLayer\0");
+        let key_name = cf_string(b"kCGWindowName\0");
+
+        let mut result = None;
+        let count = CFArrayGetCount(arr);
+        for i in 0..count {
+            let dict = CFArrayGetValueAtIndex(arr, i);
+            if dict.is_null() {
+                continue;
+            }
+
+            let pid_ref = CFDictionaryGetValue(dict, key_pid);
+            let mut owner_pid: i32 = -1;
+            if pid_ref.is_null()
+                || !CFNumberGetValue(
+                    pid_ref,
+                    KCF_NUMBER_SINT32_TYPE,
+                    &mut owner_pid as *mut i32 as *mut c_void,
+                )
+                || owner_pid != target_pid
+            {
+                continue;
+            }
+
+            let layer_ref = CFDictionaryGetValue(dict, key_layer);
+            let mut layer: i32 = -1;
+            if layer_ref.is_null()
+                || !CFNumberGetValue(
+                    layer_ref,
+                    KCF_NUMBER_SINT32_TYPE,
+                    &mut layer as *mut i32 as *mut c_void,
+                )
+                || layer != 0
+            {
+                continue;
+            }
+
+            let name_ref = CFDictionaryGetValue(dict, key_name);
+            if !name_ref.is_null() {
+                if let Some(s) = ns_string_to_string(name_ref as ObjcId) {
+                    result = Some(s);
+                    break;
+                }
+            }
+        }
+
+        CFRelease(key_pid);
+        CFRelease(key_layer);
+        CFRelease(key_name);
+        CFRelease(arr);
+        result
     }
 }
 

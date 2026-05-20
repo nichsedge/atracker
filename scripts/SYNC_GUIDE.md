@@ -9,6 +9,7 @@ The path is set in `~/.config/atracker-rs/config-rs.yaml` under `database.path`.
 | Platform | Path |
 | --- | --- |
 | Linux   | `~/.local/share/atracker-rs/atracker-rs.db` |
+| macOS   | `~/.local/share/atracker-rs/atracker-rs.db` |
 | Windows | `%USERPROFILE%\.local\share\atracker-rs\atracker-rs.db` |
 
 If you changed it, check the file or hit `http://localhost:8933/api/...` while the daemon runs — `db_path` is reported.

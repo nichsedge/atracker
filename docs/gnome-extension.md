@@ -1,5 +1,7 @@
 # GNOME Extension Guide
 
+> **This guide applies to Linux (GNOME) only.** Windows uses Win32 APIs directly and macOS uses AppKit + CoreGraphics — neither needs a helper extension. See [architecture.md](architecture.md#4-platform-integration) for the per-platform breakdown.
+
 To accurately track active windows on GNOME Shell (especially on Wayland), `atracker` requires a small helper extension.
 
 ## Why an extension?
