@@ -1,6 +1,6 @@
 # 🕒 atracker (v2)
 
-**High-performance, local-first activity watcher & tracker for Linux (GNOME/Wayland) and Windows.**
+**High-performance, local-first activity watcher & tracker for Linux (GNOME/Wayland), Windows, and macOS.**
 
 `atracker` is a privacy-focused tool that automatically monitors your active windows and apps, helps you understand where your time goes, and provides beautiful visualizations—all while keeping your data strictly local.
 
@@ -20,6 +20,7 @@ This version (v2) is built with **Rust** for the backend and **React** for the d
 - 📱 **Android Sync**: Companion app to track mobile usage.
 - 🐧 **Linux Native**: Optimized for GNOME/Wayland via a dedicated shell extension.
 - 🪟 **Windows Native**: Integrated natively using direct Win32 APIs for foreground window and idle monitoring.
+- 🍎 **macOS Native**: Uses AppKit (NSWorkspace) and CoreGraphics for foreground app and idle detection — no extra runtime dependencies.
 
 ---
 
@@ -27,18 +28,20 @@ This version (v2) is built with **Rust** for the backend and **React** for the d
 
 You can install, build, and configure both the frontend dashboard and backend service automatically with a single command.
 
-### 🐧 On Linux
+### 🐧 On Linux / 🍎 On macOS
 
 Run the unified installer script:
 ```bash
 ./install.sh
 ```
 
-This script will:
-1. Verify system dependencies (`cargo`, `bun` or `npm`).
-2. Build the React dashboard and Rust backend in release mode.
-3. Automatically template and register the systemd user service `atracker-rs.service` with your actual workspace path.
-4. Enable and start the background activity watcher.
+The script detects your OS (`uname -s`) and:
+1. Verifies system dependencies (`cargo`, `bun` or `npm`).
+2. Builds the React dashboard and Rust backend in release mode.
+3. Templates and registers the appropriate login-time service with your actual workspace path:
+   - **Linux** → systemd user unit `atracker-rs.service`.
+   - **macOS** → `launchd` agent at `~/Library/LaunchAgents/com.atracker.atracker-rs.plist` (logs to `~/Library/Logs/atracker-rs.log`).
+4. Enables and starts the background activity watcher.
 
 ### 🪟 On Windows
 
@@ -53,6 +56,17 @@ This script will:
 3. Set up the local configuration at `~/.config/atracker-rs/config-rs.yaml`.
 4. Install a silent startup script in your Windows **Startup folder** (`start-atracker.vbs`), launching the tracker completely hidden in the background on logon.
 
+#### macOS permission note
+
+The macOS watcher reads two kinds of data, with different permission requirements:
+
+- **No prompt required** for: idle detection, the frontmost app's bundle identifier / localized name, and its process id.
+- **Screen Recording** permission is required to read per-window titles via `CGWindowListCopyWindowInfo`. Until granted, `title` falls back to the active app's localized name (e.g. `Safari` rather than the actual window/tab title). Grant it under *System Settings → Privacy & Security → Screen Recording*, then kick the service:
+
+  ```bash
+  launchctl kickstart -k gui/$(id -u)/com.atracker.atracker-rs
+  ```
+
 ---
 
 ## 📊 Open Dashboard
@@ -65,7 +79,7 @@ Once the installation is complete, visit **[http://localhost:8933](http://localh
 
 - **Backend (`atracker-rs`)**: Rust + Axum + SQLx (SQLite).
 - **Frontend (`dashboard-v2`)**: React + Vite + Tailwind (Legacy) / Vanilla CSS.
-- **Watcher**: D-Bus integration with GNOME Shell and Mutter.
+- **Watcher**: D-Bus on Linux (GNOME Shell + Mutter), Win32 on Windows, AppKit + CoreGraphics on macOS.
 - **Android**: Kotlin app syncing via REST API.
 
 

@@ -71,6 +71,9 @@ pub fn resolve_path(path: &str) -> PathBuf {
     if path.starts_with("~/") {
         let home = dirs::home_dir().expect("Could not find home directory");
         home.join(&path[2..])
+    } else if let Some(rest) = path.strip_prefix("%USERPROFILE%") {
+        let home = dirs::home_dir().expect("Could not find home directory");
+        home.join(rest.trim_start_matches(['\\', '/']))
     } else {
         PathBuf::from(path)
     }

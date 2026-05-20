@@ -103,6 +103,8 @@ pub async fn init_db(config: &Config) -> SqlitePool {
     sqlx::query("PRAGMA synchronous = NORMAL").execute(&pool).await.ok();
     sqlx::query("PRAGMA temp_store = MEMORY").execute(&pool).await.ok();
     sqlx::query("PRAGMA cache_size = -20000").execute(&pool).await.ok();
+    // 5s busy_timeout absorbs writer contention with scripts/sync_db.py without raising "database is locked".
+    sqlx::query("PRAGMA busy_timeout = 5000").execute(&pool).await.ok();
 
     // Primary tables
     sqlx::query(
@@ -864,4 +866,58 @@ pub async fn sync_android_day(pool: &SqlitePool, _day: &str, events: Vec<Android
         count += 1;
     }
     Ok(count)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn parse_utc(s: &str) -> chrono::DateTime<Utc> {
+        chrono::DateTime::parse_from_rfc3339(s)
+            .unwrap()
+            .with_timezone(&Utc)
+    }
+
+    #[test]
+    fn normalize_rfc3339_z_suffix_is_idempotent() {
+        let got = normalize_timestamp("2026-05-20T14:30:00Z");
+        assert_eq!(parse_utc(&got), parse_utc("2026-05-20T14:30:00Z"));
+    }
+
+    #[test]
+    fn normalize_rfc3339_with_offset_converts_to_utc() {
+        let got = normalize_timestamp("2026-05-20T16:30:00+02:00");
+        assert_eq!(parse_utc(&got), parse_utc("2026-05-20T14:30:00Z"));
+    }
+
+    #[test]
+    fn normalize_rfc3339_with_fractional_seconds_round_trips() {
+        let got = normalize_timestamp("2026-05-20T14:30:00.123456Z");
+        // chrono normalizes the precision but the instant should match.
+        assert_eq!(parse_utc(&got), parse_utc("2026-05-20T14:30:00.123456Z"));
+    }
+
+    #[test]
+    fn normalize_naive_space_separated_treated_as_local() {
+        let got = normalize_timestamp("2026-05-20 14:30:00");
+        // We can't assert an exact UTC value without knowing the test host's TZ,
+        // but we can assert the output is a valid RFC3339 UTC string.
+        let parsed = chrono::DateTime::parse_from_rfc3339(&got)
+            .expect("normalized output must be RFC3339");
+        assert_eq!(parsed.timezone().local_minus_utc(), 0, "output must be in UTC");
+    }
+
+    #[test]
+    fn normalize_naive_t_separated_with_fraction_treated_as_local() {
+        let got = normalize_timestamp("2026-05-20T14:30:00.500");
+        let parsed = chrono::DateTime::parse_from_rfc3339(&got)
+            .expect("normalized output must be RFC3339");
+        assert_eq!(parsed.timezone().local_minus_utc(), 0);
+    }
+
+    #[test]
+    fn normalize_garbage_passes_through_unchanged() {
+        let raw = "not a timestamp";
+        assert_eq!(normalize_timestamp(raw), raw);
+    }
 }
