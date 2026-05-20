@@ -30,7 +30,7 @@ cp -r gnome-extension/atracker@local ~/.local/share/gnome-shell/extensions/
 
 ## D-Bus Interface
 
-The extension exposes a simple interface that `atracker-rs` (and `atracker-py`) uses:
+The extension exposes a simple interface that `atracker-rs` uses:
 
 - **Bus Name**: `org.atracker.WindowTracker`
 - **Object Path**: `/org/atracker/WindowTracker`

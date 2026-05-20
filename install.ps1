@@ -65,7 +65,7 @@ dashboard:
   port: 8933
   host: 0.0.0.0
 database:
-  path: "~/.local/share/atracker-rs/atracker-rs.db"
+  path: "%USERPROFILE%\\.local\\share\\atracker-rs\\atracker-rs.db"
   retention_days: 90
 tracking:
   poll_interval: 5

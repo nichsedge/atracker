@@ -88,9 +88,16 @@ To build the dashboard and Rust backend, reload systemd, and restart the service
 
 ## Helper Scripts
 
-All helper scripts reside in the `scripts/` directory:
-- `scripts/deploy-rs-dashboard.sh`: Rebuild + restart the daemon on **Linux** (via systemd) and **macOS** (via launchd `kickstart -k`, with a `pkill` + `nohup` fallback for the dev case where no LaunchAgent is loaded yet). Detects the OS via `uname -s`.
-- `scripts/deploy-rs-dashboard.ps1`: Windows equivalent — stops the running `.exe`, rebuilds, relaunches via the autostart VBS.
+All helper scripts reside in the `scripts/` directory.
+
+**Deploy / lifecycle (one pair per platform family):**
+- `scripts/deploy-rs-dashboard.sh` (Linux + macOS, detected via `uname -s`): rebuilds dashboard + Rust, then restarts. Linux uses `systemctl --user restart`; macOS uses `launchctl kickstart -k` if the LaunchAgent is loaded, otherwise falls back to `pkill -x` + a fresh `nohup` launch for dev work.
+- `scripts/deploy-rs-dashboard.ps1` (Windows): stops the running `.exe`, rebuilds, relaunches via the autostart VBS.
+- `scripts/uninstall.sh` / `scripts/uninstall.ps1`: stop the daemon and remove the systemd unit / LaunchAgent plist / Startup VBS. Leaves DB and config in place.
+- `scripts/tail-logs.sh` / `scripts/tail-logs.ps1`: follow daemon logs. Linux uses `journalctl --user -fu`; macOS tails `~/Library/Logs/atracker-rs.log`; Windows prints how to enable file logging (the current VBS launcher discards stdout).
+- `scripts/wipe-data.sh` / `scripts/wipe-data.ps1`: delete the SQLite DB and its WAL/SHM sidecars after a `[y/N]` confirmation (or `--yes` / `-Yes` to skip). Leaves the config file alone. Pass `--db <path>` / `-DbPath <path>` if your DB lives outside the default.
+
+**Maintenance:**
 - `scripts/dedup_events.py`: Cleans near-duplicate sequential rows in the SQLite database.
 - `scripts/sync_db.py`: Merges and upserts track event databases.
 - `scripts/generate_icons.py`: Compiles and exports launchers and web favicon assets.

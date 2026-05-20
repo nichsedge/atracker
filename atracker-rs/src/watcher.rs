@@ -38,6 +38,11 @@ pub struct CurrentState {
     pub is_idle: bool,
 }
 
+struct Probe {
+    idle_ms: u64,
+    window: Option<(String, String, i32)>,
+}
+
 #[cfg(target_os = "windows")]
 mod win32 {
     use std::ffi::c_void;
@@ -332,6 +337,59 @@ mod macos {
     }
 }
 
+pub(crate) enum FilterDecision {
+    Keep,
+    Redact,
+    Ignore(String),
+}
+
+/// Walks rules in order. The first matching `ignore` rule short-circuits and
+/// returns `Ignore(rule_id)`. Any matching `redact` rules promote the result
+/// to `Redact`. Later rules see the redacted title (matches the pre-extraction
+/// in-place mutation behavior).
+pub(crate) fn apply_filter_rules(
+    rules: &[db::FilterRule],
+    wm_class: &str,
+    title: &str,
+) -> FilterDecision {
+    let mut current_title = title.to_string();
+    let mut redacted = false;
+
+    for rule in rules {
+        let wm_match = rule.wm_class_pattern.is_empty() || {
+            regex::RegexBuilder::new(&rule.wm_class_pattern)
+                .case_insensitive(true)
+                .build()
+                .ok()
+                .map(|r| r.is_match(wm_class))
+                .unwrap_or(false)
+        };
+        let title_match = rule.title_pattern.is_empty() || {
+            regex::RegexBuilder::new(&rule.title_pattern)
+                .case_insensitive(true)
+                .build()
+                .ok()
+                .map(|r| r.is_match(&current_title))
+                .unwrap_or(false)
+        };
+
+        if wm_match && title_match {
+            if rule.rule_type == "ignore" {
+                return FilterDecision::Ignore(rule.id.clone());
+            } else if rule.rule_type == "redact" {
+                current_title = "[Redacted]".to_string();
+                redacted = true;
+            }
+        }
+    }
+
+    if redacted {
+        FilterDecision::Redact
+    } else {
+        FilterDecision::Keep
+    }
+}
+
 impl Watcher {
     pub fn new(config: Config, pool: SqlitePool, tx: broadcast::Sender<String>) -> Self {
         Self {
@@ -389,79 +447,28 @@ impl Watcher {
     }
 
     async fn poll(&self) -> Result<Option<CurrentState>, Box<dyn std::error::Error + Send + Sync>> {
-        #[cfg(target_os = "linux")]
-        {
-            let mut conn_lock = self.dbus_conn.lock().await;
-            if conn_lock.is_none() {
-                match Connection::session().await {
-                    Ok(c) => *conn_lock = Some(c),
-                    Err(e) => return Err(Box::new(e)),
-                }
-            }
-            let conn = conn_lock.as_ref().unwrap();
+        let probe = self.probe_platform().await?;
 
-            let idle_ms = self.get_idle_time(conn).await.unwrap_or(0);
-            let threshold_ms = db::get_setting(&self.pool, "idle_threshold", &self.config.tracking.idle_threshold.to_string()).await.parse::<u64>().unwrap_or(self.config.tracking.idle_threshold) * 1000;
-            
-            let is_idle = idle_ms > threshold_ms;
+        let threshold_ms = db::get_setting(
+            &self.pool,
+            "idle_threshold",
+            &self.config.tracking.idle_threshold.to_string(),
+        )
+        .await
+        .parse::<u64>()
+        .unwrap_or(self.config.tracking.idle_threshold)
+            * 1000;
 
-            if is_idle {
-                return self.handle_window_change("__idle__".to_string(), "Idle".to_string(), 0, true).await;
-            }
-
-            let window = self.get_active_window(conn).await;
-            match window {
-                Ok(Some(win)) => {
-                    let mut missing = self.missing_window_since.lock().await;
-                    *missing = None;
-                    return self.handle_window_change(win.wm_class, win.title, win.pid, false).await;
-                }
-                _ => {
-                    if window.is_err() {
-                        if let Ok(mut lock) = self.dbus_conn.try_lock() {
-                            *lock = None;
-                        }
-                    }
-                }
-            }
+        if probe.idle_ms > threshold_ms {
+            return self
+                .handle_window_change("__idle__".to_string(), "Idle".to_string(), 0, true)
+                .await;
         }
 
-        #[cfg(target_os = "windows")]
-        {
-            let idle_ms = win32::get_idle_time_ms();
-            let threshold_ms = db::get_setting(&self.pool, "idle_threshold", &self.config.tracking.idle_threshold.to_string()).await.parse::<u64>().unwrap_or(self.config.tracking.idle_threshold) * 1000;
-            
-            let is_idle = idle_ms > threshold_ms;
-
-            if is_idle {
-                return self.handle_window_change("__idle__".to_string(), "Idle".to_string(), 0, true).await;
-            }
-
-            let window = win32::get_active_window_info();
-            if let Some((wm_class, title, pid)) = window {
-                let mut missing = self.missing_window_since.lock().await;
-                *missing = None;
-                return self.handle_window_change(wm_class, title, pid, false).await;
-            }
-        }
-
-        #[cfg(target_os = "macos")]
-        {
-            let idle_ms = macos::get_idle_time_ms();
-            let threshold_ms = db::get_setting(&self.pool, "idle_threshold", &self.config.tracking.idle_threshold.to_string()).await.parse::<u64>().unwrap_or(self.config.tracking.idle_threshold) * 1000;
-
-            let is_idle = idle_ms > threshold_ms;
-
-            if is_idle {
-                return self.handle_window_change("__idle__".to_string(), "Idle".to_string(), 0, true).await;
-            }
-
-            let window = macos::get_active_window_info();
-            if let Some((wm_class, title, pid)) = window {
-                let mut missing = self.missing_window_since.lock().await;
-                *missing = None;
-                return self.handle_window_change(wm_class, title, pid, false).await;
-            }
+        if let Some((wm_class, title, pid)) = probe.window {
+            let mut missing = self.missing_window_since.lock().await;
+            *missing = None;
+            return self.handle_window_change(wm_class, title, pid, false).await;
         }
 
         // Keep parity: if active window is unavailable for too long,
@@ -483,6 +490,50 @@ impl Watcher {
         }
 
         Ok(None)
+    }
+
+    #[cfg(target_os = "linux")]
+    async fn probe_platform(&self) -> Result<Probe, Box<dyn std::error::Error + Send + Sync>> {
+        let (idle_ms, window_result) = {
+            let mut conn_lock = self.dbus_conn.lock().await;
+            if conn_lock.is_none() {
+                match Connection::session().await {
+                    Ok(c) => *conn_lock = Some(c),
+                    Err(e) => return Err(Box::new(e)),
+                }
+            }
+            let conn = conn_lock.as_ref().unwrap();
+            let idle_ms = self.get_idle_time(conn).await.unwrap_or(0);
+            let window_result = self.get_active_window(conn).await;
+            (idle_ms, window_result)
+        };
+
+        let window = match window_result {
+            Ok(Some(win)) => Some((win.wm_class, win.title, win.pid)),
+            Ok(None) => None,
+            Err(_) => {
+                // D-Bus call failed; drop the cached connection so we reconnect next poll.
+                *self.dbus_conn.lock().await = None;
+                None
+            }
+        };
+        Ok(Probe { idle_ms, window })
+    }
+
+    #[cfg(target_os = "windows")]
+    async fn probe_platform(&self) -> Result<Probe, Box<dyn std::error::Error + Send + Sync>> {
+        Ok(Probe {
+            idle_ms: win32::get_idle_time_ms(),
+            window: win32::get_active_window_info(),
+        })
+    }
+
+    #[cfg(target_os = "macos")]
+    async fn probe_platform(&self) -> Result<Probe, Box<dyn std::error::Error + Send + Sync>> {
+        Ok(Probe {
+            idle_ms: macos::get_idle_time_ms(),
+            window: macos::get_active_window_info(),
+        })
     }
 
     async fn handle_window_change(&self, wm_class: String, title: String, pid: i32, is_idle: bool) -> Result<Option<CurrentState>, Box<dyn std::error::Error + Send + Sync>> {
@@ -540,24 +591,15 @@ impl Watcher {
         // Apply filter rules
         if curr.wm_class != "__idle__" && curr.wm_class != "__paused__" {
             let rules = self.filter_rules.lock().await;
-            for rule in rules.iter() {
-                let wm_match = rule.wm_class_pattern.is_empty() || {
-                    let re = regex::RegexBuilder::new(&rule.wm_class_pattern).case_insensitive(true).build().ok();
-                    re.map(|r| r.is_match(&curr.wm_class)).unwrap_or(false)
-                };
-                let title_match = rule.title_pattern.is_empty() || {
-                    let re = regex::RegexBuilder::new(&rule.title_pattern).case_insensitive(true).build().ok();
-                    re.map(|r| r.is_match(&curr.title)).unwrap_or(false)
-                };
-
-                if wm_match && title_match {
-                    if rule.rule_type == "ignore" {
-                        debug!("Ignoring event due to rule: {}", rule.id);
-                        return Ok(());
-                    } else if rule.rule_type == "redact" {
-                        curr.title = "[Redacted]".to_string();
-                    }
+            match apply_filter_rules(&rules, &curr.wm_class, &curr.title) {
+                FilterDecision::Ignore(rule_id) => {
+                    debug!("Ignoring event due to rule: {}", rule_id);
+                    return Ok(());
                 }
+                FilterDecision::Redact => {
+                    curr.title = "[Redacted]".to_string();
+                }
+                FilterDecision::Keep => {}
             }
         }
 
@@ -610,4 +652,134 @@ struct WindowInfo {
     wm_class: String,
     title: String,
     pid: i32,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::FilterRule;
+
+    fn rule(id: &str, kind: &str, wm: &str, title: &str) -> FilterRule {
+        FilterRule {
+            id: id.to_string(),
+            rule_type: kind.to_string(),
+            wm_class_pattern: wm.to_string(),
+            title_pattern: title.to_string(),
+        }
+    }
+
+    #[test]
+    fn no_rules_keeps_event() {
+        assert!(matches!(
+            apply_filter_rules(&[], "firefox", "GitHub - foo"),
+            FilterDecision::Keep
+        ));
+    }
+
+    #[test]
+    fn empty_patterns_match_everything() {
+        let rules = vec![rule("r1", "ignore", "", "")];
+        assert!(matches!(
+            apply_filter_rules(&rules, "anything", "anything"),
+            FilterDecision::Ignore(_)
+        ));
+    }
+
+    #[test]
+    fn wm_only_pattern_matches_by_wm() {
+        let rules = vec![rule("r1", "ignore", "^firefox$", "")];
+        assert!(matches!(
+            apply_filter_rules(&rules, "firefox", "GitHub"),
+            FilterDecision::Ignore(_)
+        ));
+        assert!(matches!(
+            apply_filter_rules(&rules, "chrome", "GitHub"),
+            FilterDecision::Keep
+        ));
+    }
+
+    #[test]
+    fn title_only_pattern_matches_by_title() {
+        let rules = vec![rule("r1", "ignore", "", "secret")];
+        assert!(matches!(
+            apply_filter_rules(&rules, "firefox", "Top Secret Doc"),
+            FilterDecision::Ignore(_)
+        ));
+        assert!(matches!(
+            apply_filter_rules(&rules, "firefox", "Public Doc"),
+            FilterDecision::Keep
+        ));
+    }
+
+    #[test]
+    fn both_patterns_required_when_both_present() {
+        let rules = vec![rule("r1", "ignore", "^firefox$", "secret")];
+        // Both match -> ignore.
+        assert!(matches!(
+            apply_filter_rules(&rules, "firefox", "secret stuff"),
+            FilterDecision::Ignore(_)
+        ));
+        // Only wm matches -> keep.
+        assert!(matches!(
+            apply_filter_rules(&rules, "firefox", "boring"),
+            FilterDecision::Keep
+        ));
+    }
+
+    #[test]
+    fn ignore_short_circuits_before_subsequent_redact() {
+        let rules = vec![
+            rule("r1", "ignore", "secret-app", ""),
+            rule("r2", "redact", "secret-app", ""),
+        ];
+        assert!(matches!(
+            apply_filter_rules(&rules, "secret-app", "anything"),
+            FilterDecision::Ignore(id) if id == "r1"
+        ));
+    }
+
+    #[test]
+    fn redact_returned_when_no_ignore_matches() {
+        let rules = vec![rule("r1", "redact", "browser", "")];
+        assert!(matches!(
+            apply_filter_rules(&rules, "browser", "Some title"),
+            FilterDecision::Redact
+        ));
+    }
+
+    #[test]
+    fn matching_is_case_insensitive() {
+        let rules = vec![rule("r1", "ignore", "Firefox", "")];
+        assert!(matches!(
+            apply_filter_rules(&rules, "firefox", ""),
+            FilterDecision::Ignore(_)
+        ));
+        assert!(matches!(
+            apply_filter_rules(&rules, "FIREFOX", ""),
+            FilterDecision::Ignore(_)
+        ));
+    }
+
+    #[test]
+    fn invalid_regex_is_treated_as_non_match_not_panic() {
+        // Unclosed bracket — RegexBuilder returns Err. The matcher must not panic.
+        let rules = vec![rule("r1", "ignore", "[unclosed", "")];
+        assert!(matches!(
+            apply_filter_rules(&rules, "firefox", ""),
+            FilterDecision::Keep
+        ));
+    }
+
+    #[test]
+    fn later_rules_see_redacted_title() {
+        // r1 redacts; r2 ignores when title contains "[Redacted]" -> should ignore.
+        let rules = vec![
+            rule("r1", "redact", "browser", ""),
+            rule("r2", "ignore", "", r"\[Redacted\]"),
+        ];
+        assert!(matches!(
+            apply_filter_rules(&rules, "browser", "real title"),
+            FilterDecision::Ignore(id) if id == "r2"
+        ));
+    }
 }

@@ -43,8 +43,7 @@ A modern React application built with Vite.
 
 ## 3. Data Storage
 
-- **Database**: SQLite, stored at `~/.local/share/atracker-rs/atracker-rs.db`.
-- **Isolation**: The Rust version uses a separate database from the legacy Python version, ensuring zero data contamination during migration.
+- **Database**: SQLite, stored at `~/.local/share/atracker-rs/atracker-rs.db` (or `%USERPROFILE%\.local\share\atracker-rs\atracker-rs.db` on Windows). Configurable via `database.path` in the YAML config.
 
 ## 4. Platform Integration
 
