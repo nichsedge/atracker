@@ -8,7 +8,7 @@ use sqlx::SqlitePool;
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 use tracing::{info, debug};
-use serde::Serialize;
+use serde::{Serialize, Deserialize};
 
 pub struct Watcher {
     config: Config,

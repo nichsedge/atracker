@@ -5,31 +5,12 @@ import ManualActivityModal from '../components/ManualActivityModal';
 import DeviceFilterPill from '../components/DeviceFilterPill';
 
 const NowTrackingCard = ({ currentApp }) => {
-  const [localElapsed, setLocalElapsed] = useState(0);
-
-  useEffect(() => {
-    if (!currentApp || currentApp.is_idle) {
-      setLocalElapsed(0);
-      return;
-    }
-
-    const start = new Date(currentApp.timestamp).getTime();
-    const update = () => {
-      const now = Date.now();
-      setLocalElapsed(Math.floor((now - start) / 1000));
-    };
-
-    update();
-    const timer = setInterval(update, 1000);
-    return () => clearInterval(timer);
-  }, [currentApp]);
-
   if (!currentApp) {
     return (
       <div className="now-tracking-card-light idle" style={{ display: 'flex', flexDirection: 'column', padding: '2rem', justifyContent: 'center', alignItems: 'center', background: 'rgba(255,255,255,0.01)', border: '1px dashed var(--border-color)', borderRadius: 'var(--radius-lg)' }}>
         <div className="pulse-dot" style={{ width: 12, height: 12, borderRadius: '50%', background: '#94a3b8', marginBottom: '0.75rem', opacity: 0.5 }}></div>
         <h3 style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--text-secondary)' }}>System Idle</h3>
-        <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', opacity: 0.6, marginTop: '0.25rem' }}>No activity is currently being recorded</p>
+        <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', opacity: 0.6, marginTop: '0.25rem' }}>No activity is currently being recorded</p>
       </div>
     );
   }
@@ -47,26 +28,22 @@ const NowTrackingCard = ({ currentApp }) => {
 
   return (
     <div className="now-tracking-card-light glow" style={{ position: 'relative', overflow: 'hidden', display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
-      <div className="live-badge" style={{ position: 'absolute', top: '1rem', right: '1rem', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.7rem', fontWeight: 800, color: '#10b981', background: 'rgba(16, 185, 129, 0.1)', padding: '4px 10px', borderRadius: '20px', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
+      <div className="live-badge" style={{ position: 'absolute', top: '1.25rem', right: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.6rem', fontSize: '0.7rem', fontWeight: 800, color: '#10b981', background: 'rgba(16, 185, 129, 0.08)', padding: '6px 12px', borderRadius: '20px', border: '1px solid rgba(16, 185, 129, 0.2)', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}>
         <span className="live-pulse-dot" style={{ width: 6, height: 6, borderRadius: '50%', background: '#10b981' }}></span>
         LIVE
+        <span style={{ opacity: 0.3, fontWeight: 400, color: 'var(--text-secondary)' }}>|</span>
+        <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>SINCE {formatTime(currentApp.timestamp)}</span>
       </div>
       <div className="app-icon-large" style={{ fontSize: '2.2rem', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255, 255, 255, 0.03)', border: '1px solid var(--border-color)', borderRadius: '14px', width: '60px', height: '60px', flexShrink: 0 }}>
         {getAppIcon(currentApp.wm_class)}
       </div>
-      <div className="app-details" style={{ minWidth: 0, flex: 1 }}>
+      <div className="app-details" style={{ minWidth: 0, flex: 1, paddingRight: '12rem' }}>
         <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-primary)', fontFamily: "'Outfit', sans-serif", marginBottom: '0.25rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {currentApp.wm_class}
         </h3>
         <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%', opacity: 0.8 }} title={currentApp.title}>
           {currentApp.title}
         </p>
-      </div>
-      <div className="now-tracking-timer-container" style={{ marginLeft: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', flexShrink: 0 }}>
-        <div className="now-tracking-timer" style={{ fontSize: '2.5rem', fontWeight: 900, fontFamily: "'Outfit', monospace", letterSpacing: '-0.03em', color: 'var(--accent-color)', textShadow: '0 0 20px rgba(99, 102, 241, 0.2)' }}>
-          {formatDuration(localElapsed)}
-        </div>
-        <span style={{ fontSize: '0.65rem', fontWeight: 800, color: 'var(--text-secondary)', letterSpacing: '0.05em', opacity: 0.5 }}>ELAPSED</span>
       </div>
     </div>
   );
