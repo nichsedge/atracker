@@ -93,12 +93,12 @@ const DeviceFilterPill = ({ devices = [], selectedDevices = [], setSelectedDevic
           right: 0,
           zIndex: 1000,
           width: '280px',
-          background: 'rgba(13, 20, 35, 0.95)',
+          background: 'var(--bg-secondary)',
           border: '1px solid var(--border-color)',
           borderRadius: '16px',
           padding: '1rem',
-          boxShadow: '0 15px 35px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05)',
-          backdropFilter: 'blur(16px)',
+          boxShadow: 'var(--card-shadow)',
+          backdropFilter: 'blur(20px)',
           animation: 'tooltipFade 0.15s cubic-bezier(0.2, 0.8, 0.2, 1)'
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', paddingBottom: '0.5rem', borderBottom: '1px solid var(--border-subtle)' }}>
@@ -136,7 +136,7 @@ const DeviceFilterPill = ({ devices = [], selectedDevices = [], setSelectedDevic
                     borderRadius: '8px',
                     cursor: 'pointer',
                     background: active ? 'var(--accent-light)' : 'rgba(255,255,255,0.01)',
-                    border: `1px solid ${active ? 'rgba(99,102,241,0.25)' : 'var(--border-subtle)'}`,
+                    border: `1px solid ${active ? 'var(--accent-glow)' : 'var(--border-subtle)'}`,
                     transition: 'all 0.15s'
                   }}
                   className="device-dropdown-item"

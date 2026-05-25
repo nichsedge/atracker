@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, History, Settings, Pause, Play, Smartphone } from 'lucide-react';
+import { LayoutDashboard, History, Settings, Pause, Play, Smartphone, Sun, Moon } from 'lucide-react';
 
-const Sidebar = ({ status = {}, isPaused, togglePause }) => {
+const Sidebar = ({ status = {}, isPaused, togglePause, theme, setTheme }) => {
   return (
     <aside className="sidebar" style={{ background: 'var(--bg-secondary)', borderRight: '1px solid var(--border-color)', boxShadow: '1px 0 10px rgba(0,0,0,0.2)' }}>
       <div className="sidebar-brand" style={{ padding: '2rem 1.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
@@ -55,6 +55,65 @@ const Sidebar = ({ status = {}, isPaused, togglePause }) => {
           {isPaused ? <Play size={18} fill="currentColor" /> : <Pause size={18} fill="currentColor" />}
           {isPaused ? 'Resume' : 'Pause Tracking'}
         </button>
+
+        {/* Premium Segmented Theme switcher */}
+        <div style={{
+          display: 'flex',
+          padding: '4px',
+          borderRadius: '12px',
+          border: '1px solid var(--border-color)',
+          gap: '4px',
+          marginBottom: '1rem'
+        }} className="theme-toggle-container">
+          <button 
+            onClick={() => setTheme('light')}
+            style={{
+              flex: 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.4rem',
+              padding: '0.45rem',
+              borderRadius: '8px',
+              border: 'none',
+              cursor: 'pointer',
+              fontSize: '0.8rem',
+              fontWeight: 700,
+              fontFamily: "'Outfit', sans-serif",
+              backgroundColor: theme === 'light' ? 'var(--bg-main)' : 'transparent',
+              color: theme === 'light' ? 'var(--accent-color)' : 'var(--text-secondary)',
+              boxShadow: theme === 'light' ? '0 4px 12px rgba(0, 0, 0, 0.04), 0 0 0 1px rgba(0, 0, 0, 0.01)' : 'none',
+              transition: 'all 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)'
+            }}
+          >
+            <Sun size={14} />
+            <span>Light</span>
+          </button>
+          <button 
+            onClick={() => setTheme('dark')}
+            style={{
+              flex: 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.4rem',
+              padding: '0.45rem',
+              borderRadius: '8px',
+              border: 'none',
+              cursor: 'pointer',
+              fontSize: '0.8rem',
+              fontWeight: 700,
+              fontFamily: "'Outfit', sans-serif",
+              backgroundColor: theme === 'dark' ? 'var(--bg-main)' : 'transparent',
+              color: theme === 'dark' ? 'var(--accent-color)' : 'var(--text-secondary)',
+              boxShadow: theme === 'dark' ? '0 4px 12px rgba(0, 0, 0, 0.25)' : 'none',
+              transition: 'all 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)'
+            }}
+          >
+            <Moon size={14} />
+            <span>Dark</span>
+          </button>
+        </div>
 
         <div className="status-indicator" style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
           <div className={`status-dot ${status.status === 'running' && !isPaused ? 'running' : ''}`} style={{ width: 8, height: 8, borderRadius: '50%', background: status.status === 'running' && !isPaused ? '#10b981' : 'var(--text-secondary)', boxShadow: status.status === 'running' && !isPaused ? '0 0 8px #10b981' : 'none' }}></div>

@@ -136,16 +136,16 @@ const DevicesView = ({ devices, merges, mergeDevice, deleteMerge, renameDevice }
             <div className="form-group">
               <label style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text-secondary)', marginBottom: '0.5rem', display: 'block' }}>MERGE FROM (LEGACY ID)</label>
               <select className="date-picker" value={originalId} onChange={(e) => setOriginalId(e.target.value)} style={{ width: '100%', height: '48px', fontWeight: 600, background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '0 1rem' }}>
-                <option value="" style={{ background: '#0b1120', color: 'var(--text-secondary)' }}>Select source device...</option>
-                {Array.isArray(devices) && devices.map(d => <option key={d.id} value={d.id} style={{ background: '#0b1120', color: 'var(--text-primary)' }}>{d.name} ({d.id})</option>)}
+                <option value="" style={{ background: 'var(--bg-main)', color: 'var(--text-secondary)' }}>Select source device...</option>
+                {Array.isArray(devices) && devices.map(d => <option key={d.id} value={d.id} style={{ background: 'var(--bg-main)', color: 'var(--text-primary)' }}>{d.name} ({d.id})</option>)}
               </select>
             </div>
 
             <div className="form-group">
               <label style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text-secondary)', marginBottom: '0.5rem', display: 'block' }}>MERGE INTO (PRIMARY ID)</label>
               <select className="date-picker" value={targetId} onChange={(e) => setTargetId(e.target.value)} style={{ width: '100%', height: '48px', fontWeight: 600, background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '0 1rem' }}>
-                <option value="" style={{ background: '#0b1120', color: 'var(--text-secondary)' }}>Select target device...</option>
-                {Array.isArray(devices) && devices.map(d => <option key={d.id} value={d.id} style={{ background: '#0b1120', color: 'var(--text-primary)' }}>{d.name} ({d.id})</option>)}
+                <option value="" style={{ background: 'var(--bg-main)', color: 'var(--text-secondary)' }}>Select target device...</option>
+                {Array.isArray(devices) && devices.map(d => <option key={d.id} value={d.id} style={{ background: 'var(--bg-main)', color: 'var(--text-primary)' }}>{d.name} ({d.id})</option>)}
               </select>
             </div>
 

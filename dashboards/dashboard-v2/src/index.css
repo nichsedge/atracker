@@ -21,6 +21,24 @@
   --font-display: 'Outfit', sans-serif;
 }
 
+body.light-theme {
+  --bg-main: #FAF9FC; /* Soft warm lavender-white */
+  --bg-secondary: rgba(255, 255, 255, 0.7); /* Translucent pure-white glass */
+  --bg-card: rgba(245, 243, 248, 0.65); /* Soft light lavender-card */
+  --text-main: #3A354A; /* Indigo slate gray */
+  --text-primary: #1C172A; /* Deep obsidian purple */
+  --text-secondary: #746E85; /* Cool gray-purple */
+  --accent-color: #7c2cfb; /* Vibrant high-contrast neon purple */
+  --accent-light: rgba(124, 44, 251, 0.08); /* Soft purple translucent tint */
+  --accent-glow: rgba(124, 44, 251, 0.15);
+  --border-color: rgba(124, 44, 251, 0.08); /* Subtle purple borders */
+  --border-subtle: rgba(124, 44, 251, 0.04);
+  --card-shadow: 0 20px 40px -15px rgba(28, 23, 42, 0.08), 0 0 0 1px rgba(124, 44, 251, 0.04);
+  --shadow-glow: 0 0 25px rgba(124, 44, 251, 0.1);
+  --card-gradient: linear-gradient(135deg, rgba(124, 44, 251, 0.04), rgba(0, 210, 255, 0.01));
+  --success-color: #00C875; /* Premium high-contrast mint green */
+}
+
 @keyframes spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
@@ -1046,3 +1064,111 @@ input[type="date"] {
     align-self: flex-start;
   }
 }
+
+/* Light Theme Utility & Component Overrides */
+body.light-theme {
+  background-image: 
+    radial-gradient(circle at 80% 10%, rgba(124, 44, 251, 0.05) 0%, transparent 50%),
+    radial-gradient(circle at 10% 90%, rgba(0, 210, 255, 0.03) 0%, transparent 40%);
+}
+
+body.light-theme ::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+body.light-theme ::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.15);
+}
+
+body.light-theme input[type="date"] {
+  color-scheme: light;
+}
+
+body.light-theme .floating-tooltip {
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 15px 35px rgba(28, 23, 42, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.05);
+  border-color: var(--border-color);
+  color: var(--text-main);
+}
+
+body.light-theme .modal-overlay {
+  background: rgba(28, 23, 42, 0.4);
+}
+
+body.light-theme .modal-content {
+  background: #ffffff;
+  box-shadow: 0 25px 50px -12px rgba(28, 23, 42, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.05);
+  border-color: var(--border-color);
+}
+
+body.light-theme .device-item {
+  background: rgba(0, 0, 0, 0.01);
+}
+
+body.light-theme .device-item:hover {
+  background: rgba(124, 44, 251, 0.04);
+  border-color: rgba(124, 44, 251, 0.15);
+}
+
+body.light-theme .nav-btn:hover {
+  background: rgba(124, 44, 251, 0.02);
+}
+
+body.light-theme .btn-outline {
+  background: rgba(0, 0, 0, 0.01);
+}
+
+body.light-theme .btn-outline:disabled {
+  background: rgba(0, 0, 0, 0.005);
+}
+
+body.light-theme .btn-ghost:hover {
+  background: rgba(0, 0, 0, 0.03);
+}
+
+body.light-theme .btn-icon-soft:hover {
+  background: rgba(124, 44, 251, 0.04);
+}
+
+body.light-theme .timeline-track {
+  background: rgba(0, 0, 0, 0.02);
+}
+
+body.light-theme .timeline-empty {
+  background: rgba(0, 0, 0, 0.01);
+}
+
+body.light-theme .cat-progress-track {
+  background: rgba(0, 0, 0, 0.02);
+}
+
+body.light-theme .now-tracking-card-light.idle {
+  background: rgba(0, 0, 0, 0.005);
+}
+
+body.light-theme .app-icon-large {
+  background: rgba(0, 0, 0, 0.01);
+}
+
+body.light-theme .add-form {
+  background: rgba(0, 0, 0, 0.005);
+}
+
+/* Theme Switcher Container Class */
+.theme-toggle-container {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+body.light-theme .theme-toggle-container {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+/* Light Theme Device filter dropdown overrides */
+body.light-theme .device-dropdown-item {
+  background: rgba(0, 0, 0, 0.01) !important;
+}
+
+body.light-theme .device-dropdown-item:hover {
+  background: rgba(124, 44, 251, 0.03) !important;
+}
+

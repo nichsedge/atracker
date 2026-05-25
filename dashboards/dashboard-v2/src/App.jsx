@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
 import ActivityDashboard from './pages/ActivityDashboard';
@@ -10,6 +11,21 @@ import './index.css';
 
 const App = () => {
   const tracker = useTracker(formatLocalDateISO());
+  
+  const [theme, setTheme] = useState(() => {
+    const saved = localStorage.getItem('theme');
+    if (saved) return saved;
+    return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+  });
+
+  useEffect(() => {
+    if (theme === 'light') {
+      document.body.classList.add('light-theme');
+    } else {
+      document.body.classList.remove('light-theme');
+    }
+    localStorage.setItem('theme', theme);
+  }, [theme]);
 
   return (
     <Router>
@@ -18,6 +34,8 @@ const App = () => {
             status={tracker.status} 
             isPaused={tracker.isPaused}
             togglePause={tracker.togglePause}
+            theme={theme}
+            setTheme={setTheme}
         />
         
         <main className="main-content">
