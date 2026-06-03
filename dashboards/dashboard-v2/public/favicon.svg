@@ -1,33 +1,21 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
-  <!-- Background with smooth radial dark gradient -->
   <defs>
+    <!-- Background with smooth radial dark gradient -->
     <radialGradient id="bgGrad" cx="50%" cy="50%" r="50%" fx="50%" fy="50%">
       <stop offset="0%" stop-color="#18122B" />
       <stop offset="100%" stop-color="#0B0716" />
     </radialGradient>
 
-    <!-- Main Shield Neon Gradient -->
-    <linearGradient id="shieldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#8A3DFF" />
-      <stop offset="50%" stop-color="#6E30E8" />
-      <stop offset="100%" stop-color="#00D2FF" />
-    </linearGradient>
-
-    <!-- Hourglass Glow Gradient -->
-    <linearGradient id="hourglassGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+    <!-- Main Gradient for the Loop -->
+    <linearGradient id="loopGrad" x1="0%" y1="100%" x2="100%" y2="0%">
       <stop offset="0%" stop-color="#00D2FF" />
-      <stop offset="100%" stop-color="#8A3DFF" />
+      <stop offset="40%" stop-color="#8A3DFF" />
+      <stop offset="100%" stop-color="#00FFD2" />
     </linearGradient>
 
-    <!-- Outer Orbit Glow -->
-    <linearGradient id="orbitGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#00FFD2" />
-      <stop offset="100%" stop-color="#8A3DFF" />
-    </linearGradient>
-
-    <!-- Glow Filters for Neon Aesthetic -->
-    <filter id="neonGlow" x="-20%" y="-20%" width="140%" height="140%">
-      <feGaussianBlur stdDeviation="8" result="blur" />
+    <!-- Subtle Glow Filter -->
+    <filter id="subtleGlow" x="-10%" y="-10%" width="120%" height="120%">
+      <feGaussianBlur stdDeviation="5" result="blur" />
       <feMerge>
         <feMergeNode in="blur" />
         <feMergeNode in="SourceGraphic" />
@@ -35,51 +23,20 @@
     </filter>
   </defs>
 
-  <!-- Icon Rounded Background -->
+  <!-- Rounded Background -->
   <rect width="512" height="512" rx="128" fill="url(#bgGrad)" stroke="#1F1635" stroke-width="6" />
 
-  <!-- Shield Shape (Privacy) -->
-  <path d="M256 70 C 290 70, 390 90, 390 90 C 390 90, 400 280, 256 420 C 112 280, 122 90, 122 90 C 122 90, 222 70, 256 70 Z" 
+  <!-- The Loop Path (Concept A) -->
+  <path d="M 140 380 
+           L 256 130 
+           L 330 300 
+           C 350 345, 410 345, 420 300 
+           C 430 250, 380 230, 340 280 
+           L 190 280" 
         fill="none" 
-        stroke="url(#shieldGrad)" 
-        stroke-width="16" 
+        stroke="url(#loopGrad)" 
+        stroke-width="28" 
+        stroke-linecap="round" 
         stroke-linejoin="round"
-        filter="url(#neonGlow)" />
-
-  <!-- Hourglass Shape (Time Tracking) -->
-  <g transform="translate(186, 146)">
-    <!-- Top & Bottom Bars -->
-    <line x1="20" y1="20" x2="120" y2="20" stroke="url(#hourglassGrad)" stroke-width="12" stroke-linecap="round" />
-    <line x1="20" y1="200" x2="120" y2="200" stroke="url(#hourglassGrad)" stroke-width="12" stroke-linecap="round" />
-
-    <!-- Glass bulb outlines -->
-    <path d="M 25 20 
-             C 25 100, 60 110, 70 110 
-             C 80 110, 115 100, 115 20 Z" 
-          fill="none" 
-          stroke="url(#hourglassGrad)" 
-          stroke-width="8" />
-    <path d="M 25 200 
-             C 25 120, 60 110, 70 110 
-             C 80 110, 115 120, 115 200 Z" 
-          fill="none" 
-          stroke="url(#hourglassGrad)" 
-          stroke-width="8" />
-
-    <!-- Sand / Digital Nodes -->
-    <!-- Top Sand (Running out) -->
-    <path d="M 35 30 Q 70 30 105 30 L 85 85 Q 70 100 70 100 Q 70 100 55 85 Z" fill="#8A3DFF" opacity="0.65" />
-    <!-- Falling sand stream -->
-    <line x1="70" y1="100" x2="70" y2="175" stroke="#00D2FF" stroke-width="6" stroke-dasharray="8 8" />
-    <!-- Bottom Sand (Filling up) -->
-    <path d="M 40 190 Q 70 160 100 190 Z" fill="#00D2FF" opacity="0.8" />
-  </g>
-
-  <!-- Orbital Ring (Continuous Monitoring) -->
-  <path d="M 90 280 C 70 200, 430 180, 420 285 C 410 370, 75 350, 95 285" 
-        fill="none" 
-        stroke="url(#orbitGrad)" 
-        stroke-width="14" 
-        stroke-linecap="round"
-        filter="url(#neonGlow)" />
+        filter="url(#subtleGlow)" />
 </svg>
