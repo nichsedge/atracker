@@ -171,6 +171,10 @@ mod macos {
             encoding: u32,
         ) -> CFTypeRef;
         fn CFRelease(cf: CFTypeRef);
+
+        // RunLoop functions
+        fn CFRunLoopRunInMode(mode: CFTypeRef, seconds: f64, returnAfterSourceHandled: bool) -> i32;
+        static kCFRunLoopDefaultMode: CFTypeRef;
     }
 
     const KCG_WINDOW_LIST_OPTION_ON_SCREEN_ONLY: u32 = 1;
@@ -226,6 +230,9 @@ mod macos {
             } else {
                 msg_send_id(msg_send_id(pool_cls, sel(b"alloc\0")), sel(b"init\0"))
             };
+
+            // Pump the runloop so NSWorkspace updates its frontmostApplication
+            CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0.0, true);
 
             let result = collect_active_window();
 
