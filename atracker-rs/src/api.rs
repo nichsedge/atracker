@@ -1,5 +1,5 @@
 use axum::{
-    extract::{State, WebSocketUpgrade, ws::{Message, WebSocket}, Query, Path},
+    extract::{State, WebSocketUpgrade, ws::{Message, WebSocket}, Query, Path, DefaultBodyLimit},
     response::{IntoResponse, Response},
     routing::{get, post, delete, put},
     Router, Json,
@@ -131,7 +131,8 @@ pub async fn run_api(state: Arc<AppState>) {
         .route("/ws", get(ws_handler))
         .fallback(static_handler)
         .with_state(state.clone())
-        .layer(CorsLayer::permissive());
+        .layer(CorsLayer::permissive())
+        .layer(DefaultBodyLimit::max(100 * 1024 * 1024)); // 100MB body limit
 
     let addr = format!("{}:{}", state.config.dashboard.host, state.config.dashboard.port);
     let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();

@@ -809,6 +809,7 @@ pub async fn get_last_event_timestamp(pool: &SqlitePool, device_id: &str) -> Opt
 }
 
 pub async fn sync_events(pool: &SqlitePool, device_id: &str, events: Vec<Event>) -> Result<usize, sqlx::Error> {
+    let mut tx = pool.begin().await?;
     let mut count = 0;
     for mut event in events {
         event.device_id = device_id.to_string();
@@ -828,17 +829,19 @@ pub async fn sync_events(pool: &SqlitePool, device_id: &str, events: Vec<Event>)
         .bind(event.pid)
         .bind(event.duration_secs)
         .bind(event.is_idle)
-        .execute(pool)
+        .execute(&mut *tx)
         .await?;
         
         if res.rows_affected() > 0 {
             count += 1;
         }
     }
+    tx.commit().await?;
     Ok(count)
 }
 
 pub async fn sync_android_day(pool: &SqlitePool, _day: &str, events: Vec<AndroidEvent>) -> Result<usize, sqlx::Error> {
+    let mut tx = pool.begin().await?;
     let mut count = 0;
     for e in events {
         let timestamp = normalize_timestamp(&e.timestamp);
@@ -861,10 +864,11 @@ pub async fn sync_android_day(pool: &SqlitePool, _day: &str, events: Vec<Android
         .bind(e.domain.unwrap_or_default())
         .bind(e.page_title.unwrap_or_default())
         .bind(e.browser_package.unwrap_or_default())
-        .execute(pool)
+        .execute(&mut *tx)
         .await?;
         count += 1;
     }
+    tx.commit().await?;
     Ok(count)
 }
 
