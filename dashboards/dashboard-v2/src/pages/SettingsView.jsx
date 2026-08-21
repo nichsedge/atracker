@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Plus, Trash2, Edit2, Shield, Download, Upload, Smartphone, Cpu } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import CategoryModal from '../components/CategoryModal';
@@ -14,10 +14,12 @@ const SettingsView = ({
   const [editingCategory, setEditingCategory] = useState(null);
   const [isRuleModalOpen, setIsRuleModalOpen] = useState(false);
   const [tuningData, setTuningData] = useState(settings);
+  const [prevSettings, setPrevSettings] = useState(settings);
 
-  useEffect(() => {
+  if (settings !== prevSettings) {
+    setPrevSettings(settings);
     setTuningData(settings);
-  }, [settings]);
+  }
 
   const handleEditCategory = (cat) => {
     setEditingCategory(cat);
@@ -56,7 +58,7 @@ const SettingsView = ({
             body: JSON.stringify(data)
           });
           window.location.reload();
-        } catch (err) { alert("Import failed"); }
+        } catch { alert("Import failed"); }
       };
       reader.readAsText(file);
     };
@@ -71,25 +73,25 @@ const SettingsView = ({
 
   return (
     <div className="view-content fade-in" style={{ paddingBottom: '5rem' }}>
-      <header className="main-header" style={{ marginBottom: '2.5rem' }}>
+      <header className="main-header">
         <div className="header-title">
-          <h1 style={{ fontSize: '2.25rem', fontWeight: 900, fontFamily: "'Outfit', sans-serif", letterSpacing: '-0.03em', color: 'var(--text-primary)' }}>Configuration</h1>
-          <p style={{ fontSize: '1rem', color: 'var(--text-secondary)', fontWeight: 500 }}>System tuning, activity rules, and device management</p>
+          <h1 className="page-heading">Configuration</h1>
+          <p className="page-subheading">System tuning, activity rules, and device management</p>
         </div>
-        <div style={{ display: 'flex', gap: '0.75rem' }}>
+        <div className="header-actions">
           <div style={{ display: 'flex', background: 'var(--bg-secondary)', padding: '4px', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
             <button className="btn-ghost" onClick={handleExportCategories} title="Export JSON"><Download size={18} /></button>
             <button className="btn-ghost" onClick={handleImportCategories} title="Import JSON"><Upload size={18} /></button>
           </div>
           <button className="btn-primary" onClick={handleAddCategory} style={{ padding: '0 1.5rem', height: '48px', borderRadius: '12px', fontSize: '0.95rem' }}>
-            <Plus size={20} /> Add Category
+            <Plus size={20} /> <span>Add Category</span>
           </button>
         </div>
       </header>
 
       <div className="settings-grid">
         {/* Left Column: Categories & Rules */}
-        <div style={{ minWidth: 0 }}>
+        <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: '2rem' }}>
           <section className="glass-card" style={{ margin: 0 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
               <div className="section-label" style={{ margin: 0 }}>ACTIVITY CATEGORIES</div>
@@ -138,7 +140,7 @@ const SettingsView = ({
                     }}>{rule.rule_type}</span>
                     <div className="pattern" style={{ fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{rule.wm_class_pattern || '*Any App*'}</div>
                   </div>
-                  <button className="btn-icon-soft" onClick={() => deleteRule(rule.id)} style={{ color: '#ef4444' }}><Trash2 size={16} /></button>
+                  <button className="btn-icon-soft" onClick={() => deleteRule(rule.id)} style={{ color: '#ef4444', flexShrink: 0 }}><Trash2 size={16} /></button>
                 </div>
               ))}
             </div>
@@ -149,7 +151,7 @@ const SettingsView = ({
         </div>
 
         {/* Right Column: Devices & Engine */}
-        <div style={{ minWidth: 0 }}>
+        <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: '2rem' }}>
           <section className="glass-card" style={{ margin: 0 }}>
             <div className="section-label" style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '1.25rem' }}>
               <Smartphone size={16} color="var(--text-secondary)" /> DEVICES & MERGING
@@ -167,7 +169,7 @@ const SettingsView = ({
               <Cpu size={16} color="var(--text-secondary)" /> ENGINE TUNING
             </div>
             <form onSubmit={handleTuningSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+              <div className="tuning-form-grid">
                 <div className="form-group">
                   <label style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text-secondary)', display: 'block', marginBottom: '0.5rem' }}>POLL INTERVAL</label>
                   <div style={{ position: 'relative' }}>

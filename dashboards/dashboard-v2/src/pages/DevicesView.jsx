@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Smartphone, GitMerge, Trash2, Plus, Info, Edit2 } from 'lucide-react';
+import { Smartphone, GitMerge, Trash2, Info, Edit2 } from 'lucide-react';
 
 const DevicesView = ({ devices, merges, mergeDevice, deleteMerge, renameDevice }) => {
   const [originalId, setOriginalId] = useState('');
@@ -43,39 +43,39 @@ const DevicesView = ({ devices, merges, mergeDevice, deleteMerge, renameDevice }
         hour: '2-digit',
         minute: '2-digit'
       });
-    } catch (e) {
+    } catch {
       return ts;
     }
   };
 
   return (
     <div className="view-content fade-in" style={{ maxWidth: '1200px', margin: '0 auto' }}>
-      <header className="main-header" style={{ marginBottom: '2.5rem' }}>
+      <header className="main-header">
         <div className="header-title">
-          <h1 style={{ fontSize: '2.25rem', fontWeight: 900, fontFamily: "'Outfit', sans-serif", letterSpacing: '-0.03em', color: 'var(--text-primary)' }}>Device Management</h1>
-          <p style={{ fontSize: '1rem', color: 'var(--text-secondary)', fontWeight: 500 }}>Monitor active trackers and resolve duplicate identities</p>
+          <h1 className="page-heading">Device Management</h1>
+          <p className="page-subheading">Monitor active trackers and resolve duplicate identities</p>
         </div>
       </header>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '2rem' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+      <div className="devices-grid">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem', minWidth: 0 }}>
           <section className="glass-card" style={{ margin: 0 }}>
             <div className="section-label">ACTIVE TRACKING SOURCES</div>
             <div className="item-list">
               {Array.isArray(devices) && devices.map((dev) => (
-                <div key={dev.id} className="item-row" style={{ padding: '1rem 0', borderBottom: '1px solid var(--border-subtle)' }}>
-                  <div className="item-info">
-                    <div style={{ width: 40, height: 40, background: 'var(--accent-light)', border: '1px solid rgba(99, 102, 241, 0.15)', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent-color)' }}>
+                <div key={dev.id} className="item-row device-management-row">
+                  <div className="item-info" style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ width: 40, height: 40, flexShrink: 0, background: 'var(--accent-light)', border: '1px solid rgba(99, 102, 241, 0.15)', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent-color)' }}>
                       <Smartphone size={20} />
                     </div>
-                    <div>
+                    <div style={{ minWidth: 0, flex: 1, overflow: 'hidden' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <div style={{ fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Outfit', sans-serif" }}>{dev.name}</div>
+                        <div style={{ fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Outfit', sans-serif", whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{dev.name}</div>
                         <button 
                           className="btn-icon-soft" 
                           onClick={() => handleRename(dev.id, dev.name)} 
                           title="Rename device"
-                          style={{ padding: '2px', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                          style={{ padding: '2px', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
                         >
                           <Edit2 size={12} />
                         </button>
@@ -83,7 +83,7 @@ const DevicesView = ({ devices, merges, mergeDevice, deleteMerge, renameDevice }
                       <div className="pattern" style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{dev.platform} • ID: {dev.id}</div>
                     </div>
                   </div>
-                  <div className="status-indicator" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+                  <div className="device-status-col">
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                       <div className="status-dot running"></div>
                       <span style={{ fontWeight: 700, fontSize: '0.7rem', color: 'var(--success-color)', textTransform: 'uppercase' }}>Active</span>
@@ -105,13 +105,13 @@ const DevicesView = ({ devices, merges, mergeDevice, deleteMerge, renameDevice }
             <div className="item-list">
               {Array.isArray(merges) && merges.map((m) => (
                 <div key={m.original_id} className="item-row" style={{ padding: '0.75rem 0', borderBottom: '1px solid var(--border-subtle)' }}>
-                  <div className="item-info">
-                    <GitMerge size={16} className="text-secondary" style={{ color: 'var(--accent-color)' }} />
-                    <div style={{ fontWeight: 600, fontSize: '0.9rem', color: 'var(--text-primary)' }}>
+                  <div className="item-info" style={{ minWidth: 0, flex: 1 }}>
+                    <GitMerge size={16} className="text-secondary" style={{ color: 'var(--accent-color)', flexShrink: 0 }} />
+                    <div style={{ fontWeight: 600, fontSize: '0.9rem', color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {getDeviceName(m.original_id)} <span style={{ color: 'var(--text-secondary)', margin: '0 4px', opacity: 0.5 }}>→</span> {getDeviceName(m.target_id)}
                     </div>
                   </div>
-                  <button className="btn-icon-soft" onClick={() => deleteMerge(m.original_id)} style={{ color: '#ef4444' }}>
+                  <button className="btn-icon-soft" onClick={() => deleteMerge(m.original_id)} style={{ color: '#ef4444', flexShrink: 0 }}>
                     <Trash2 size={16} />
                   </button>
                 </div>
@@ -161,11 +161,6 @@ const DevicesView = ({ devices, merges, mergeDevice, deleteMerge, renameDevice }
           </form>
         </section>
       </div>
-      
-      <style dangerouslySetInnerHTML={{ __html: `
-        .btn-icon-soft { background: transparent; border: none; padding: 0.5rem; border-radius: 8px; cursor: pointer; color: var(--text-secondary); display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
-        .btn-icon-soft:hover { background: rgba(255,255,255,0.05); color: var(--accent-color); }
-      `}} />
     </div>
   );
 };

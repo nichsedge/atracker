@@ -98,11 +98,19 @@ export const useTracker = (initialDate) => {
   }, [selectedDevices]);
 
   useEffect(() => {
-    fetchStaticData();
+    let ignore = false;
+    (async () => {
+      if (!ignore) await fetchStaticData();
+    })();
+    return () => { ignore = true; };
   }, [fetchStaticData]);
 
   useEffect(() => {
-    fetchHistory();
+    let ignore = false;
+    (async () => {
+      if (!ignore) await fetchHistory();
+    })();
+    return () => { ignore = true; };
   }, [fetchHistory]);
 
   useEffect(() => {

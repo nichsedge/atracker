@@ -66,12 +66,12 @@ const HistoryView = ({ history, devices = [], selectedDevices = [], setSelectedD
 
   return (
     <div className="view-content fade-in">
-      <header className="main-header" style={{ marginBottom: '2.5rem' }}>
+      <header className="main-header">
         <div className="header-title">
-          <h1 style={{ fontSize: '2.25rem', fontWeight: 900, fontFamily: "'Outfit', sans-serif", letterSpacing: '-0.03em', color: 'var(--text-primary)' }}>Tracking History</h1>
-          <p style={{ fontSize: '1.05rem', color: 'var(--text-secondary)', fontWeight: 500 }}>{isCustomRange ? `Viewing ${range.start} to ${range.end}` : 'Activity trends over the last 14 days'}</p>
+          <h1 className="page-heading">Tracking History</h1>
+          <p className="page-subheading">{isCustomRange ? `Viewing ${range.start} to ${range.end}` : 'Activity trends over the last 14 days'}</p>
         </div>
-        <div style={{ display: 'flex', gap: '0.75rem' }}>
+        <div className="header-actions">
           {isCustomRange && <button className="btn-outline" style={{ padding: '0 1rem' }} onClick={resetRange}><RefreshCw size={18} /></button>}
           <button className="btn-outline" onClick={handleExportCSV} title="Export CSV"><Download size={18} /> Export</button>
         </div>
@@ -79,9 +79,9 @@ const HistoryView = ({ history, devices = [], selectedDevices = [], setSelectedD
 
       <section className="glass-card" style={{ marginBottom: '2rem', position: 'relative', zIndex: 10 }}>
         <div className="section-label">DATE RANGE & DEVICES</div>
-        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
-            <div className="date-input-group" style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', background: 'var(--bg-secondary)', padding: '0.6rem 1.2rem', borderRadius: 24, border: '1px solid var(--border-color)' }}>
-                <Calendar size={16} color="var(--accent-color)" />
+        <div className="history-filter-bar">
+            <div className="date-input-group">
+                <Calendar size={16} color="var(--accent-color)" style={{ flexShrink: 0 }} />
                 <input 
                     type="date" 
                     value={range.start} 
@@ -109,11 +109,11 @@ const HistoryView = ({ history, devices = [], selectedDevices = [], setSelectedD
         </div>
       </section>
 
-      <section className="glass-card" style={{ padding: '2rem', marginBottom: '2rem' }}>
+      <section className="glass-card chart-card" style={{ padding: '1.5rem', marginBottom: '2rem' }}>
         <div className="section-label">ACTIVITY TRENDS</div>
-        <div style={{ width: '100%', height: '300px', minHeight: '300px' }}>
+        <div className="chart-container" style={{ width: '100%', height: '300px', minHeight: '220px' }}>
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData}>
+            <BarChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
               <XAxis 
                 dataKey="name" 
                 axisLine={false} 
@@ -132,7 +132,7 @@ const HistoryView = ({ history, devices = [], selectedDevices = [], setSelectedD
         </div>
       </section>
 
-      <div className="history-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '1.25rem', marginTop: '2rem' }}>
+      <div className="history-grid">
         {dataToRender.map((item) => (
           <div key={item.day} className="glass-card" style={{ padding: '1.5rem', margin: 0 }}>
             <div className="stat-label" style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text-secondary)', marginBottom: '0.5rem', letterSpacing: '0.02em' }}>

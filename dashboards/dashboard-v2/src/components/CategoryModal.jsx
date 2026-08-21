@@ -72,8 +72,8 @@ const CategoryModal = ({ isOpen, onClose, category, onSave }) => {
           <button onClick={onClose} className="btn-close"><X size={20} /></button>
         </div>
         <form onSubmit={handleSubmit} className="manual-form" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '1.5rem' }}>
-            <div className="form-group">
+          <div className="modal-row-grid">
+            <div className="form-group" style={{ flex: 2 }}>
               <label style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '0.5rem', display: 'block' }}>Category Name</label>
               <input 
                 type="text" 
@@ -84,7 +84,7 @@ const CategoryModal = ({ isOpen, onClose, category, onSave }) => {
                 style={{ width: '100%', padding: '0.75rem', borderRadius: 10, border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontSize: '1rem' }}
               />
             </div>
-            <div className="form-group">
+            <div className="form-group" style={{ flex: 1 }}>
               <label style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '0.5rem', display: 'block' }}>Color</label>
               <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', background: 'var(--bg-secondary)', padding: '0.4rem', borderRadius: 10, border: '1px solid var(--border-color)' }}>
                 <input 
@@ -141,8 +141,8 @@ const CategoryModal = ({ isOpen, onClose, category, onSave }) => {
             </label>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
-            <div className="form-group">
+          <div className="modal-row-grid">
+            <div className="form-group" style={{ flex: 1 }}>
               <label style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '0.5rem', display: 'block' }}>Daily Goal (minutes)</label>
               <input 
                 type="number" 
@@ -152,7 +152,7 @@ const CategoryModal = ({ isOpen, onClose, category, onSave }) => {
                 style={{ width: '100%', padding: '0.75rem', borderRadius: 10, border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontSize: '1rem' }}
               />
             </div>
-            <div className="form-group">
+            <div className="form-group" style={{ flex: 1 }}>
               <label style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '0.5rem', display: 'block' }}>Daily Limit (minutes)</label>
               <input 
                 type="number" 
@@ -164,7 +164,7 @@ const CategoryModal = ({ isOpen, onClose, category, onSave }) => {
             </div>
           </div>
 
-          <div className="modal-footer" style={{ marginTop: '1rem', display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
+          <div className="modal-footer" style={{ marginTop: '1rem', display: 'flex', gap: '1rem', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
             <button type="button" onClick={onClose} className="btn-outline" style={{ padding: '0.75rem 1.5rem' }}>Cancel</button>
             <button type="submit" className="btn-primary" style={{ padding: '0.75rem 2rem', borderRadius: 10 }} disabled={!!(regexErrors.wm_class || regexErrors.title)}>
               {category ? 'Update Category' : 'Create Category'}

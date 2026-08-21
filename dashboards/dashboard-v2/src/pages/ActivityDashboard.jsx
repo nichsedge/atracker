@@ -1,5 +1,5 @@
-import { useMemo, useState, useEffect, useCallback, Fragment } from 'react';
-import { formatDuration, formatTime, formatLocalDateISO } from '../utils/formatters';
+import { useMemo, useState, useCallback, Fragment } from 'react';
+import { formatDuration, formatTime } from '../utils/formatters';
 import { Plus, Calendar, Target, AlertCircle, RefreshCw } from 'lucide-react';
 import ManualActivityModal from '../components/ManualActivityModal';
 import DeviceFilterPill from '../components/DeviceFilterPill';
@@ -7,7 +7,7 @@ import DeviceFilterPill from '../components/DeviceFilterPill';
 const NowTrackingCard = ({ currentApp }) => {
   if (!currentApp) {
     return (
-      <div className="now-tracking-card-light idle" style={{ display: 'flex', flexDirection: 'column', padding: '2rem', justifyContent: 'center', alignItems: 'center', background: 'rgba(255,255,255,0.01)', border: '1px dashed var(--border-color)', borderRadius: 'var(--radius-lg)' }}>
+      <div className="now-tracking-card-light idle">
         <div className="pulse-dot" style={{ width: 12, height: 12, borderRadius: '50%', background: '#94a3b8', marginBottom: '0.75rem', opacity: 0.5 }}></div>
         <h3 style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--text-secondary)' }}>System Idle</h3>
         <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', opacity: 0.6, marginTop: '0.25rem' }}>No activity is currently being recorded</p>
@@ -27,23 +27,25 @@ const NowTrackingCard = ({ currentApp }) => {
   };
 
   return (
-    <div className="now-tracking-card-light glow" style={{ position: 'relative', overflow: 'hidden', display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
-      <div className="live-badge" style={{ position: 'absolute', top: '1.25rem', right: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.6rem', fontSize: '0.7rem', fontWeight: 800, color: '#10b981', background: 'rgba(16, 185, 129, 0.08)', padding: '6px 12px', borderRadius: '20px', border: '1px solid rgba(16, 185, 129, 0.2)', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}>
-        <span className="live-pulse-dot" style={{ width: 6, height: 6, borderRadius: '50%', background: '#10b981' }}></span>
+    <div className="now-tracking-card-light glow">
+      <div className="live-badge">
+        <span className="live-pulse-dot"></span>
         LIVE
-        <span style={{ opacity: 0.3, fontWeight: 400, color: 'var(--text-secondary)' }}>|</span>
-        <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>SINCE {formatTime(currentApp.timestamp)}</span>
+        <span className="live-badge-divider">|</span>
+        <span className="live-badge-time">SINCE {formatTime(currentApp.timestamp)}</span>
       </div>
-      <div className="app-icon-large" style={{ fontSize: '2.2rem', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255, 255, 255, 0.03)', border: '1px solid var(--border-color)', borderRadius: '14px', width: '60px', height: '60px', flexShrink: 0 }}>
-        {getAppIcon(currentApp.wm_class)}
-      </div>
-      <div className="app-details" style={{ minWidth: 0, flex: 1, paddingRight: '12rem' }}>
-        <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-primary)', fontFamily: "'Outfit', sans-serif", marginBottom: '0.25rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-          {currentApp.wm_class}
-        </h3>
-        <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%', opacity: 0.8 }} title={currentApp.title}>
-          {currentApp.title}
-        </p>
+      <div className="now-tracking-content">
+        <div className="app-icon-large">
+          {getAppIcon(currentApp.wm_class)}
+        </div>
+        <div className="app-details">
+          <h3 className="app-title-text">
+            {currentApp.wm_class}
+          </h3>
+          <p className="app-subtitle-text" title={currentApp.title}>
+            {currentApp.title}
+          </p>
+        </div>
       </div>
     </div>
   );
@@ -107,7 +109,7 @@ const ActivityDashboard = ({
   const timelineLabels = useMemo(() => {
     const labels = [];
     for (let i = 0; i <= 24; i += 2) {
-      labels.push(`${i}:00`);
+      labels.push({ label: `${i}:00`, hour: i });
     }
     return labels;
   }, []);
@@ -116,12 +118,14 @@ const ActivityDashboard = ({
     setExpandedCategories(prev => ({ ...prev, [catName]: !prev[catName] }));
   };
 
-  const handleTimelineHover = (e, block) => {
+  const showTooltipForBlock = (e, block) => {
     if (block.is_idle) return;
+    const clientX = e.clientX || (e.touches && e.touches[0] ? e.touches[0].clientX : window.innerWidth / 2);
+    const clientY = e.clientY || (e.touches && e.touches[0] ? e.touches[0].clientY : 100);
     setTooltip({
       visible: true,
-      x: e.clientX,
-      y: e.clientY - 20,
+      x: Math.min(Math.max(clientX, 80), window.innerWidth - 80),
+      y: Math.max(clientY - 30, 40),
       content: (
         <div className="custom-tooltip">
           <strong>{block.wm_class}</strong>
@@ -181,20 +185,20 @@ const ActivityDashboard = ({
 
   return (
     <div className="view-content fade-in">
-      <header className="main-header" style={{ marginBottom: '2.5rem' }}>
+      <header className="main-header">
         <div className="header-title">
-          <h1 style={{ fontSize: '2.25rem', fontWeight: 900, fontFamily: "'Outfit', sans-serif", letterSpacing: '-0.03em', color: 'var(--text-primary)' }}>Activity Dashboard</h1>
-          <div className="header-meta" style={{ display: 'flex', gap: '1.2rem', marginTop: '0.5rem', alignItems: 'center' }}>
-            <div className="date-picker-pill" style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0.6rem 1.2rem', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '24px' }}>
-                <Calendar size={16} style={{ color: 'var(--accent-color)' }} />
-                <input 
-                    type="date" 
-                    value={date} 
-                    onChange={e => {
-                        if (e.target.value) setDate(e.target.value);
-                    }}
-                    style={{ background: 'none', border: 'none', outline: 'none', fontSize: '0.85rem', color: 'var(--text-primary)', fontWeight: 600, cursor: 'pointer' }}
-                />
+          <h1 className="page-heading">Activity Dashboard</h1>
+          <div className="header-meta">
+            <div className="date-picker-pill">
+              <Calendar size={16} style={{ color: 'var(--accent-color)', flexShrink: 0 }} />
+              <input 
+                type="date" 
+                value={date} 
+                onChange={e => {
+                  if (e.target.value) setDate(e.target.value);
+                }}
+                style={{ background: 'none', border: 'none', outline: 'none', fontSize: '0.85rem', color: 'var(--text-primary)', fontWeight: 600, cursor: 'pointer' }}
+              />
             </div>
 
             <DeviceFilterPill 
@@ -203,19 +207,19 @@ const ActivityDashboard = ({
               setSelectedDevices={setSelectedDevices} 
             />
 
-            <div className="total-time-pill" style={{ display: 'flex', alignItems: 'center', padding: '0.6rem 1.2rem', background: 'var(--accent-light)', border: '1px solid rgba(99, 102, 241, 0.2)', borderRadius: '24px', color: 'var(--accent-color)', fontWeight: 700, fontSize: '0.85rem' }}>
+            <div className="total-time-pill">
               {loading && <RefreshCw size={14} className="spin" style={{ marginRight: 6 }} />}
               {formatDuration(totalTracked)} tracked
             </div>
           </div>
         </div>
-        <button className="btn-primary" onClick={() => setIsManualModalOpen(true)} style={{ padding: '0.6rem 1.5rem', borderRadius: '12px', fontSize: '0.9rem', fontWeight: 700, gap: '0.5rem', height: '44px', boxShadow: '0 4px 14px rgba(99, 102, 241, 0.3)' }}>
-          <Plus size={18} /> Log Activity
+        <button className="btn-primary log-activity-btn" onClick={() => setIsManualModalOpen(true)}>
+          <Plus size={18} /> <span>Log Activity</span>
         </button>
       </header>
 
-      <div className="dashboard-grid" style={{ display: 'grid', gridTemplateColumns: goals.length > 0 ? '2fr 1fr' : '1fr', gap: '1.5rem' }}>
-        <div className="main-column" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+      <div className={`dashboard-grid ${goals.length > 0 ? 'has-goals' : ''}`}>
+        <div className="main-column">
           <section className="glass-card now-tracking-section" style={{ margin: 0 }}>
             <div className="section-label">NOW TRACKING</div>
             <NowTrackingCard currentApp={currentApp} />
@@ -225,15 +229,21 @@ const ActivityDashboard = ({
             <div className="section-label">TIMELINE</div>
             <div className="timeline-outer">
               <div className="timeline-labels">
-                {timelineLabels.map(l => <span key={l}>{l}</span>)}
+                {timelineLabels.map(l => (
+                  <span key={l.hour} className={`timeline-label-tick ${l.hour % 6 === 0 ? 'major' : (l.hour % 4 === 0 ? 'medium' : 'minor')}`}>
+                    {l.label}
+                  </span>
+                ))}
               </div>
-              <div className="timeline-track" style={{ height: '60px', background: 'rgba(255, 255, 255, 0.02)', borderRadius: '10px', border: '1px solid var(--border-color)', overflow: 'hidden', position: 'relative' }}>
+              <div className="timeline-track">
                 {timeline.length === 0 && <div className="timeline-empty" style={{ background: 'transparent' }}>No activity recorded for this day</div>}
                 {timeline.map((block, i) => (
                   <div 
                     key={i} 
                     className="timeline-block-absolute"
-                    onMouseMove={(e) => handleTimelineHover(e, block)}
+                    onMouseMove={(e) => showTooltipForBlock(e, block)}
+                    onClick={(e) => showTooltipForBlock(e, block)}
+                    onTouchStart={(e) => showTooltipForBlock(e, block)}
                     onMouseLeave={() => setTooltip({ ...tooltip, visible: false })}
                     style={getBlockStyles(block)}
                   ></div>
@@ -248,24 +258,24 @@ const ActivityDashboard = ({
               {summary.length === 0 && <div className="empty-container" style={{ color: 'var(--text-secondary)', textAlign: 'center', padding: '2rem 0' }}>No activity recorded for {date}</div>}
               {categoryBreakdown.map((cat, i) => (
                 <Fragment key={i}>
-                  <div className="usage-row-modern" onClick={() => toggleCategory(cat.name)} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', padding: '1rem 0', borderBottom: '1px solid var(--border-subtle)', gap: '1.5rem' }}>
-                    <span className={`expand-icon ${expandedCategories[cat.name] ? 'open' : ''}`} style={{ transition: 'transform 0.2s', display: 'inline-block', transform: expandedCategories[cat.name] ? 'rotate(90deg)' : 'none', color: 'var(--text-secondary)', fontSize: '1.2rem', fontWeight: 'bold' }}>›</span>
-                    <div className="cat-dot" style={{ backgroundColor: cat.color, width: '12px', height: '12px', borderRadius: '50%', boxShadow: `0 0 10px ${cat.color}66` }}></div>
-                    <div className="cat-name" style={{ width: '150px', fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Outfit', sans-serif" }}>{cat.name}</div>
-                    <div className="cat-progress-track" style={{ flex: 1, height: '10px', background: 'rgba(255, 255, 255, 0.03)', borderRadius: '5px', overflow: 'hidden', border: '1px solid var(--border-subtle)' }}>
+                  <div className="usage-row-modern" onClick={() => toggleCategory(cat.name)}>
+                    <span className={`expand-icon ${expandedCategories[cat.name] ? 'open' : ''}`}>›</span>
+                    <div className="cat-dot" style={{ backgroundColor: cat.color, width: '12px', height: '12px', borderRadius: '50%', flexShrink: 0, boxShadow: `0 0 10px ${cat.color}66` }}></div>
+                    <div className="cat-name">{cat.name}</div>
+                    <div className="cat-progress-track">
                       <div className="cat-progress-fill" style={{ width: `${(cat.total_secs / totalTracked) * 100}%`, backgroundColor: cat.color, height: '100%', borderRadius: '5px', boxShadow: `0 0 8px ${cat.color}55` }}></div>
                     </div>
-                    <div className="cat-time" style={{ width: '100px', textAlign: 'right', fontWeight: 800, color: 'var(--accent-color)' }}>{formatDuration(cat.total_secs)}</div>
+                    <div className="cat-time">{formatDuration(cat.total_secs)}</div>
                   </div>
                   {expandedCategories[cat.name] && cat.apps.map((app, j) => (
-                    <div key={`${i}-${j}`} className="app-detail-row-modern" style={{ display: 'flex', justifyContent: 'space-between', padding: '0.8rem 1rem 0.8rem 3.5rem', borderBottom: '1px solid rgba(255,255,255,0.02)', fontSize: '0.85rem', background: 'rgba(255, 255, 255, 0.005)' }}>
-                      <div className="app-name-cell" style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-                        <div style={{ fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <div key={`${i}-${j}`} className="app-detail-row-modern">
+                      <div className="app-name-cell">
+                        <div className="app-name-title">
                           <span style={{ color: 'var(--text-secondary)', opacity: 0.3 }}>└</span> {app.wm_class}
                         </div>
-                        {app.title && <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', maxWidth: '500px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', paddingLeft: '1rem', opacity: 0.7 }}>{app.title}</div>}
+                        {app.title && <div className="app-name-subtitle">{app.title}</div>}
                       </div>
-                      <div className="app-time-cell" style={{ fontWeight: 700, color: 'var(--text-secondary)' }}>{formatDuration(app.total_secs)}</div>
+                      <div className="app-time-cell">{formatDuration(app.total_secs)}</div>
                     </div>
                   ))}
                 </Fragment>
