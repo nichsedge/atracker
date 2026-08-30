@@ -3,7 +3,7 @@ name = "atracker-scripts"
 version = "0.1.0"
 description = "Local-first activity watcher & tracker - helper scripts"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.14.7"
 dependencies = [
     "pyyaml>=6.0.3",
 ]
