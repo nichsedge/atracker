@@ -1,5 +1,6 @@
 package com.sans.atracker.data.repository
 
+import com.sans.atracker.data.local.DailyAppSummary
 import com.sans.atracker.data.local.Event
 import com.sans.atracker.data.local.EventDao
 import kotlinx.coroutines.flow.Flow
@@ -11,6 +12,7 @@ interface EventRepository {
     fun getUnsyncedFlow(): Flow<List<Event>>
     suspend fun getEventsByDay(dayStart: Long, dayEnd: Long): List<Event>
     fun getEventsByDayFlow(dayStart: Long, dayEnd: Long): Flow<List<Event>>
+    fun getDailySummariesFlow(sinceTimestamp: Long): Flow<List<DailyAppSummary>>
     fun getAllEventsFlow(): Flow<List<Event>>
     suspend fun markSynced(ids: List<String>)
 }
@@ -26,6 +28,9 @@ class EventRepositoryImpl @Inject constructor(
 
     override fun getEventsByDayFlow(dayStart: Long, dayEnd: Long): Flow<List<Event>> =
         eventDao.getEventsByDayFlow(dayStart, dayEnd)
+
+    override fun getDailySummariesFlow(sinceTimestamp: Long): Flow<List<DailyAppSummary>> =
+        eventDao.getDailySummariesFlow(sinceTimestamp)
 
     override fun getAllEventsFlow(): Flow<List<Event>> = eventDao.getAllEventsFlow()
     override suspend fun markSynced(ids: List<String>) = eventDao.markSynced(ids)

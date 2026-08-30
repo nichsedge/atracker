@@ -8,12 +8,12 @@ plugins {
 
 android {
     namespace = "com.sans.atracker"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = rootProject.extra["defaultApplicationId"] as String
         minSdk = 33
-        targetSdk = 36
+        targetSdk = 37
         versionCode = 1
         versionName = "1.0"
 

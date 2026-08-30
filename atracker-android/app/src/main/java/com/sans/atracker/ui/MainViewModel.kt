@@ -16,6 +16,7 @@ import android.content.IntentFilter
 import com.sans.atracker.worker.SyncWorker
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -23,6 +24,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.Calendar
@@ -178,47 +180,39 @@ class MainViewModel @Inject constructor(
             }
         }
 
-        viewModelScope.launch {
-            eventRepository.getAllEventsFlow().collect { allEvents ->
-                val sortedHistory = allEvents
-                    .filter { !it.isIdle }
-                    .groupBy { event ->
-                        val cal =
-                            Calendar.getInstance().apply { timeInMillis = event.startTimestamp }
-                        cal.set(Calendar.HOUR_OF_DAY, 0)
-                        cal.set(Calendar.MINUTE, 0)
-                        cal.set(Calendar.SECOND, 0)
-                        cal.set(Calendar.MILLISECOND, 0)
-                        cal.timeInMillis
-                    }
-                    .toList()
-                    .sortedByDescending { it.first }
-                    .map { (dayStart, events) ->
-                        val topApps = events
-                            .groupBy { it.packageName }
-                            .map { (pkg, evts) ->
-                                val rawLabel = evts.first().appLabel
-                                val displayLabel = if (rawLabel.isBlank() || rawLabel == pkg) {
-                                    appLabelProvider.getAppLabel(pkg)
-                                } else {
-                                    rawLabel
-                                }
-                                TodayAppUsage(pkg, displayLabel, evts.sumOf { it.durationSecs })
+        viewModelScope.launch(Dispatchers.Default) {
+            val thirtyDaysAgo = System.currentTimeMillis() - (30L * 86_400_000L)
+            eventRepository.getDailySummariesFlow(thirtyDaysAgo)
+                .flowOn(Dispatchers.IO)
+                .collect { summaries ->
+                    val sdf =
+                        java.text.SimpleDateFormat("EEEE, MMM d", java.util.Locale.getDefault())
+                    val groupedByDay = summaries.groupBy { it.dayDate }
+                    val sortedHistory = groupedByDay.map { (_, daySummaries) ->
+                        val topApps = daySummaries.map { summary ->
+                            val rawLabel = summary.appLabel
+                            val displayLabel = if (rawLabel.isBlank() || rawLabel == summary.packageName) {
+                                appLabelProvider.getAppLabel(summary.packageName)
+                            } else {
+                                rawLabel
                             }
-                            .sortedByDescending { it.totalSecs }
-                            .take(3)
+                            TodayAppUsage(
+                                packageName = summary.packageName,
+                                appLabel = displayLabel,
+                                totalSecs = summary.totalSecs
+                            )
+                        }.take(3)
 
-                        val sdf =
-                            java.text.SimpleDateFormat("EEEE, MMM d", java.util.Locale.getDefault())
+                        val representativeTime = daySummaries.first().minTimestamp
                         DayUsage(
-                            dateLabel = sdf.format(java.util.Date(dayStart)),
-                            totalSecs = events.sumOf { it.durationSecs },
+                            dateLabel = sdf.format(java.util.Date(representativeTime)),
+                            totalSecs = daySummaries.sumOf { it.totalSecs },
                             topApps = topApps
                         )
                     }
 
-                _uiState.update { it.copy(history = sortedHistory) }
-            }
+                    _uiState.update { it.copy(history = sortedHistory) }
+                }
         }
     }
 

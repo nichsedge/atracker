@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -12,9 +13,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -35,48 +36,54 @@ import com.sans.atracker.ui.components.formatDuration
 @Composable
 fun HistoryScreen(viewModel: MainViewModel) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    val scrollState = rememberScrollState()
 
-    Column(
+    LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .verticalScroll(scrollState)
+            .background(MaterialTheme.colorScheme.background),
+        contentPadding = PaddingValues(bottom = 40.dp)
     ) {
-        MeshGradientHeader(
-            modifier = Modifier.padding(bottom = 8.dp)
-        ) {
-            Column(
-                modifier = Modifier
-                    .padding(horizontal = 24.dp)
-                    .padding(top = 16.dp, bottom = 24.dp)
+        item(key = "header") {
+            MeshGradientHeader(
+                modifier = Modifier.padding(bottom = 8.dp)
             ) {
-                Text(
-                    "Activity History",
-                    style = MaterialTheme.typography.headlineLarge,
-                    fontWeight = FontWeight.Black,
-                    color = MaterialTheme.colorScheme.onBackground
-                )
-                Text(
-                    "Review your past digital habits",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.secondary,
-                    fontWeight = FontWeight.Medium
-                )
+                Column(
+                    modifier = Modifier
+                        .padding(horizontal = 24.dp)
+                        .padding(top = 16.dp, bottom = 24.dp)
+                ) {
+                    Text(
+                        "Activity History",
+                        style = MaterialTheme.typography.headlineLarge,
+                        fontWeight = FontWeight.Black,
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
+                    Text(
+                        "Review your past digital habits",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.secondary,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
             }
         }
 
-        Column(
-            modifier = Modifier.padding(horizontal = 20.dp),
-            verticalArrangement = Arrangement.spacedBy(28.dp)
-        ) {
-            SectionHeader("Recent Days")
+        item(key = "section_header") {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 12.dp)
+            ) {
+                SectionHeader("Recent Days")
+            }
+        }
 
-            if (state.history.isEmpty()) {
+        if (state.history.isEmpty()) {
+            item(key = "empty_state") {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 40.dp),
+                        .padding(horizontal = 20.dp, vertical = 40.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
@@ -85,13 +92,20 @@ fun HistoryScreen(viewModel: MainViewModel) {
                         color = MaterialTheme.colorScheme.secondary
                     )
                 }
-            } else {
-                state.history.forEach { dayUsage ->
+            }
+        } else {
+            items(
+                items = state.history,
+                key = { it.dateLabel }
+            ) { dayUsage ->
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 10.dp)
+                ) {
                     HistoryItem(dayUsage)
                 }
             }
-
-            Spacer(modifier = Modifier.height(40.dp))
         }
     }
 }

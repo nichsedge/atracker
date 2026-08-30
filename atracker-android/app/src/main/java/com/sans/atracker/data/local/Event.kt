@@ -1,10 +1,18 @@
 package com.sans.atracker.data.local
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 import java.util.UUID
 
-@Entity(tableName = "events")
+@Entity(
+    tableName = "events",
+    indices = [
+        Index(value = ["startTimestamp"]),
+        Index(value = ["synced"]),
+        Index(value = ["packageName"])
+    ]
+)
 data class Event(
     @PrimaryKey val id: String = UUID.randomUUID().toString(),
     val packageName: String,

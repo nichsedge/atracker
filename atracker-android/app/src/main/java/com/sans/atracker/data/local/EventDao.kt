@@ -6,6 +6,14 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import kotlinx.coroutines.flow.Flow
 
+data class DailyAppSummary(
+    val dayDate: String,
+    val packageName: String,
+    val appLabel: String,
+    val totalSecs: Double,
+    val minTimestamp: Long
+)
+
 @Dao
 interface EventDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -26,6 +34,21 @@ interface EventDao {
     /** All events in a day window (epoch ms) as a reactive flow. */
     @Query("SELECT * FROM events WHERE startTimestamp >= :dayStart AND startTimestamp < :dayEnd ORDER BY startTimestamp ASC")
     fun getEventsByDayFlow(dayStart: Long, dayEnd: Long): Flow<List<Event>>
+
+    /** Aggregated daily app summaries since a given timestamp. */
+    @Query("""
+        SELECT 
+            strftime('%Y-%m-%d', startTimestamp / 1000, 'unixepoch', 'localtime') AS dayDate,
+            packageName,
+            MAX(appLabel) AS appLabel,
+            SUM(durationSecs) AS totalSecs,
+            MIN(startTimestamp) AS minTimestamp
+        FROM events
+        WHERE isIdle = 0 AND startTimestamp >= :sinceTimestamp
+        GROUP BY dayDate, packageName
+        ORDER BY minTimestamp DESC, totalSecs DESC
+    """)
+    fun getDailySummariesFlow(sinceTimestamp: Long): Flow<List<DailyAppSummary>>
 
     /** All events, descending order by time. */
     @Query("SELECT * FROM events ORDER BY startTimestamp DESC")
