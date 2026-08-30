@@ -20,7 +20,7 @@ This workflow helps you automatically categorize activities that the system hasn
 
 // turbo-all
 2. **Run the Fetch Script**
-   Execute your script in the terminal (e.g., `uv run python list_uncategorized.py`).
+   Execute your script in the terminal (e.g., `uv run list_uncategorized.py`).
 
 3. **Analyze and Deduce Categories**
    Evaluate the `wm_class` and `title` of the uncategorized events. Use your AI capabilities to deduce their appropriate category.
@@ -34,7 +34,7 @@ This workflow helps you automatically categorize activities that the system hasn
 
 4. **Prepare the Category Updates**
    Create a second python script (e.g., `update_categories.py`) to programmatically apply the missing or adjusted categorizations:
-   - First, fetch current categories with `GET http://localhost:8933/api/categories`.
+   - First, fetch current categories with `GET http://localhost:8933/api/categories`. *Note*: The response returns an object with a `"categories"` array (`data.get("categories", [])`).
    - **Guideline**:
      - Prefer `wm_class_pattern` for Android packages and desktop app classes.
      - Prefer `title_pattern` for specific browser tabs (e.g., `YouTube`, `GitHub`).
@@ -48,7 +48,7 @@ This workflow helps you automatically categorize activities that the system hasn
 
 // turbo
 5. **Apply Updates and Clean Up**
-   Execute the update script (e.g., `uv run python update_categories.py`) to commit your changes.
+   Execute the update script (e.g., `uv run update_categories.py`) to commit your changes.
    Once they have successfully applied, delete the temporary python scripts you created.
 
 6. **Verify and Notify**
