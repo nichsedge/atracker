@@ -2,6 +2,12 @@ use std::sync::Arc;
 use tokio::sync::{Mutex, broadcast};
 #[cfg(target_os = "linux")]
 use zbus::{Connection, Proxy};
+#[cfg(target_os = "linux")]
+use std::path::PathBuf;
+#[cfg(target_os = "linux")]
+use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
+#[cfg(target_os = "linux")]
+use tokio::net::UnixStream;
 use crate::config::Config;
 use crate::db::{self, Event};
 use sqlx::SqlitePool;
@@ -501,6 +507,35 @@ impl Watcher {
 
     #[cfg(target_os = "linux")]
     async fn probe_platform(&self) -> Result<Probe, Box<dyn std::error::Error + Send + Sync>> {
+        // 1. Check if Niri is running by querying Niri IPC socket
+        match self.get_niri_active_window().await {
+            Ok(win_opt) => {
+                let idle_ms = self.get_linux_idle_ms().await.unwrap_or(0);
+                return Ok(Probe {
+                    idle_ms,
+                    window: win_opt.map(|win| (win.wm_class, win.title, win.pid)),
+                });
+            }
+            Err(e) => {
+                debug!("Niri IPC check failed/skipped: {}", e);
+            }
+        }
+
+        // 2. Check if Hyprland is running by querying Hyprland IPC socket
+        match self.get_hyprland_active_window().await {
+            Ok(win_opt) => {
+                let idle_ms = self.get_linux_idle_ms().await.unwrap_or(0);
+                return Ok(Probe {
+                    idle_ms,
+                    window: win_opt.map(|win| (win.wm_class, win.title, win.pid)),
+                });
+            }
+            Err(e) => {
+                debug!("Hyprland IPC check failed/skipped: {}", e);
+            }
+        }
+
+        // 3. GNOME / Mutter fallback via DBus
         let (idle_ms, window_result) = {
             let mut conn_lock = self.dbus_conn.lock().await;
             if conn_lock.is_none() {
@@ -632,6 +667,231 @@ impl Watcher {
     }
 
     #[cfg(target_os = "linux")]
+    fn find_niri_socket() -> Option<PathBuf> {
+        if let Ok(sock) = std::env::var("NIRI_SOCKET") {
+            let p = PathBuf::from(sock);
+            if p.exists() {
+                return Some(p);
+            }
+        }
+
+        let base_dirs = [
+            std::env::var("XDG_RUNTIME_DIR").ok().map(PathBuf::from),
+            dirs::runtime_dir(),
+            Some(PathBuf::from("/tmp")),
+        ];
+
+        for base in base_dirs.into_iter().flatten() {
+            if let Ok(entries) = std::fs::read_dir(&base) {
+                let mut candidates = Vec::new();
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                        if name.starts_with("niri") && name.ends_with(".sock") {
+                            let mtime = entry.metadata().and_then(|m| m.modified()).ok();
+                            candidates.push((mtime, path));
+                        }
+                    }
+                }
+                candidates.sort_by(|a, b| b.0.cmp(&a.0));
+                if let Some((_, sock_path)) = candidates.into_iter().next() {
+                    return Some(sock_path);
+                }
+            }
+        }
+
+        None
+    }
+
+    #[cfg(target_os = "linux")]
+    async fn get_niri_active_window(&self) -> Result<Option<WindowInfo>, Box<dyn std::error::Error + Send + Sync>> {
+        let sock_path = match Self::find_niri_socket() {
+            Some(p) => p,
+            None => return Err("Niri socket not found".into()),
+        };
+
+        let mut stream = match UnixStream::connect(&sock_path).await {
+            Ok(s) => s,
+            Err(e) => {
+                debug!("Failed to connect to Niri socket {:?}: {}", sock_path, e);
+                return Err(Box::new(e));
+            }
+        };
+
+        if let Err(e) = stream.write_all(b"\"FocusedWindow\"\n").await {
+            debug!("Failed to write to Niri socket: {}", e);
+            return Err(Box::new(e));
+        }
+
+        let mut reader = BufReader::new(stream);
+        let mut line = String::new();
+        let n = reader.read_line(&mut line).await?;
+        if n == 0 {
+            return Ok(None);
+        }
+
+        let s = line.trim();
+        if s.is_empty() {
+            return Ok(None);
+        }
+
+        Ok(Self::parse_niri_response(s))
+    }
+
+    #[cfg(target_os = "linux")]
+    pub(crate) fn parse_niri_response(s: &str) -> Option<WindowInfo> {
+        #[derive(Deserialize)]
+        struct NiriReply {
+            #[serde(rename = "Ok")]
+            ok: Option<NiriResponse>,
+        }
+
+        #[derive(Deserialize)]
+        struct NiriResponse {
+            #[serde(rename = "FocusedWindow")]
+            focused_window: Option<NiriWindow>,
+        }
+
+        #[derive(Deserialize)]
+        struct NiriWindow {
+            #[serde(default)]
+            title: Option<String>,
+            #[serde(default)]
+            app_id: Option<String>,
+            #[serde(default)]
+            pid: Option<i32>,
+        }
+
+        if let Ok(reply) = serde_json::from_str::<NiriReply>(s) {
+            if let Some(resp) = reply.ok {
+                if let Some(win) = resp.focused_window {
+                    let wm_class = win
+                        .app_id
+                        .filter(|s| !s.trim().is_empty())
+                        .or_else(|| win.title.clone())
+                        .unwrap_or_default();
+                    if !wm_class.is_empty() {
+                        return Some(WindowInfo {
+                            wm_class,
+                            title: win.title.unwrap_or_default(),
+                            pid: win.pid.unwrap_or(0),
+                        });
+                    }
+                }
+            }
+        }
+
+        None
+    }
+
+    #[cfg(target_os = "linux")]
+    fn find_hyprland_socket() -> Option<PathBuf> {
+        if let Ok(sig) = std::env::var("HYPRLAND_INSTANCE_SIGNATURE") {
+            if let Ok(runtime_dir) = std::env::var("XDG_RUNTIME_DIR") {
+                let p = PathBuf::from(runtime_dir).join("hypr").join(&sig).join(".socket.sock");
+                if p.exists() {
+                    return Some(p);
+                }
+            }
+            let p = PathBuf::from("/tmp/hypr").join(&sig).join(".socket.sock");
+            if p.exists() {
+                return Some(p);
+            }
+        }
+
+        let base_dirs = [
+            std::env::var("XDG_RUNTIME_DIR").ok().map(|d| PathBuf::from(d).join("hypr")),
+            Some(PathBuf::from("/tmp/hypr")),
+        ];
+
+        for base in base_dirs.into_iter().flatten() {
+            if let Ok(entries) = std::fs::read_dir(&base) {
+                let mut candidates = Vec::new();
+                for entry in entries.flatten() {
+                    let sock = entry.path().join(".socket.sock");
+                    let lock = entry.path().join("hyprland.lock");
+                    if sock.exists() {
+                        let has_lock = lock.exists();
+                        let mtime = entry.metadata().and_then(|m| m.modified()).ok();
+                        candidates.push((has_lock, mtime, sock));
+                    }
+                }
+                candidates.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| b.1.cmp(&a.1)));
+                if let Some((_, _, sock_path)) = candidates.into_iter().next() {
+                    return Some(sock_path);
+                }
+            }
+        }
+
+        None
+    }
+
+    #[cfg(target_os = "linux")]
+    async fn get_hyprland_active_window(&self) -> Result<Option<WindowInfo>, Box<dyn std::error::Error + Send + Sync>> {
+        let sock_path = match Self::find_hyprland_socket() {
+            Some(p) => p,
+            None => return Err("Hyprland socket not found".into()),
+        };
+
+        let mut stream = match UnixStream::connect(&sock_path).await {
+            Ok(s) => s,
+            Err(e) => {
+                debug!("Failed to connect to Hyprland socket {:?}: {}", sock_path, e);
+                return Err(Box::new(e));
+            }
+        };
+
+        if let Err(e) = stream.write_all(b"j/activewindow").await {
+            debug!("Failed to write to Hyprland socket: {}", e);
+            return Err(Box::new(e));
+        }
+
+        let mut response = Vec::new();
+        let mut buf = [0u8; 4096];
+        loop {
+            match stream.read(&mut buf).await {
+                Ok(0) => break,
+                Ok(n) => response.extend_from_slice(&buf[..n]),
+                Err(e) => {
+                    debug!("Failed to read from Hyprland socket: {}", e);
+                    return Err(Box::new(e));
+                }
+            }
+        }
+
+        let s = match std::str::from_utf8(&response) {
+            Ok(s) => s.trim(),
+            Err(_) => return Ok(None),
+        };
+
+        if s.is_empty() || s == "{}" {
+            return Ok(None);
+        }
+
+        #[derive(Deserialize)]
+        struct HyprWindow {
+            #[serde(default)]
+            class: String,
+            #[serde(default)]
+            title: String,
+            #[serde(default)]
+            pid: i32,
+        }
+
+        if let Ok(hypr_win) = serde_json::from_str::<HyprWindow>(s) {
+            if !hypr_win.class.is_empty() {
+                return Ok(Some(WindowInfo {
+                    wm_class: hypr_win.class,
+                    title: hypr_win.title,
+                    pid: hypr_win.pid,
+                }));
+            }
+        }
+
+        Ok(None)
+    }
+
+    #[cfg(target_os = "linux")]
     async fn get_active_window(&self, conn: &Connection) -> Result<Option<WindowInfo>, Box<dyn std::error::Error + Send + Sync>> {
         let proxy = Proxy::new(conn, "org.atracker.WindowTracker", "/org/atracker/WindowTracker", "org.atracker.WindowTracker").await.map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
         let result: String = proxy.call("GetActiveWindow", &()).await.map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
@@ -646,6 +906,107 @@ impl Watcher {
         Ok(idle_time)
     }
 
+    #[cfg(target_os = "linux")]
+    async fn get_linux_idle_ms(&self) -> Result<u64, Box<dyn std::error::Error + Send + Sync>> {
+        // 1. File-flag method via hypridle (most reliable on Wayland compositors)
+        //    hypridle touches /tmp/atracker-idle (or $XDG_RUNTIME_DIR/atracker-idle) on timeout
+        //    and removes on resume. We compute idle_ms as timeout + elapsed since flag mtime.
+        let idle_flag_paths = {
+            let mut v = Vec::new();
+            if let Ok(rt) = std::env::var("XDG_RUNTIME_DIR") {
+                v.push(PathBuf::from(rt).join("atracker-idle"));
+            }
+            v.push(PathBuf::from("/tmp/atracker-idle"));
+            // legacy / fallback used by older hypridle snippet
+            v.push(PathBuf::from("/tmp/atracker-idle-flag"));
+            v
+        };
+        // idle threshold from DB (fallback 300s) — matches hypridle listener timeout
+        let threshold_ms = {
+            let t = db::get_setting(&self.pool, "idle_threshold", &self.config.tracking.idle_threshold.to_string()).await;
+            t.parse::<u64>().unwrap_or(self.config.tracking.idle_threshold) * 1000
+        };
+        for p in &idle_flag_paths {
+            if let Ok(meta) = std::fs::metadata(p) {
+                if let Ok(mtime) = meta.modified() {
+                    if let Ok(elapsed) = mtime.elapsed() {
+                        // idle_ms = threshold + time since flag was touched
+                        let elapsed_ms = elapsed.as_millis() as u64;
+                        return Ok(threshold_ms.saturating_add(elapsed_ms));
+                    }
+                }
+                // flag exists but mtime unreadable -> assume exactly threshold
+                return Ok(threshold_ms);
+            }
+        }
+
+        // 2. Try GNOME Mutter IdleMonitor (works on GNOME)
+        {
+            let mut conn_lock = self.dbus_conn.lock().await;
+            if conn_lock.is_none() {
+                if let Ok(c) = Connection::session().await {
+                    *conn_lock = Some(c);
+                }
+            }
+            if let Some(conn) = conn_lock.as_ref() {
+                if let Ok(idle) = self.get_idle_time(conn).await {
+                    if idle > 0 {
+                        return Ok(idle);
+                    }
+                }
+                // 3. Fallback: ScreenSaver GetActive (DMS provides org.gnome.ScreenSaver; hypridle provides org.freedesktop.ScreenSaver)
+                //    If locked, treat as idle with threshold + 1 to trigger idle branch
+                if let Ok(proxy) = Proxy::new(conn, "org.gnome.ScreenSaver", "/org/gnome/ScreenSaver", "org.gnome.ScreenSaver").await {
+                    if let Ok(active) = proxy.call("GetActive", &()).await as Result<bool, _> {
+                        if active {
+                            return Ok(threshold_ms.saturating_add(1000));
+                        }
+                    }
+                }
+                if let Ok(proxy) = Proxy::new(conn, "org.freedesktop.ScreenSaver", "/org/freedesktop/ScreenSaver", "org.freedesktop.ScreenSaver").await {
+                    if let Ok(active) = proxy.call("GetActive", &()).await as Result<bool, _> {
+                        if active {
+                            return Ok(threshold_ms.saturating_add(1000));
+                        }
+                    }
+                }
+            }
+        }
+
+        // 4. Last resort: check dpmsStatus via hyprctl (dpms off == idle)
+        //    Non-fatal if hyprctl fails
+        if let Ok(dpms_off) = Self::is_hyprland_dpms_off().await {
+            if dpms_off {
+                return Ok(threshold_ms.saturating_add(1000));
+            }
+        }
+
+        Ok(0)
+    }
+
+    #[cfg(target_os = "linux")]
+    async fn is_hyprland_dpms_off() -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
+        // hyprctl monitors -j -> check dpmsStatus
+        let out = tokio::process::Command::new("hyprctl")
+            .args(["monitors", "-j"])
+            .output()
+            .await?;
+        if !out.status.success() {
+            return Ok(false);
+        }
+        let s = String::from_utf8_lossy(&out.stdout);
+        if let Ok(v) = serde_json::from_str::<serde_json::Value>(&s) {
+            if let Some(arr) = v.as_array() {
+                for mon in arr {
+                    if mon.get("dpmsStatus").and_then(|x| x.as_bool()) == Some(false) {
+                        return Ok(true);
+                    }
+                }
+            }
+        }
+        Ok(false)
+    }
+
     pub async fn stop(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let mut current = self.current_event.lock().await;
         if let Some(curr) = current.take() { self.flush_event(curr).await?; }
@@ -655,10 +1016,13 @@ impl Watcher {
 
 #[cfg(target_os = "linux")]
 #[derive(Deserialize)]
-struct WindowInfo {
-    wm_class: String,
-    title: String,
-    pid: i32,
+pub(crate) struct WindowInfo {
+    #[serde(alias = "class")]
+    pub(crate) wm_class: String,
+    #[serde(default)]
+    pub(crate) title: String,
+    #[serde(default)]
+    pub(crate) pid: i32,
 }
 
 #[cfg(test)]
@@ -789,4 +1153,40 @@ mod tests {
             FilterDecision::Ignore(id) if id == "r2"
         ));
     }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn parse_niri_response_with_focused_window() {
+        let json = r#"{"Ok":{"FocusedWindow":{"id":4,"title":"Sans Launcher","app_id":"jetbrains-studio","pid":246807,"workspace_id":1,"is_focused":true}}}"#;
+        let win = Watcher::parse_niri_response(json).expect("should parse window");
+        assert_eq!(win.wm_class, "jetbrains-studio");
+        assert_eq!(win.title, "Sans Launcher");
+        assert_eq!(win.pid, 246807);
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn parse_niri_response_null_focused_window() {
+        let json = r#"{"Ok":{"FocusedWindow":null}}"#;
+        let win = Watcher::parse_niri_response(json);
+        assert!(win.is_none());
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn parse_niri_response_fallback_to_title_when_app_id_missing() {
+        let json = r#"{"Ok":{"FocusedWindow":{"id":4,"title":"Special Utility","app_id":null,"pid":1234}}}"#;
+        let win = Watcher::parse_niri_response(json).expect("should fallback to title");
+        assert_eq!(win.wm_class, "Special Utility");
+        assert_eq!(win.title, "Special Utility");
+        assert_eq!(win.pid, 1234);
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn parse_niri_response_invalid_json() {
+        assert!(Watcher::parse_niri_response("invalid json").is_none());
+        assert!(Watcher::parse_niri_response("").is_none());
+    }
 }
+
