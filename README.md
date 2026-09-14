@@ -90,6 +90,14 @@ Once the installation is complete, visit **[http://localhost:8933](http://localh
 
 ---
 
+## ☁️ Cloudflare R2 Backup
+
+Atomic online SQLite snapshot and rolling overwrite to Cloudflare R2 (`db/atracker_latest.sqlite` in bucket `ichsanul-dev`):
+```bash
+python3 scripts/backup_r2.py
+```
+Integrated into workstation-wide scheduled sync (`~/Projects/_scheduled_jobs/sync_ecosystem.py`).
+
 ## 📖 Documentation
 
 - [System Architecture](docs/architecture.md)
