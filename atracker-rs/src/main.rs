@@ -83,6 +83,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         "title": curr.title,
                         "timestamp": curr.timestamp,
                         "is_idle": curr.is_idle,
+                        "desktop_env": curr.desktop_env,
                     }));
                 } else {
                     *state_curr = None;

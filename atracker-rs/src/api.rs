@@ -245,6 +245,7 @@ async fn get_timeline(State(state): State<Arc<AppState>>, Query(q): Query<DateQu
                         pid: 0,
                         duration_secs: duration,
                         is_idle: wm_class == "__idle__",
+                        desktop_env: curr["desktop_env"].as_str().unwrap_or("").to_string(),
                     });
                 }
             }
@@ -528,6 +529,7 @@ async fn add_manual_event(State(state): State<Arc<AppState>>, Json(req): Json<Ma
         pid: 0,
         duration_secs: duration,
         is_idle: false,
+        desktop_env: "".to_string(),
     };
 
     match db::insert_event(&state.pool, event).await {

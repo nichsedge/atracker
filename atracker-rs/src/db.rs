@@ -15,6 +15,8 @@ pub struct Event {
     pub pid: i32,
     pub duration_secs: f64,
     pub is_idle: bool,
+    #[serde(default)]
+    pub desktop_env: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, sqlx::FromRow, Clone)]
@@ -118,12 +120,18 @@ pub async fn init_db(config: &Config) -> SqlitePool {
             pid INTEGER NOT NULL DEFAULT 0,
             duration_secs REAL NOT NULL DEFAULT 0,
             is_idle INTEGER NOT NULL DEFAULT 0,
+            desktop_env TEXT NOT NULL DEFAULT '',
             PRIMARY KEY(device_id, id)
         )"
     )
     .execute(&pool)
     .await
     .unwrap();
+
+    // Migration: ensure desktop_env column exists in existing events table
+    let _ = sqlx::query("ALTER TABLE events ADD COLUMN desktop_env TEXT NOT NULL DEFAULT ''")
+        .execute(&pool)
+        .await;
 
     sqlx::query(
         "CREATE TABLE IF NOT EXISTS categories (
@@ -212,6 +220,7 @@ pub async fn init_db(config: &Config) -> SqlitePool {
     sqlx::query("CREATE INDEX IF NOT EXISTS idx_events_time_idle ON events(timestamp, is_idle)").execute(&pool).await.unwrap();
     sqlx::query("CREATE INDEX IF NOT EXISTS idx_events_device_id ON events(device_id)").execute(&pool).await.unwrap();
     sqlx::query("CREATE INDEX IF NOT EXISTS idx_events_device_time ON events(device_id, timestamp)").execute(&pool).await.unwrap();
+    sqlx::query("CREATE INDEX IF NOT EXISTS idx_events_desktop_env ON events(desktop_env)").execute(&pool).await.unwrap();
     sqlx::query("CREATE INDEX IF NOT EXISTS idx_android_events_timestamp ON android_events(timestamp)").execute(&pool).await.unwrap();
     sqlx::query("CREATE INDEX IF NOT EXISTS idx_android_events_device_id ON android_events(device_id)").execute(&pool).await.unwrap();
     sqlx::query("CREATE INDEX IF NOT EXISTS idx_android_events_device_time ON android_events(device_id, timestamp)").execute(&pool).await.unwrap();
@@ -318,8 +327,8 @@ pub async fn insert_event(pool: &SqlitePool, event: Event) -> Result<(), sqlx::E
     let end_timestamp = normalize_timestamp(&event.end_timestamp);
 
     sqlx::query(
-        "INSERT INTO events (id, device_id, timestamp, end_timestamp, wm_class, title, pid, duration_secs, is_idle)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        "INSERT INTO events (id, device_id, timestamp, end_timestamp, wm_class, title, pid, duration_secs, is_idle, desktop_env)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
     )
     .bind(event.id)
     .bind(event.device_id)
@@ -330,6 +339,7 @@ pub async fn insert_event(pool: &SqlitePool, event: Event) -> Result<(), sqlx::E
     .bind(event.pid)
     .bind(event.duration_secs)
     .bind(event.is_idle)
+    .bind(event.desktop_env)
     .execute(pool)
     .await?;
 
@@ -344,11 +354,11 @@ pub async fn get_events(pool: &SqlitePool, target_date: &str, device_ids: Option
 
     sqlx::query(
         "WITH combined_events AS (
-            SELECT e.id, COALESCE(m.target_id, e.device_id) as device_id, 'local' as platform, timestamp, end_timestamp, wm_class, title, pid, duration_secs, is_idle 
+            SELECT e.id, COALESCE(m.target_id, e.device_id) as device_id, 'local' as platform, timestamp, end_timestamp, wm_class, title, pid, duration_secs, is_idle, e.desktop_env 
             FROM events e
             LEFT JOIN device_merges m ON e.device_id = m.original_id
             UNION ALL
-            SELECT ae.id, COALESCE(m.target_id, ae.device_id) as device_id, 'android' as platform, timestamp, end_timestamp, package_name as wm_class, CASE WHEN source_type = 'BROWSER_TAB' THEN COALESCE(NULLIF(page_title, ''), NULLIF(domain, ''), app_label) ELSE app_label END as title, 0 as pid, duration_secs, is_idle 
+            SELECT ae.id, COALESCE(m.target_id, ae.device_id) as device_id, 'android' as platform, timestamp, end_timestamp, package_name as wm_class, CASE WHEN source_type = 'BROWSER_TAB' THEN COALESCE(NULLIF(page_title, ''), NULLIF(domain, ''), app_label) ELSE app_label END as title, 0 as pid, duration_secs, is_idle, '' as desktop_env 
             FROM android_events ae
             LEFT JOIN device_merges m ON ae.device_id = m.original_id
         )
@@ -377,6 +387,7 @@ pub async fn get_events(pool: &SqlitePool, target_date: &str, device_ids: Option
             "pid": row.get::<i32, _>("pid"),
             "duration_secs": row.get::<f64, _>("duration_secs"),
             "is_idle": row.get::<i32, _>("is_idle") != 0,
+            "desktop_env": row.get::<String, _>("desktop_env"),
         })
     })
     .collect()
@@ -439,11 +450,11 @@ pub async fn get_timeline_range(pool: &SqlitePool, start_date: &str, end_date: &
 
     sqlx::query(
         "WITH combined_events AS (
-            SELECT e.id, COALESCE(m.target_id, e.device_id) as device_id, timestamp, end_timestamp, wm_class, title, pid, duration_secs, is_idle 
+            SELECT e.id, COALESCE(m.target_id, e.device_id) as device_id, timestamp, end_timestamp, wm_class, title, pid, duration_secs, is_idle, e.desktop_env 
             FROM events e
             LEFT JOIN device_merges m ON e.device_id = m.original_id
             UNION ALL
-            SELECT ae.id, COALESCE(m.target_id, ae.device_id) as device_id, timestamp, end_timestamp, package_name as wm_class, CASE WHEN source_type = 'BROWSER_TAB' THEN COALESCE(NULLIF(page_title, ''), NULLIF(domain, ''), app_label) ELSE app_label END as title, 0 as pid, duration_secs, is_idle 
+            SELECT ae.id, COALESCE(m.target_id, ae.device_id) as device_id, timestamp, end_timestamp, package_name as wm_class, CASE WHEN source_type = 'BROWSER_TAB' THEN COALESCE(NULLIF(page_title, ''), NULLIF(domain, ''), app_label) ELSE app_label END as title, 0 as pid, duration_secs, is_idle, '' as desktop_env 
             FROM android_events ae
             LEFT JOIN device_merges m ON ae.device_id = m.original_id
         )
@@ -472,6 +483,7 @@ pub async fn get_timeline_range(pool: &SqlitePool, start_date: &str, end_date: &
             pid: row.get("pid"),
             duration_secs: row.get("duration_secs"),
             is_idle: row.get::<i32, _>("is_idle") != 0,
+            desktop_env: row.get("desktop_env"),
         }
     })
     .collect()

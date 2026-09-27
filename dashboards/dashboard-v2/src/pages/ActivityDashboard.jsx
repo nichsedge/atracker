@@ -33,6 +33,12 @@ const NowTrackingCard = ({ currentApp }) => {
         LIVE
         <span className="live-badge-divider">|</span>
         <span className="live-badge-time">SINCE {formatTime(currentApp.timestamp)}</span>
+        {currentApp.desktop_env && (
+          <>
+            <span className="live-badge-divider">|</span>
+            <span className="live-badge-de" style={{ textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.04em' }}>{currentApp.desktop_env}</span>
+          </>
+        )}
       </div>
       <div className="now-tracking-content">
         <div className="app-icon-large">
@@ -128,7 +134,14 @@ const ActivityDashboard = ({
       y: Math.max(clientY - 30, 40),
       content: (
         <div className="custom-tooltip">
-          <strong>{block.wm_class}</strong>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <strong>{block.wm_class}</strong>
+            {block.desktop_env && (
+              <span style={{ fontSize: '0.68rem', padding: '1px 5px', borderRadius: '4px', background: 'rgba(255,255,255,0.15)', textTransform: 'uppercase', fontWeight: 600 }}>
+                {block.desktop_env}
+              </span>
+            )}
+          </div>
           <p className="tooltip-time">{formatTime(block.timestamp)} — {formatTime(block.end_timestamp)} ({formatDuration(block.duration_secs || 0)})</p>
         </div>
       )

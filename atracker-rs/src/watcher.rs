@@ -34,6 +34,7 @@ pub struct CurrentEvent {
     pub title: String,
     pub pid: i32,
     pub start_time: DateTime<Utc>,
+    pub desktop_env: String,
 }
 
 #[derive(Serialize, Clone)]
@@ -42,11 +43,13 @@ pub struct CurrentState {
     pub title: String,
     pub timestamp: String,
     pub is_idle: bool,
+    pub desktop_env: String,
 }
 
 struct Probe {
     idle_ms: u64,
     window: Option<(String, String, i32)>,
+    desktop_env: String,
 }
 
 #[cfg(target_os = "windows")]
@@ -439,7 +442,7 @@ impl Watcher {
         }
 
         if is_paused_externally {
-            return self.handle_window_change("__paused__".to_string(), "Paused".to_string(), 0, false).await;
+            return self.handle_window_change("__paused__".to_string(), "Paused".to_string(), 0, false, "paused".to_string()).await;
         }
 
         self.poll().await
@@ -474,14 +477,14 @@ impl Watcher {
 
         if probe.idle_ms > threshold_ms {
             return self
-                .handle_window_change("__idle__".to_string(), "Idle".to_string(), 0, true)
+                .handle_window_change("__idle__".to_string(), "Idle".to_string(), 0, true, probe.desktop_env)
                 .await;
         }
 
         if let Some((wm_class, title, pid)) = probe.window {
             let mut missing = self.missing_window_since.lock().await;
             *missing = None;
-            return self.handle_window_change(wm_class, title, pid, false).await;
+            return self.handle_window_change(wm_class, title, pid, false, probe.desktop_env).await;
         }
 
         // Keep parity: if active window is unavailable for too long,
@@ -514,6 +517,7 @@ impl Watcher {
                 return Ok(Probe {
                     idle_ms,
                     window: win_opt.map(|win| (win.wm_class, win.title, win.pid)),
+                    desktop_env: "niri".to_string(),
                 });
             }
             Err(e) => {
@@ -528,6 +532,7 @@ impl Watcher {
                 return Ok(Probe {
                     idle_ms,
                     window: win_opt.map(|win| (win.wm_class, win.title, win.pid)),
+                    desktop_env: "hyprland".to_string(),
                 });
             }
             Err(e) => {
@@ -550,6 +555,7 @@ impl Watcher {
             (idle_ms, window_result)
         };
 
+        let is_gnome = window_result.is_ok();
         let window = match window_result {
             Ok(Some(win)) => Some((win.wm_class, win.title, win.pid)),
             Ok(None) => None,
@@ -559,7 +565,17 @@ impl Watcher {
                 None
             }
         };
-        Ok(Probe { idle_ms, window })
+
+        let desktop_env = if is_gnome {
+            "gnome".to_string()
+        } else {
+            std::env::var("XDG_CURRENT_DESKTOP")
+                .or_else(|_| std::env::var("DESKTOP_SESSION"))
+                .unwrap_or_else(|_| "linux".to_string())
+                .to_lowercase()
+        };
+
+        Ok(Probe { idle_ms, window, desktop_env })
     }
 
     #[cfg(target_os = "windows")]
@@ -567,6 +583,7 @@ impl Watcher {
         Ok(Probe {
             idle_ms: win32::get_idle_time_ms(),
             window: win32::get_active_window_info(),
+            desktop_env: "windows".to_string(),
         })
     }
 
@@ -575,14 +592,15 @@ impl Watcher {
         Ok(Probe {
             idle_ms: macos::get_idle_time_ms(),
             window: macos::get_active_window_info(),
+            desktop_env: "macos".to_string(),
         })
     }
 
-    async fn handle_window_change(&self, wm_class: String, title: String, pid: i32, is_idle: bool) -> Result<Option<CurrentState>, Box<dyn std::error::Error + Send + Sync>> {
+    async fn handle_window_change(&self, wm_class: String, title: String, pid: i32, is_idle: bool, desktop_env: String) -> Result<Option<CurrentState>, Box<dyn std::error::Error + Send + Sync>> {
         let mut current = self.current_event.lock().await;
         
         let changed = match &*current {
-            Some(curr) => curr.wm_class != wm_class || curr.title != title,
+            Some(curr) => curr.wm_class != wm_class || curr.title != title || curr.desktop_env != desktop_env,
             None => true,
         };
 
@@ -591,21 +609,24 @@ impl Watcher {
                 self.flush_event_internal(curr, None).await?;
             }
 
-            debug!("Window changed to: {}", wm_class);
+            debug!("Window changed to: {} (desktop_env: {})", wm_class, desktop_env);
             *current = Some(CurrentEvent {
                 wm_class: wm_class.clone(),
                 title: title.clone(),
                 pid,
                 start_time: Utc::now(),
+                desktop_env: desktop_env.clone(),
             });
+
+            let start_time_rfc = current.as_ref().map(|c| c.start_time).unwrap_or_else(Utc::now).to_rfc3339();
 
             // Broadcast change
             let msg = if wm_class == "__idle__" {
-                serde_json::json!({ "type": "idle" })
+                serde_json::json!({ "type": "idle", "desktop_env": desktop_env, "timestamp": start_time_rfc })
             } else if wm_class == "__paused__" {
                 serde_json::json!({ "type": "pause_state", "is_paused": true })
             } else {
-                serde_json::json!({ "type": "activity", "wm_class": wm_class, "title": title })
+                serde_json::json!({ "type": "activity", "wm_class": wm_class, "title": title, "desktop_env": desktop_env, "timestamp": start_time_rfc })
             };
             let _ = self.tx.send(msg.to_string());
         }
@@ -616,6 +637,7 @@ impl Watcher {
             title,
             timestamp: start_time.to_rfc3339(),
             is_idle,
+            desktop_env,
         }))
     }
 
@@ -656,6 +678,7 @@ impl Watcher {
             pid: curr.pid,
             duration_secs: duration,
             is_idle,
+            desktop_env: curr.desktop_env,
         };
 
         db::insert_event(&self.pool, event).await.map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;

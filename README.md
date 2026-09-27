@@ -18,7 +18,7 @@ This version (v2) is built with **Rust** for the backend and **React** for the d
     - 📱 **Multi-Device**: View stats from your Linux desktop and Android phone in one place.
     - 🏷️ **Smart Categorization**: Auto-categorize apps using regex patterns.
 - 📱 **Android Sync**: Companion app to track mobile usage.
-- 🐧 **Linux Native**: Optimized for **Niri** (native JSON IPC), **Hyprland** (native IPC), and **GNOME/Wayland** (dedicated shell extension).
+- 🐧 **Linux Native**: Optimized for **Niri** (native JSON IPC), **Hyprland** (native IPC), and **GNOME/Wayland** (dedicated shell extension) with dynamic desktop environment detection and per-event tagging.
 - 🪟 **Windows Native**: Integrated natively using direct Win32 APIs for foreground window and idle monitoring.
 - 🍎 **macOS Native**: Uses AppKit (NSWorkspace) and CoreGraphics for foreground app and idle detection — no extra runtime dependencies.
 
