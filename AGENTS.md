@@ -14,7 +14,7 @@ This repository uses a single unified stack:
 
 `atracker` is the **High-Frequency Activity Telemetry Recorder** in the workstation's Personal Data Architecture ([`~/Projects/DATA_ARCHITECTURE.md`](file:///home/al/Projects/DATA_ARCHITECTURE.md)):
 
-- **Primary Domain**: Continuous foreground window polling, process usage tracking, and idle detection across Linux (Niri/Hyprland/GNOME), Windows, and macOS.
+- **Primary Domain**: Continuous foreground window polling, process usage tracking, and idle detection across Linux (COSMIC/Niri/Hyprland/GNOME), Windows, and macOS.
 - **Storage**: Local SQLite database at `~/.local/share/atracker-rs/atracker-rs.db`.
 - **Promotion to Core SSOTs**:
   - Significant work sessions, project milestones, or travel blocks can be promoted to structured timeline events in `ierp` (`uv run ierp insert`).

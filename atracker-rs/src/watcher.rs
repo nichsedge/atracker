@@ -22,6 +22,8 @@ pub struct Watcher {
     current_event: Arc<Mutex<Option<CurrentEvent>>>,
     #[cfg(target_os = "linux")]
     dbus_conn: Arc<Mutex<Option<Connection>>>,
+    #[cfg(target_os = "linux")]
+    cosmic_tracker: Arc<crate::cosmic::CosmicTracker>,
     tx: broadcast::Sender<String>,
     filter_rules: Arc<Mutex<Vec<db::FilterRule>>>,
     last_settings_refresh: Arc<Mutex<i64>>,
@@ -414,6 +416,8 @@ impl Watcher {
             current_event: Arc::new(Mutex::new(None)),
             #[cfg(target_os = "linux")]
             dbus_conn: Arc::new(Mutex::new(None)),
+            #[cfg(target_os = "linux")]
+            cosmic_tracker: Arc::new(crate::cosmic::CosmicTracker::new()),
             tx,
             filter_rules: Arc::new(Mutex::new(Vec::new())),
             last_settings_refresh: Arc::new(Mutex::new(0)),
@@ -510,7 +514,18 @@ impl Watcher {
 
     #[cfg(target_os = "linux")]
     async fn probe_platform(&self) -> Result<Probe, Box<dyn std::error::Error + Send + Sync>> {
-        // 1. Check if Niri is running by querying Niri IPC socket
+        // 1. Check if COSMIC is running by querying CosmicTracker
+        if self.cosmic_tracker.is_available() {
+            let idle_ms = self.get_linux_idle_ms().await.unwrap_or(0);
+            let win_opt = self.cosmic_tracker.get_active_window();
+            return Ok(Probe {
+                idle_ms,
+                window: win_opt.map(|win| (win.wm_class, win.title, win.pid)),
+                desktop_env: "cosmic".to_string(),
+            });
+        }
+
+        // 2. Check if Niri is running by querying Niri IPC socket
         match self.get_niri_active_window().await {
             Ok(win_opt) => {
                 let idle_ms = self.get_linux_idle_ms().await.unwrap_or(0);
@@ -996,6 +1011,17 @@ impl Watcher {
             }
         }
 
+        // 3b. Fallback: systemd-logind LockedHint (system bus) - covers COSMIC, GNOME, and standard Wayland screen locks
+        if let Ok(sys_conn) = Connection::system().await {
+            if let Ok(proxy) = Proxy::new(&sys_conn, "org.freedesktop.login1", "/org/freedesktop/login1/session/auto", "org.freedesktop.login1.Session").await {
+                if let Ok(locked) = proxy.get_property::<bool>("LockedHint").await {
+                    if locked {
+                        return Ok(threshold_ms.saturating_add(1000));
+                    }
+                }
+            }
+        }
+
         // 4. Last resort: check dpmsStatus via hyprctl (dpms off == idle)
         //    Non-fatal if hyprctl fails
         if let Ok(dpms_off) = Self::is_hyprland_dpms_off().await {
@@ -1038,7 +1064,7 @@ impl Watcher {
 }
 
 #[cfg(target_os = "linux")]
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug, Clone)]
 pub(crate) struct WindowInfo {
     #[serde(alias = "class")]
     pub(crate) wm_class: String,

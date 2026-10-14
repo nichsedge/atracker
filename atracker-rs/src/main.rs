@@ -2,6 +2,8 @@ mod config;
 mod db;
 mod watcher;
 mod api;
+#[cfg(target_os = "linux")]
+mod cosmic;
 
 use std::sync::Arc;
 use tokio::sync::{broadcast, Mutex};
