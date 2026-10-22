@@ -27,7 +27,9 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
 import java.util.Calendar
+import java.util.Locale
 import javax.inject.Inject
 
 data class TodayAppUsage(
@@ -37,9 +39,13 @@ data class TodayAppUsage(
 )
 
 data class DayUsage(
+    val dayDate: String,
     val dateLabel: String,
     val totalSecs: Double,
-    val topApps: List<TodayAppUsage>
+    val topApps: List<TodayAppUsage>,
+    val allApps: List<TodayAppUsage> = topApps,
+    val isToday: Boolean = false,
+    val isYesterday: Boolean = false
 )
 
 data class MainUiState(
@@ -185,29 +191,76 @@ class MainViewModel @Inject constructor(
             eventRepository.getDailySummariesFlow(thirtyDaysAgo)
                 .flowOn(Dispatchers.IO)
                 .collect { summaries ->
-                    val sdf =
-                        java.text.SimpleDateFormat("EEEE, MMM d", java.util.Locale.getDefault())
-                    val groupedByDay = summaries.groupBy { it.dayDate }
-                    val sortedHistory = groupedByDay.map { (_, daySummaries) ->
-                        val topApps = daySummaries.map { summary ->
-                            val rawLabel = summary.appLabel
-                            val displayLabel = if (rawLabel.isBlank() || rawLabel == summary.packageName) {
-                                appLabelProvider.getAppLabel(summary.packageName)
-                            } else {
-                                rawLabel
-                            }
-                            TodayAppUsage(
-                                packageName = summary.packageName,
-                                appLabel = displayLabel,
-                                totalSecs = summary.totalSecs
-                            )
-                        }.take(3)
+                    val isoParser = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+                    val fullDateFormatter = SimpleDateFormat("EEEE, MMM d", Locale.getDefault())
+                    val monthDayFormatter = SimpleDateFormat("MMM d", Locale.getDefault())
 
-                        val representativeTime = daySummaries.first().minTimestamp
+                    val todayCal = Calendar.getInstance()
+                    val todayDateStr = String.format(
+                        Locale.US,
+                        "%04d-%02d-%02d",
+                        todayCal.get(Calendar.YEAR),
+                        todayCal.get(Calendar.MONTH) + 1,
+                        todayCal.get(Calendar.DAY_OF_MONTH)
+                    )
+
+                    todayCal.add(Calendar.DAY_OF_YEAR, -1)
+                    val yesterdayDateStr = String.format(
+                        Locale.US,
+                        "%04d-%02d-%02d",
+                        todayCal.get(Calendar.YEAR),
+                        todayCal.get(Calendar.MONTH) + 1,
+                        todayCal.get(Calendar.DAY_OF_MONTH)
+                    )
+
+                    // Group by dayDate and guarantee descending chronological order (newest days first)
+                    val groupedByDay = summaries
+                        .groupBy { it.dayDate }
+                        .toList()
+                        .sortedByDescending { it.first }
+
+                    val sortedHistory = groupedByDay.map { (dayDate, daySummaries) ->
+                        // All apps for this day, sorted descending by totalSecs (most used first)
+                        val allApps = daySummaries
+                            .map { summary ->
+                                val rawLabel = summary.appLabel
+                                val displayLabel = if (rawLabel.isBlank() || rawLabel == summary.packageName) {
+                                    appLabelProvider.getAppLabel(summary.packageName)
+                                } else {
+                                    rawLabel
+                                }
+                                TodayAppUsage(
+                                    packageName = summary.packageName,
+                                    appLabel = displayLabel,
+                                    totalSecs = summary.totalSecs
+                                )
+                            }
+                            .sortedByDescending { it.totalSecs }
+
+                        val isToday = dayDate == todayDateStr
+                        val isYesterday = dayDate == yesterdayDateStr
+
+                        val parsedDate = try {
+                            isoParser.parse(dayDate)
+                        } catch (_: Exception) {
+                            null
+                        }
+
+                        val dateLabel = when {
+                            isToday -> "Today" + (parsedDate?.let { ", ${monthDayFormatter.format(it)}" } ?: "")
+                            isYesterday -> "Yesterday" + (parsedDate?.let { ", ${monthDayFormatter.format(it)}" } ?: "")
+                            parsedDate != null -> fullDateFormatter.format(parsedDate)
+                            else -> dayDate
+                        }
+
                         DayUsage(
-                            dateLabel = sdf.format(java.util.Date(representativeTime)),
-                            totalSecs = daySummaries.sumOf { it.totalSecs },
-                            topApps = topApps
+                            dayDate = dayDate,
+                            dateLabel = dateLabel,
+                            totalSecs = allApps.sumOf { it.totalSecs },
+                            topApps = allApps.take(3),
+                            allApps = allApps,
+                            isToday = isToday,
+                            isYesterday = isYesterday
                         )
                     }
 
@@ -332,5 +385,26 @@ class MainViewModel @Inject constructor(
 
     fun getAppLabel(packageName: String): String {
         return appLabelProvider.getAppLabel(packageName)
+    }
+
+    fun getAppIcon(packageName: String): android.graphics.drawable.Drawable? {
+        return appLabelProvider.getAppIcon(packageName)
+    }
+
+    private val _isRefreshing = MutableStateFlow(false)
+    val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
+
+    fun refresh() {
+        viewModelScope.launch {
+            _isRefreshing.value = true
+            try {
+                val intent = Intent(context, com.sans.atracker.service.TrackerService::class.java).apply {
+                    action = com.sans.atracker.service.TrackerService.ACTION_FORCE_POLL
+                }
+                context.startService(intent)
+            } catch (_: Exception) {}
+            kotlinx.coroutines.delay(500)
+            _isRefreshing.value = false
+        }
     }
 }

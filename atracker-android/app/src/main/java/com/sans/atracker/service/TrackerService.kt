@@ -1,5 +1,6 @@
 package com.sans.atracker.service
 
+import android.app.KeyguardManager
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -54,12 +55,14 @@ class TrackerService : Service() {
     private var lastQueryTime: Long = 0L
     private var ignoredPackages = setOf<String>()
     private var customExcludedPackages = setOf<String>()
+    private var lastNotifText: String? = null
 
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             when (intent.action) {
                 Intent.ACTION_SCREEN_OFF -> handleScreenOff()
                 Intent.ACTION_SCREEN_ON -> handleScreenOn()
+                Intent.ACTION_USER_PRESENT -> handleUserPresent()
             }
         }
     }
@@ -68,7 +71,8 @@ class TrackerService : Service() {
         super.onCreate()
         serviceStateManager.setServiceRunning(true)
         createNotificationChannel()
-        startForeground(1, createNotification())
+        startForeground(1, createNotification("Tracking: On"))
+        lastNotifText = "Tracking: On"
         // Schedule the AlarmManager watchdog. AlarmManager lives in the system process,
         // so this alarm fires even after our process is killed by "Clear All".
         ServiceRestartReceiver.schedule(this)
@@ -84,6 +88,7 @@ class TrackerService : Service() {
         val filter = IntentFilter().apply {
             addAction(Intent.ACTION_SCREEN_OFF)
             addAction(Intent.ACTION_SCREEN_ON)
+            addAction(Intent.ACTION_USER_PRESENT)
         }
         registerReceiver(screenReceiver, filter)
         lastQueryTime = System.currentTimeMillis() - 10_000
@@ -104,56 +109,108 @@ class TrackerService : Service() {
     }
 
     private fun startPolling() {
+        if (pollingJob?.isActive == true) return
         pollingJob = serviceScope.launch {
             while (isActive) {
                 if (!isIdle) {
                     val now = System.currentTimeMillis()
-                    val foregroundEvent = getForegroundApp(lastQueryTime, now)
+                    processUsageEvents(lastQueryTime, now)
                     lastQueryTime = now
-                    if (foregroundEvent != null) {
-                        val pkg = foregroundEvent.packageName
-                        val isIgnored = ignoredPackages.contains(pkg) || customExcludedPackages.contains(pkg)
-                        val mappedPkg = if (isIgnored) "__idle__" else pkg
-                        if (mappedPkg != currentPackage) {
-                            flushPreviousEvent(mappedPkg, foregroundEvent.timestamp)
-                        }
-                    }
                 }
                 delay(15_000)
             }
         }
     }
 
+    private fun stopPolling() {
+        pollingJob?.cancel()
+        pollingJob = null
+    }
+
     private data class ForegroundEvent(val packageName: String, val timestamp: Long)
 
-    private fun getForegroundApp(startTime: Long, endTime: Long): ForegroundEvent? {
+    private fun processUsageEvents(startTime: Long, endTime: Long) {
         val usageStatsManager = getSystemService(USAGE_STATS_SERVICE) as UsageStatsManager
         val usageEvents = usageStatsManager.queryEvents(startTime, endTime)
         val event = UsageEvents.Event()
-        var lastResumedApp: ForegroundEvent? = null
+        val transitions = mutableListOf<ForegroundEvent>()
 
         while (usageEvents.hasNextEvent()) {
             usageEvents.getNextEvent(event)
             if (event.eventType == UsageEvents.Event.ACTIVITY_RESUMED) {
-                lastResumedApp = ForegroundEvent(event.packageName, event.timeStamp)
+                transitions.add(ForegroundEvent(event.packageName, event.timeStamp))
             }
         }
-        return lastResumedApp
-    }
 
+        if (transitions.isEmpty()) {
+            // If currentPackage is null (e.g. freshly started or resumed from idle),
+            // inspect a recent 60s window to discover the active foreground app.
+            if (currentPackage == null) {
+                val fallbackEvents = usageStatsManager.queryEvents(endTime - 60_000L, endTime)
+                var lastResumed: ForegroundEvent? = null
+                val temp = UsageEvents.Event()
+                while (fallbackEvents.hasNextEvent()) {
+                    fallbackEvents.getNextEvent(temp)
+                    if (temp.eventType == UsageEvents.Event.ACTIVITY_RESUMED) {
+                        lastResumed = ForegroundEvent(temp.packageName, temp.timeStamp)
+                    }
+                }
+                if (lastResumed != null) {
+                    val pkg = lastResumed.packageName
+                    val isIgnored = ignoredPackages.contains(pkg) || customExcludedPackages.contains(pkg)
+                    val mappedPkg = if (isIgnored) "__idle__" else pkg
+                    currentPackage = mappedPkg
+                    currentStartTime = endTime
+                    updateNotification(if (isIdle) "Tracking: Off" else "Tracking: On")
+                }
+            }
+            return
+        }
+
+        // Process all resumed events sequentially to preserve every intermediate app transition
+        for (transition in transitions) {
+            val pkg = transition.packageName
+            val isIgnored = ignoredPackages.contains(pkg) || customExcludedPackages.contains(pkg)
+            val mappedPkg = if (isIgnored) "__idle__" else pkg
+
+            if (mappedPkg != currentPackage) {
+                val transitionTime = if (transition.timestamp > currentStartTime && currentStartTime > 0) {
+                    transition.timestamp
+                } else {
+                    endTime
+                }
+                flushPreviousEvent(mappedPkg, transitionTime)
+            }
+        }
+    }
 
     private fun handleScreenOff() {
         val now = System.currentTimeMillis()
+        isIdle = true
+        stopPolling()
         flushPreviousEvent("__idle__", now)
         lastQueryTime = now
-        isIdle = true
     }
 
     private fun handleScreenOn() {
+        val keyguardManager = getSystemService(KEYGUARD_SERVICE) as? KeyguardManager
+        val isLocked = keyguardManager?.isKeyguardLocked == true
+        if (!isLocked) {
+            resumeTracking()
+        }
+    }
+
+    private fun handleUserPresent() {
+        resumeTracking()
+    }
+
+    private fun resumeTracking() {
+        if (!isIdle) return
         val now = System.currentTimeMillis()
+        isIdle = false
         flushPreviousEvent(null, now)
         lastQueryTime = now
-        isIdle = false
+        startPolling()
     }
 
     private fun flushPreviousEvent(nextPackage: String?, endTime: Long) {
@@ -179,11 +236,7 @@ class TrackerService : Service() {
         }
         currentPackage = nextPackage
         currentStartTime = endTime
-        val notifText = when {
-            nextPackage == null -> "Running in background"
-            nextPackage == "__idle__" -> "Screen off"
-            else -> "Tracking: ${appLabelProvider.getAppLabel(nextPackage)}"
-        }
+        val notifText = if (isIdle) "Tracking: Off" else "Tracking: On"
         updateNotification(notifText)
     }
 
@@ -205,10 +258,12 @@ class TrackerService : Service() {
     }
 
     private fun updateNotification(contentText: String) {
+        if (contentText == lastNotifText) return
+        lastNotifText = contentText
         getSystemService(NotificationManager::class.java).notify(1, createNotification(contentText))
     }
 
-    private fun createNotification(contentText: String = "Running in background"): Notification {
+    private fun createNotification(contentText: String = "Tracking: On"): Notification {
         val intent = Intent(this, MainActivity::class.java)
         val pendingIntent = PendingIntent.getActivity(
             this,
@@ -230,14 +285,25 @@ class TrackerService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == ACTION_FORCE_POLL) {
+            if (!isIdle) {
+                val now = System.currentTimeMillis()
+                processUsageEvents(lastQueryTime, now)
+                lastQueryTime = now
+            }
+        }
         // START_STICKY: restart the service if killed, without re-delivering the intent
         return START_STICKY
+    }
+
+    companion object {
+        const val ACTION_FORCE_POLL = "com.sans.atracker.ACTION_FORCE_POLL"
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
         // Re-assert startForeground immediately so the notification is not dismissed
         // by the OS when the task is removed from Recents.
-        startForeground(1, createNotification())
+        startForeground(1, createNotification(lastNotifText ?: "Tracking: On"))
 
         // Belt-and-suspenders: also schedule a restart via AlarmManager in case the
         // service is killed by the OEM battery manager shortly after task removal.
@@ -264,7 +330,11 @@ class TrackerService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         serviceStateManager.setServiceRunning(false)
-        unregisterReceiver(screenReceiver)
+        try {
+            unregisterReceiver(screenReceiver)
+        } catch (_: Exception) {}
+        stopPolling()
+        flushPreviousEvent("__idle__", System.currentTimeMillis())
         serviceScope.cancel()
     }
 }

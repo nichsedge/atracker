@@ -26,6 +26,10 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -92,11 +96,20 @@ class MainActivity : ComponentActivity() {
                 val navController = rememberNavController()
                 val navBackStackEntry by navController.currentBackStackEntryAsState()
                 val currentDestination = navBackStackEntry?.destination
+                val haptic = LocalHapticFeedback.current
 
                 Scaffold(
                     bottomBar = {
                         val screens = listOf(Screen.Main, Screen.History, Screen.Settings)
                         NavigationBar(
+                            modifier = Modifier.drawBehind {
+                                drawLine(
+                                    color = Color(0xFF261940),
+                                    start = androidx.compose.ui.geometry.Offset(0f, 0f),
+                                    end = androidx.compose.ui.geometry.Offset(size.width, 0f),
+                                    strokeWidth = 1.dp.toPx()
+                                )
+                            },
                             containerColor = MaterialTheme.colorScheme.surface,
                             contentColor = MaterialTheme.colorScheme.onSurface,
                             tonalElevation = 0.dp
@@ -106,6 +119,9 @@ class MainActivity : ComponentActivity() {
                                 NavigationBarItem(
                                     selected = selected,
                                     onClick = {
+                                        if (!selected) {
+                                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                        }
                                         navController.navigate(screen.route) {
                                             popUpTo(navController.graph.startDestinationId) {
                                                 saveState = true
@@ -124,12 +140,14 @@ class MainActivity : ComponentActivity() {
                                         Text(
                                             screen.label,
                                             style = MaterialTheme.typography.labelMedium,
-                                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
+                                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
                                         )
                                     },
                                     colors = NavigationBarItemDefaults.colors(
                                         selectedIconColor = MaterialTheme.colorScheme.primary,
                                         selectedTextColor = MaterialTheme.colorScheme.primary,
+                                        unselectedIconColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.6f),
+                                        unselectedTextColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.7f),
                                         indicatorColor = MaterialTheme.colorScheme.primaryContainer
                                     )
                                 )

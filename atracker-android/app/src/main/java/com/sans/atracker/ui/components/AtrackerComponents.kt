@@ -50,13 +50,15 @@ import androidx.compose.ui.unit.sp
 @Composable
 fun AtrackerCard(
     modifier: Modifier = Modifier,
+    shape: androidx.compose.ui.graphics.Shape = MaterialTheme.shapes.large,
     content: @Composable ColumnScope.() -> Unit
 ) {
     val isDark = isSystemInDarkTheme()
     val borderColor = Brush.linearGradient(
         colors = listOf(
-            MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
-            MaterialTheme.colorScheme.tertiary.copy(alpha = 0.4f)
+            MaterialTheme.colorScheme.primary.copy(alpha = if (isDark) 0.35f else 0.25f),
+            MaterialTheme.colorScheme.secondary.copy(alpha = if (isDark) 0.15f else 0.1f),
+            MaterialTheme.colorScheme.outlineVariant.copy(alpha = if (isDark) 0.3f else 0.2f)
         )
     )
 
@@ -66,15 +68,15 @@ fun AtrackerCard(
             .border(
                 width = 1.dp,
                 brush = borderColor,
-                shape = MaterialTheme.shapes.large
+                shape = shape
             ),
-        shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.8f else 0.9f),
-        tonalElevation = 0.dp,
+        shape = shape,
+        color = if (isDark) MaterialTheme.colorScheme.surface.copy(alpha = 0.95f) else MaterialTheme.colorScheme.surface,
+        tonalElevation = 2.dp,
         shadowElevation = 0.dp
     ) {
         Column(
-            modifier = Modifier.padding(24.dp),
+            modifier = Modifier.padding(20.dp),
             content = content
         )
     }
@@ -280,6 +282,9 @@ fun MeshGradientHeader(
         label = "offset1"
     )
 
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val secondaryColor = MaterialTheme.colorScheme.secondary
+
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -289,7 +294,7 @@ fun MeshGradientHeader(
 
                 val brush = Brush.radialGradient(
                     colors = listOf(
-                        Color(0xFF6366F1).copy(alpha = 0.12f),
+                        primaryColor.copy(alpha = 0.16f),
                         Color.Transparent
                     ),
                     center = Offset(
@@ -302,7 +307,7 @@ fun MeshGradientHeader(
 
                 val brush2 = Brush.radialGradient(
                     colors = listOf(
-                        Color(0xFF10B981).copy(alpha = 0.08f),
+                        secondaryColor.copy(alpha = 0.10f),
                         Color.Transparent
                     ),
                     center = Offset(

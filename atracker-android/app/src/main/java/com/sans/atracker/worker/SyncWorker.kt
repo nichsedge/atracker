@@ -107,10 +107,16 @@ class SyncWorker @AssistedInject constructor(
 
             if (response.status.isSuccess()) {
                 eventRepository.markSynced(unsynced.map { it.id })
+
+                // Auto-prune synced events older than 30 days to keep local SQLite database compact
+                val thirtyDaysAgo = System.currentTimeMillis() - (30L * 86_400_000L)
+                val prunedCount = eventRepository.pruneSyncedEvents(thirtyDaysAgo)
+
                 Result.success(
                     Data.Builder()
                         .putInt("syncedEvents", unsynced.size)
                         .putInt("syncedDays", byDay.size)
+                        .putInt("prunedEvents", prunedCount)
                         .build()
                 )
             } else {
@@ -133,21 +139,26 @@ class SyncWorker @AssistedInject constructor(
     companion object {
         private const val SYNC_WORK_NAME = "atracker_auto_sync"
 
-        fun scheduleAutoSync(context: Context) {
+        fun scheduleAutoSync(
+            context: Context,
+            requireUnmetered: Boolean = false,
+            requireCharging: Boolean = false
+        ) {
+            val networkType = if (requireUnmetered) NetworkType.UNMETERED else NetworkType.CONNECTED
             val constraints = Constraints.Builder()
-                .setRequiredNetworkType(NetworkType.UNMETERED)
-                .setRequiresCharging(true)
+                .setRequiredNetworkType(networkType)
+                .setRequiresCharging(requireCharging)
                 .build()
 
             val syncRequest = PeriodicWorkRequestBuilder<SyncWorker>(
-                4, TimeUnit.HOURS
+                1, TimeUnit.HOURS
             )
                 .setConstraints(constraints)
                 .build()
 
             WorkManager.getInstance(context).enqueueUniquePeriodicWork(
                 SYNC_WORK_NAME,
-                ExistingPeriodicWorkPolicy.KEEP,
+                ExistingPeriodicWorkPolicy.UPDATE,
                 syncRequest
             )
         }

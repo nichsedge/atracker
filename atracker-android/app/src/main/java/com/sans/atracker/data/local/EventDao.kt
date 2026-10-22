@@ -46,7 +46,7 @@ interface EventDao {
         FROM events
         WHERE isIdle = 0 AND startTimestamp >= :sinceTimestamp
         GROUP BY dayDate, packageName
-        ORDER BY minTimestamp DESC, totalSecs DESC
+        ORDER BY dayDate DESC, totalSecs DESC
     """)
     fun getDailySummariesFlow(sinceTimestamp: Long): Flow<List<DailyAppSummary>>
 
@@ -57,4 +57,8 @@ interface EventDao {
     /** Mark specific events as synced. */
     @Query("UPDATE events SET synced = 1 WHERE id IN (:ids)")
     suspend fun markSynced(ids: List<String>)
+
+    /** Prune synced events older than cutoff timestamp (epoch ms). */
+    @Query("DELETE FROM events WHERE synced = 1 AND startTimestamp < :retentionCutoff")
+    suspend fun pruneSyncedEvents(retentionCutoff: Long): Int
 }

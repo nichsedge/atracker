@@ -15,6 +15,7 @@ interface EventRepository {
     fun getDailySummariesFlow(sinceTimestamp: Long): Flow<List<DailyAppSummary>>
     fun getAllEventsFlow(): Flow<List<Event>>
     suspend fun markSynced(ids: List<String>)
+    suspend fun pruneSyncedEvents(retentionCutoff: Long): Int
 }
 
 class EventRepositoryImpl @Inject constructor(
@@ -34,4 +35,6 @@ class EventRepositoryImpl @Inject constructor(
 
     override fun getAllEventsFlow(): Flow<List<Event>> = eventDao.getAllEventsFlow()
     override suspend fun markSynced(ids: List<String>) = eventDao.markSynced(ids)
+    override suspend fun pruneSyncedEvents(retentionCutoff: Long): Int =
+        eventDao.pruneSyncedEvents(retentionCutoff)
 }

@@ -25,10 +25,20 @@ import androidx.core.view.WindowCompat
 
 private val DarkColorScheme = darkColorScheme(
     primary = Purple500,
+    primaryContainer = Color(0xFF281745),
+    onPrimaryContainer = Purple500,
     secondary = Cyan500,
+    secondaryContainer = Color(0xFF0F2C3D),
+    onSecondaryContainer = Cyan500,
     tertiary = Mint500,
+    tertiaryContainer = Color(0xFF0F3528),
+    onTertiaryContainer = Mint500,
     background = Obsidian900,
     surface = Obsidian800,
+    surfaceVariant = Color(0xFF1B1429),
+    onSurfaceVariant = Slate400,
+    outline = Color(0xFF2E2242),
+    outlineVariant = Color(0xFF201633),
     onPrimary = Color.White,
     onSecondary = Color.Black,
     onTertiary = Color.Black,
@@ -40,10 +50,20 @@ private val DarkColorScheme = darkColorScheme(
 
 private val LightColorScheme = lightColorScheme(
     primary = Purple600,
+    primaryContainer = Color(0xFFEDE9FE),
+    onPrimaryContainer = Purple700,
     secondary = Cyan500,
+    secondaryContainer = Color(0xFFE0F7FA),
+    onSecondaryContainer = Color(0xFF006064),
     tertiary = Mint500,
-    background = Color(0xFFF6F3FB),
+    tertiaryContainer = Color(0xFFD1FAE5),
+    onTertiaryContainer = Color(0xFF065F46),
+    background = Color(0xFFF8FAFC),
     surface = Color.White,
+    surfaceVariant = Color(0xFFF1F5F9),
+    onSurfaceVariant = Slate600,
+    outline = Slate300,
+    outlineVariant = Slate200,
     onPrimary = Color.White,
     onSecondary = Color.Black,
     onTertiary = Color.Black,
@@ -115,7 +135,7 @@ val AtrackerTypography = Typography(
 @Composable
 fun AtrackerTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    dynamicColor: Boolean = true, // Enabled dynamic color for Material You support
+    dynamicColor: Boolean = false, // Keep curated Chronos Orbit brand palette
     content: @Composable () -> Unit
 ) {
     val colorScheme = when {
@@ -131,7 +151,9 @@ fun AtrackerTheme(
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
-            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
+            val controller = WindowCompat.getInsetsController(window, view)
+            controller.isAppearanceLightStatusBars = !darkTheme
+            controller.isAppearanceLightNavigationBars = !darkTheme
         }
     }
 

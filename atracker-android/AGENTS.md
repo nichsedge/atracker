@@ -36,9 +36,9 @@ Single-module app (`com.sans.atracker`) using MVVM + Hilt + Room + Jetpack Compo
 ```
 UsageStatsManager (Android API)
     ↓
-TrackerService — polls every 15s (foreground service)
+TrackerService — sequential UsageEvents slicing & keyguard/screen-off aware polling (foreground service)
     ↓
-EventDao (Room)  ←→  AppDatabase (SQLite v4)
+EventDao (Room)  ←→  AppDatabase (SQLite v5)
     ↓
 EventRepository
     ↓
@@ -48,7 +48,7 @@ MainActivity / MainScreen (Compose)
 ```
 
 For sync: `SyncWorker` reads unsynced events from Room, groups by day, POSTs to
-`{backendUrl}/api/sync/android` via Ktor when manually triggered.
+`{backendUrl}/api/sync/android` via Ktor periodically (1h connected network) or on demand, and auto-prunes synced events older than 30 days.
 
 ### Service Reliability
 
@@ -65,11 +65,11 @@ killing:
 
 | Package area  | Files                                                                                                              | Role                                                                                 |
 |---------------|--------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------|
-| Data layer    | `Event.kt`, `EventDao.kt`, `AppDatabase.kt`, `EventRepository.kt`                                                  | Room entity, DAO, DB singleton (with v1→v2→v3 migrations), repository interface+impl |
+| Data layer    | `Event.kt`, `EventDao.kt`, `AppDatabase.kt`, `EventRepository.kt`                                                  | Room entity, DAO, DB singleton (with v1→v2→v3→v4→v5 migrations), repository interface+impl |
 | Settings      | `SettingsRepository.kt`                                                                                            | DataStore Preferences: backendUrl, trackingEnabled, lastSyncTime, deviceId           |
 | Service layer | `TrackerService.kt`, `ServiceStateManager.kt`, `ServiceRestartReceiver.kt`, `WatchdogWorker.kt`, `BootReceiver.kt` | Background tracking, state tracking, restart mechanisms                              |
 | Network/Sync  | `SyncWorker.kt`, `SyncModels.kt`                                                                                   | WorkManager one-shot sync, Ktor HTTP POST, KotlinX Serialization (snake_case)        |
-| UI            | `MainActivity.kt`, `MainViewModel.kt`                                                                              | Single activity, Compose UI, permission checks, service control                      |
+| UI            | `MainActivity.kt`, `MainViewModel.kt`, `HistoryScreen.kt`, `MainScreen.kt`, `SettingsScreen.kt`                   | Single activity, Compose UI, permission checks, service control                      |
 | DI            | `AppModule.kt`, `AtrackerApp.kt`                                                                                   | Hilt module providing all singletons, HiltAndroidApp                                 |
 
 ### Tech Stack

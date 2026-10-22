@@ -10,7 +10,8 @@ import java.util.UUID
     indices = [
         Index(value = ["startTimestamp"]),
         Index(value = ["synced"]),
-        Index(value = ["packageName"])
+        Index(value = ["packageName"]),
+        Index(value = ["synced", "startTimestamp"])
     ]
 )
 data class Event(

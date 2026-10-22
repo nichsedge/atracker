@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.drawable.Drawable
 import dagger.hilt.android.qualifiers.ApplicationContext
+import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -11,7 +12,7 @@ import javax.inject.Singleton
 class AppLabelProvider @Inject constructor(
     @param:ApplicationContext private val context: Context
 ) {
-    private val appLabelCache = HashMap<String, String>()
+    private val appLabelCache = ConcurrentHashMap<String, String>()
 
     fun getAppLabel(packageName: String): String {
         if (packageName == "__idle__") return ""

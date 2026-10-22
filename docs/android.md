@@ -17,7 +17,7 @@ To see your Android stats in the new Rust-based dashboard:
 1.  **Server Address**: Open settings in the Android app.
 2.  **API URL**: Enter your desktop's local IP address and port **8933**.
     - Example: `http://192.168.1.5:8933`
-3.  **Frequency**: The app syncs data periodically in the background (roughly every 15-30 minutes when on Wi-Fi).
+3.  **Frequency**: The app syncs data periodically in the background (hourly on any connected network, including Wi-Fi, Tailscale, or cellular) and automatically prunes synced events older than 30 days to keep the local database lean.
 
 ## Data Isolation
 
