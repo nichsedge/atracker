@@ -19,3 +19,17 @@ export const formatLocalDateISO = (date = new Date()) => {
   const d = String(date.getDate()).padStart(2, '0');
   return `${y}-${m}-${d}`;
 };
+
+export const shiftDate = (isoDateString, days) => {
+  if (!isoDateString || typeof isoDateString !== 'string') {
+    return formatLocalDateISO();
+  }
+  const parts = isoDateString.split('-').map(Number);
+  if (parts.length !== 3 || parts.some(isNaN)) {
+    return formatLocalDateISO();
+  }
+  const [y, m, d] = parts;
+  const date = new Date(y, m - 1, d);
+  date.setDate(date.getDate() + days);
+  return formatLocalDateISO(date);
+};

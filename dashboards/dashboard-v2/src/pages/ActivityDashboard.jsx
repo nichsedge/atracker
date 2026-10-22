@@ -1,6 +1,6 @@
-import { useMemo, useState, useCallback, Fragment } from 'react';
-import { formatDuration, formatTime } from '../utils/formatters';
-import { Plus, Calendar, Target, AlertCircle, RefreshCw } from 'lucide-react';
+import { useMemo, useState, useCallback, useEffect, Fragment } from 'react';
+import { formatDuration, formatTime, formatLocalDateISO, shiftDate } from '../utils/formatters';
+import { Plus, Calendar, Target, AlertCircle, RefreshCw, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import ManualActivityModal from '../components/ManualActivityModal';
 import DeviceFilterPill from '../components/DeviceFilterPill';
 
@@ -71,8 +71,13 @@ const ActivityDashboard = ({
   setSelectedDevices
 }) => {
   const [expandedCategories, setExpandedCategories] = useState({});
-  const [tooltip, setTooltip] = useState({ visible: false, x: 0, y: 0, content: null });
+  const [tooltip, setTooltip] = useState({ visible: false, x: 0, y: 0, isPinned: false, block: null });
+  const [pinnedBlock, setPinnedBlock] = useState(null);
+  const [hoveredTarget, setHoveredTarget] = useState(null); // { type: 'app' | 'category', name }
+  const [activeTimelineApp, setActiveTimelineApp] = useState(null);
   const [isManualModalOpen, setIsManualModalOpen] = useState(false);
+
+  const todayISO = useMemo(() => formatLocalDateISO(), []);
 
   const totalTracked = useMemo(() => {
     if (!Array.isArray(summary)) return 0;
@@ -124,28 +129,90 @@ const ActivityDashboard = ({
     setExpandedCategories(prev => ({ ...prev, [catName]: !prev[catName] }));
   };
 
+  // Keyboard navigation & accelerators for Activity Dashboard
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      const el = document.activeElement;
+      if (el) {
+        const tag = el.tagName?.toLowerCase();
+        if (tag === 'input' || tag === 'textarea' || tag === 'select' || el.isContentEditable) {
+          return;
+        }
+      }
+
+      if (e.key === 'ArrowLeft' || e.key === '[') {
+        e.preventDefault();
+        setDate(prev => shiftDate(prev, -1));
+      } else if (e.key === 'ArrowRight' || e.key === ']') {
+        e.preventDefault();
+        setDate(prev => shiftDate(prev, 1));
+      } else if (e.key === 't' || e.key === 'T') {
+        e.preventDefault();
+        setDate(formatLocalDateISO());
+      } else if (e.key === 'm' || e.key === 'M') {
+        e.preventDefault();
+        setIsManualModalOpen(true);
+      } else if (e.key === 'Escape') {
+        if (isManualModalOpen) {
+          setIsManualModalOpen(false);
+        } else if (pinnedBlock) {
+          setPinnedBlock(null);
+          setTooltip({ visible: false, x: 0, y: 0, isPinned: false, block: null });
+          setActiveTimelineApp(null);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isManualModalOpen, pinnedBlock, setDate]);
+
   const showTooltipForBlock = (e, block) => {
     if (block.is_idle) return;
+    setActiveTimelineApp(block.wm_class);
+
+    // If another block is pinned, don't move the tooltip
+    if (pinnedBlock && pinnedBlock !== block) return;
+
     const clientX = e.clientX || (e.touches && e.touches[0] ? e.touches[0].clientX : window.innerWidth / 2);
     const clientY = e.clientY || (e.touches && e.touches[0] ? e.touches[0].clientY : 100);
     setTooltip({
       visible: true,
-      x: Math.min(Math.max(clientX, 80), window.innerWidth - 80),
+      x: Math.min(Math.max(clientX, 120), window.innerWidth - 120),
       y: Math.max(clientY - 30, 40),
-      content: (
-        <div className="custom-tooltip">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <strong>{block.wm_class}</strong>
-            {block.desktop_env && (
-              <span style={{ fontSize: '0.68rem', padding: '1px 5px', borderRadius: '4px', background: 'rgba(255,255,255,0.15)', textTransform: 'uppercase', fontWeight: 600 }}>
-                {block.desktop_env}
-              </span>
-            )}
-          </div>
-          <p className="tooltip-time">{formatTime(block.timestamp)} — {formatTime(block.end_timestamp)} ({formatDuration(block.duration_secs || 0)})</p>
-        </div>
-      )
+      isPinned: Boolean(pinnedBlock && pinnedBlock === block),
+      block
     });
+  };
+
+  const handleBlockClick = (e, block) => {
+    e.stopPropagation();
+    if (block.is_idle) return;
+
+    if (pinnedBlock === block) {
+      setPinnedBlock(null);
+      setTooltip({ visible: false, x: 0, y: 0, isPinned: false, block: null });
+      setActiveTimelineApp(null);
+    } else {
+      setPinnedBlock(block);
+      setActiveTimelineApp(block.wm_class);
+      const clientX = e.clientX || window.innerWidth / 2;
+      const clientY = e.clientY || 100;
+      setTooltip({
+        visible: true,
+        x: Math.min(Math.max(clientX, 120), window.innerWidth - 120),
+        y: Math.max(clientY - 30, 40),
+        isPinned: true,
+        block
+      });
+    }
+  };
+
+  const handleBlockMouseLeave = () => {
+    if (!pinnedBlock) {
+      setTooltip(prev => ({ ...prev, visible: false, block: null }));
+      setActiveTimelineApp(null);
+    }
   };
 
   // Pre-calculate app colors for fast lookup in timeline
@@ -175,14 +242,41 @@ const ActivityDashboard = ({
     const durationPct = ((block.duration_secs || 1) / (24 * 60 * 60)) * 100;
 
     const blockColor = block.is_idle ? 'transparent' : (block.color || appColorMap[block.wm_class] || '#3b82f6');
+    const isPinned = pinnedBlock === block;
+
+    let isDimmed = false;
+    let isHighlighted = false;
+
+    if (hoveredTarget) {
+      if (hoveredTarget.type === 'app') {
+        if (block.wm_class?.toLowerCase() === hoveredTarget.name?.toLowerCase()) {
+          isHighlighted = true;
+        } else {
+          isDimmed = true;
+        }
+      } else if (hoveredTarget.type === 'category') {
+        const cat = categoryBreakdown.find(c => c.name === hoveredTarget.name);
+        const match = cat?.apps?.some(a => a.wm_class?.toLowerCase() === block.wm_class?.toLowerCase());
+        if (match) {
+          isHighlighted = true;
+        } else {
+          isDimmed = true;
+        }
+      }
+    } else if (activeTimelineApp) {
+      if (block.wm_class?.toLowerCase() === activeTimelineApp.toLowerCase()) {
+        isHighlighted = true;
+      }
+    }
 
     return {
       left: `${startPct}%`,
-      width: `${Math.max(durationPct, 0.1)}%`,
+      width: `${Math.max(durationPct, 0.2)}%`,
       backgroundColor: blockColor,
-      zIndex: block.duration_secs > 3600 ? 1 : 2
+      zIndex: isPinned ? 25 : (isHighlighted ? 15 : (block.duration_secs > 3600 ? 1 : 2)),
+      classNameProps: `${isPinned ? 'pinned' : ''} ${isHighlighted ? 'highlighted' : ''} ${isDimmed ? 'dimmed' : ''}`
     };
-  }, [appColorMap]);
+  }, [appColorMap, pinnedBlock, hoveredTarget, activeTimelineApp, categoryBreakdown]);
 
   // Only show full loading if we have no data at all
   const isInitialLoad = loading && summary.length === 0 && timeline.length === 0 && Array.isArray(categories) && categories.length === 0;
@@ -197,21 +291,57 @@ const ActivityDashboard = ({
   }
 
   return (
-    <div className="view-content fade-in">
+    <div className="view-content fade-in" onClick={() => {
+      if (pinnedBlock) {
+        setPinnedBlock(null);
+        setTooltip({ visible: false, x: 0, y: 0, isPinned: false, block: null });
+        setActiveTimelineApp(null);
+      }
+    }}>
       <header className="main-header">
         <div className="header-title">
           <h1 className="page-heading">Activity Dashboard</h1>
           <div className="header-meta">
-            <div className="date-picker-pill">
-              <Calendar size={16} style={{ color: 'var(--accent-color)', flexShrink: 0 }} />
-              <input 
-                type="date" 
-                value={date} 
-                onChange={e => {
-                  if (e.target.value) setDate(e.target.value);
-                }}
-                style={{ background: 'none', border: 'none', outline: 'none', fontSize: '0.85rem', color: 'var(--text-primary)', fontWeight: 600, cursor: 'pointer' }}
-              />
+            <div className="date-picker-pill" style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+              <button 
+                className="date-nav-btn" 
+                onClick={() => setDate(shiftDate(date, -1))} 
+                title="Previous Day (← or [)"
+                aria-label="Previous Day"
+              >
+                <ChevronLeft size={16} />
+              </button>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                <Calendar size={15} style={{ color: 'var(--accent-color)', flexShrink: 0 }} />
+                <input 
+                  type="date" 
+                  value={date} 
+                  onChange={e => {
+                    if (e.target.value) setDate(e.target.value);
+                  }}
+                  style={{ background: 'none', border: 'none', outline: 'none', fontSize: '0.85rem', color: 'var(--text-primary)', fontWeight: 600, cursor: 'pointer' }}
+                />
+              </div>
+
+              <button 
+                className="date-nav-btn" 
+                onClick={() => setDate(shiftDate(date, 1))} 
+                title="Next Day (→ or ])"
+                aria-label="Next Day"
+              >
+                <ChevronRight size={16} />
+              </button>
+
+              {date !== todayISO && (
+                <button 
+                  className="today-pill-btn" 
+                  onClick={() => setDate(todayISO)} 
+                  title="Jump to Today (T)"
+                >
+                  Today
+                </button>
+              )}
             </div>
 
             <DeviceFilterPill 
@@ -226,8 +356,14 @@ const ActivityDashboard = ({
             </div>
           </div>
         </div>
-        <button className="btn-primary log-activity-btn" onClick={() => setIsManualModalOpen(true)}>
-          <Plus size={18} /> <span>Log Activity</span>
+        <button 
+          className="btn-primary log-activity-btn" 
+          onClick={() => setIsManualModalOpen(true)}
+          title="Log Activity (M)"
+        >
+          <Plus size={18} /> 
+          <span>Log Activity</span>
+          <kbd className="keycap-subtle">M</kbd>
         </button>
       </header>
 
@@ -239,7 +375,14 @@ const ActivityDashboard = ({
           </section>
 
           <section className="glass-card" style={{ margin: 0 }}>
-            <div className="section-label">TIMELINE</div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+              <div className="section-label" style={{ margin: 0 }}>TIMELINE (24H)</div>
+              {pinnedBlock && (
+                <span className="pinned-badge" style={{ animation: 'fadeIn 0.2s' }}>
+                  Block Pinned • Click again or Esc to dismiss
+                </span>
+              )}
+            </div>
             <div className="timeline-outer">
               <div className="timeline-labels">
                 {timelineLabels.map(l => (
@@ -250,17 +393,27 @@ const ActivityDashboard = ({
               </div>
               <div className="timeline-track">
                 {timeline.length === 0 && <div className="timeline-empty" style={{ background: 'transparent' }}>No activity recorded for this day</div>}
-                {timeline.map((block, i) => (
-                  <div 
-                    key={i} 
-                    className="timeline-block-absolute"
-                    onMouseMove={(e) => showTooltipForBlock(e, block)}
-                    onClick={(e) => showTooltipForBlock(e, block)}
-                    onTouchStart={(e) => showTooltipForBlock(e, block)}
-                    onMouseLeave={() => setTooltip({ ...tooltip, visible: false })}
-                    style={getBlockStyles(block)}
-                  ></div>
-                ))}
+                {timeline.map((block, i) => {
+                  const styles = getBlockStyles(block);
+                  if (styles.display === 'none') return null;
+
+                  return (
+                    <div 
+                      key={i} 
+                      className={`timeline-block-absolute ${styles.classNameProps}`}
+                      onMouseMove={(e) => showTooltipForBlock(e, block)}
+                      onClick={(e) => handleBlockClick(e, block)}
+                      onTouchStart={(e) => handleBlockClick(e, block)}
+                      onMouseLeave={handleBlockMouseLeave}
+                      style={{
+                        left: styles.left,
+                        width: styles.width,
+                        backgroundColor: styles.backgroundColor,
+                        zIndex: styles.zIndex
+                      }}
+                    ></div>
+                  );
+                })}
               </div>
             </div>
           </section>
@@ -269,30 +422,48 @@ const ActivityDashboard = ({
             <div className="section-label">APP USAGE</div>
             <div className="usage-table-modern">
               {summary.length === 0 && <div className="empty-container" style={{ color: 'var(--text-secondary)', textAlign: 'center', padding: '2rem 0' }}>No activity recorded for {date}</div>}
-              {categoryBreakdown.map((cat, i) => (
-                <Fragment key={i}>
-                  <div className="usage-row-modern" onClick={() => toggleCategory(cat.name)}>
-                    <span className={`expand-icon ${expandedCategories[cat.name] ? 'open' : ''}`}>›</span>
-                    <div className="cat-dot" style={{ backgroundColor: cat.color, width: '12px', height: '12px', borderRadius: '50%', flexShrink: 0, boxShadow: `0 0 10px ${cat.color}66` }}></div>
-                    <div className="cat-name">{cat.name}</div>
-                    <div className="cat-progress-track">
-                      <div className="cat-progress-fill" style={{ width: `${(cat.total_secs / totalTracked) * 100}%`, backgroundColor: cat.color, height: '100%', borderRadius: '5px', boxShadow: `0 0 8px ${cat.color}55` }}></div>
-                    </div>
-                    <div className="cat-time">{formatDuration(cat.total_secs)}</div>
-                  </div>
-                  {expandedCategories[cat.name] && cat.apps.map((app, j) => (
-                    <div key={`${i}-${j}`} className="app-detail-row-modern">
-                      <div className="app-name-cell">
-                        <div className="app-name-title">
-                          <span style={{ color: 'var(--text-secondary)', opacity: 0.3 }}>└</span> {app.wm_class}
-                        </div>
-                        {app.title && <div className="app-name-subtitle">{app.title}</div>}
+              {categoryBreakdown.map((cat, i) => {
+                const isCatActiveFromTimeline = activeTimelineApp && cat.apps.some(a => a.wm_class?.toLowerCase() === activeTimelineApp.toLowerCase());
+
+                return (
+                  <Fragment key={i}>
+                    <div 
+                      className={`usage-row-modern ${isCatActiveFromTimeline ? 'highlighted-from-timeline' : ''}`} 
+                      onClick={() => toggleCategory(cat.name)}
+                      onMouseEnter={() => setHoveredTarget({ type: 'category', name: cat.name })}
+                      onMouseLeave={() => setHoveredTarget(null)}
+                    >
+                      <span className={`expand-icon ${expandedCategories[cat.name] ? 'open' : ''}`}>›</span>
+                      <div className="cat-dot" style={{ backgroundColor: cat.color, width: '12px', height: '12px', borderRadius: '50%', flexShrink: 0, boxShadow: `0 0 10px ${cat.color}66` }}></div>
+                      <div className="cat-name">{cat.name}</div>
+                      <div className="cat-progress-track">
+                        <div className="cat-progress-fill" style={{ width: `${(cat.total_secs / totalTracked) * 100}%`, backgroundColor: cat.color, height: '100%', borderRadius: '5px', boxShadow: `0 0 8px ${cat.color}55` }}></div>
                       </div>
-                      <div className="app-time-cell">{formatDuration(app.total_secs)}</div>
+                      <div className="cat-time">{formatDuration(cat.total_secs)}</div>
                     </div>
-                  ))}
-                </Fragment>
-              ))}
+                    {expandedCategories[cat.name] && cat.apps.map((app, j) => {
+                      const isAppActiveFromTimeline = activeTimelineApp && app.wm_class?.toLowerCase() === activeTimelineApp.toLowerCase();
+
+                      return (
+                        <div 
+                          key={`${i}-${j}`} 
+                          className={`app-detail-row-modern ${isAppActiveFromTimeline ? 'highlighted-from-timeline' : ''}`}
+                          onMouseEnter={() => setHoveredTarget({ type: 'app', name: app.wm_class })}
+                          onMouseLeave={() => setHoveredTarget(null)}
+                        >
+                          <div className="app-name-cell">
+                            <div className="app-name-title">
+                              <span style={{ color: 'var(--text-secondary)', opacity: 0.3 }}>└</span> {app.wm_class}
+                            </div>
+                            {app.title && <div className="app-name-subtitle">{app.title}</div>}
+                          </div>
+                          <div className="app-time-cell">{formatDuration(app.total_secs)}</div>
+                        </div>
+                      );
+                    })}
+                  </Fragment>
+                );
+              })}
             </div>
           </section>
         </div>
@@ -329,9 +500,49 @@ const ActivityDashboard = ({
         )}
       </div>
 
-      {tooltip.visible && (
-        <div className="floating-tooltip" style={{ left: tooltip.x, top: tooltip.y }}>
-          {tooltip.content}
+      {tooltip.visible && tooltip.block && (
+        <div 
+          className={`floating-tooltip ${tooltip.isPinned ? 'pinned-mode' : ''}`} 
+          style={{ left: tooltip.x, top: tooltip.y }}
+          onClick={e => e.stopPropagation()}
+        >
+          <div className="custom-tooltip">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: '4px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <strong style={{ margin: 0 }}>{tooltip.block.wm_class}</strong>
+                {tooltip.block.desktop_env && (
+                  <span style={{ fontSize: '0.68rem', padding: '1px 5px', borderRadius: '4px', background: 'rgba(255,255,255,0.15)', textTransform: 'uppercase', fontWeight: 600 }}>
+                    {tooltip.block.desktop_env}
+                  </span>
+                )}
+              </div>
+              {tooltip.isPinned && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span className="pinned-badge">Pinned</span>
+                  <button 
+                    onClick={() => {
+                      setPinnedBlock(null);
+                      setTooltip({ visible: false, x: 0, y: 0, isPinned: false, block: null });
+                      setActiveTimelineApp(null);
+                    }} 
+                    className="btn-tooltip-close" 
+                    title="Unpin (Esc)"
+                    aria-label="Unpin Tooltip"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              )}
+            </div>
+            {tooltip.block.title && (
+              <p style={{ fontSize: '0.78rem', color: 'var(--text-main)', opacity: 0.85, marginBottom: '4px', maxWidth: '300px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {tooltip.block.title}
+              </p>
+            )}
+            <p className="tooltip-time" style={{ margin: 0 }}>
+              {formatTime(tooltip.block.timestamp)} — {formatTime(tooltip.block.end_timestamp)} ({formatDuration(tooltip.block.duration_secs || 0)})
+            </p>
+          </div>
         </div>
       )}
 

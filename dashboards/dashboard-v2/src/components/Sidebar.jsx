@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom';
 import { LayoutDashboard, History, Settings, Pause, Play, Smartphone, Sun, Moon } from 'lucide-react';
 
-const Sidebar = ({ status = {}, isPaused, togglePause, theme, setTheme }) => {
+const Sidebar = ({ status = {}, isPaused, togglePause, theme, setTheme, onOpenShortcuts }) => {
   const isRunning = status.status === 'running' && !isPaused;
 
   return (
@@ -72,6 +72,7 @@ const Sidebar = ({ status = {}, isPaused, togglePause, theme, setTheme }) => {
           <button 
             onClick={togglePause}
             className={`btn-pause ${isPaused ? 'paused' : ''}`}
+            title={isPaused ? 'Resume Tracking (Space)' : 'Pause Tracking (Space)'}
             style={{
               width: '100%',
               display: 'flex',
@@ -91,7 +92,8 @@ const Sidebar = ({ status = {}, isPaused, togglePause, theme, setTheme }) => {
             }}
           >
             {isPaused ? <Play size={18} fill="currentColor" /> : <Pause size={18} fill="currentColor" />}
-            {isPaused ? 'Resume' : 'Pause Tracking'}
+            <span>{isPaused ? 'Resume' : 'Pause Tracking'}</span>
+            <kbd className="keycap-subtle">Space</kbd>
           </button>
 
           {/* Premium Segmented Theme switcher */}
@@ -153,9 +155,21 @@ const Sidebar = ({ status = {}, isPaused, togglePause, theme, setTheme }) => {
             </button>
           </div>
 
-          <div className="status-indicator" style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
-            <div className={`status-dot ${isRunning ? 'running' : ''}`} style={{ width: 8, height: 8, borderRadius: '50%', background: isRunning ? '#10b981' : 'var(--text-secondary)', boxShadow: isRunning ? '0 0 8px #10b981' : 'none' }}></div>
-            <span>{isPaused ? 'Paused' : (status.status === 'running' ? 'Tracking Active' : 'Offline')}</span>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem' }}>
+            <div className="status-indicator" style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
+              <div className={`status-dot ${isRunning ? 'running' : ''}`} style={{ width: 8, height: 8, borderRadius: '50%', background: isRunning ? 'var(--success-color)' : 'var(--text-secondary)', boxShadow: isRunning ? '0 0 8px var(--success-color)' : 'none' }}></div>
+              <span>{isPaused ? 'Paused' : (status.status === 'running' ? 'Tracking Active' : 'Offline')}</span>
+            </div>
+            {onOpenShortcuts && (
+              <button 
+                onClick={onOpenShortcuts}
+                className="btn-shortcuts-hint"
+                title="Keyboard Shortcuts (?)"
+                aria-label="View Keyboard Shortcuts"
+              >
+                <span>Keys</span> <kbd className="keycap-pill" style={{ padding: '1px 4px', fontSize: '0.65rem' }}>?</kbd>
+              </button>
+            )}
           </div>
         </div>
       </aside>

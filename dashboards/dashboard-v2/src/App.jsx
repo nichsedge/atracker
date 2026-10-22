@@ -5,12 +5,14 @@ import ActivityDashboard from './pages/ActivityDashboard';
 import SettingsView from './pages/SettingsView';
 import HistoryView from './pages/HistoryView';
 import DevicesView from './pages/DevicesView';
+import KeyboardShortcutsModal from './components/KeyboardShortcutsModal';
 import { useTracker } from './hooks/useTracker';
 import { formatLocalDateISO } from './utils/formatters';
 import './index.css';
 
 const App = () => {
   const tracker = useTracker(formatLocalDateISO());
+  const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
   
   const [theme, setTheme] = useState(() => {
     const saved = localStorage.getItem('theme');
@@ -27,6 +29,32 @@ const App = () => {
     localStorage.setItem('theme', theme);
   }, [theme]);
 
+  // Global Keyboard Accelerators
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      const el = document.activeElement;
+      if (el) {
+        const tag = el.tagName?.toLowerCase();
+        if (tag === 'input' || tag === 'textarea' || tag === 'select' || el.isContentEditable) {
+          return;
+        }
+      }
+
+      if (e.code === 'Space') {
+        e.preventDefault();
+        tracker.togglePause();
+      } else if (e.key === '?') {
+        e.preventDefault();
+        setIsShortcutsOpen(prev => !prev);
+      } else if (e.key === 'Escape') {
+        setIsShortcutsOpen(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [tracker]);
+
   return (
     <Router>
       <div className="app-container">
@@ -36,6 +64,7 @@ const App = () => {
             togglePause={tracker.togglePause}
             theme={theme}
             setTheme={setTheme}
+            onOpenShortcuts={() => setIsShortcutsOpen(true)}
         />
         
         <main className="main-content">
@@ -53,6 +82,7 @@ const App = () => {
                 devices={tracker.devices}
                 selectedDevices={tracker.selectedDevices}
                 setSelectedDevices={tracker.setSelectedDevices}
+                onOpenShortcuts={() => setIsShortcutsOpen(true)}
               />
             } />
             <Route path="/categories" element={
@@ -91,6 +121,11 @@ const App = () => {
             <Route path="*" element={<div className="placeholder-view">Coming Soon</div>} />
           </Routes>
         </main>
+
+        <KeyboardShortcutsModal 
+          isOpen={isShortcutsOpen} 
+          onClose={() => setIsShortcutsOpen(false)} 
+        />
       </div>
     </Router>
   );

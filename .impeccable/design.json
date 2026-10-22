@@ -1,0 +1,121 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-21T22:50:00Z",
+  "title": "Design System: atracker",
+  "extensions": {
+    "colorMeta": {
+      "primary": {
+        "role": "primary",
+        "displayName": "Neon Purple",
+        "canonical": "#8A3DFF",
+        "tonalRamp": ["#1e0a40", "#3a137b", "#5b1ee0", "#6e30e8", "#8a3dff", "#a46aff", "#bf96ff", "#e0ccff"]
+      },
+      "secondary": {
+        "role": "secondary",
+        "displayName": "Electric Cyan",
+        "canonical": "#00D2FF",
+        "tonalRamp": ["#002b33", "#005566", "#0088a3", "#00b3d6", "#00d2ff", "#40dcff", "#80e7ff", "#ccf6ff"]
+      },
+      "success": {
+        "role": "tertiary",
+        "displayName": "Neon Mint",
+        "canonical": "#00FA9A",
+        "tonalRamp": ["#00331f", "#00663f", "#00995e", "#00cc7d", "#00fa9a", "#40fbb3", "#80fccc", "#ccfee6"]
+      },
+      "bg-obsidian": {
+        "role": "neutral",
+        "displayName": "Deep Obsidian",
+        "canonical": "#080511",
+        "tonalRamp": ["#040208", "#080511", "#120b21", "#1a1030", "#261846", "#352260", "#482f80", "#5e3ea6"]
+      },
+      "surface-glass": {
+        "role": "neutral",
+        "displayName": "Obsidian Glass",
+        "canonical": "#120B21",
+        "tonalRamp": ["#090510", "#120b21", "#1d1235", "#2a1a4d", "#382466", "#493084", "#5d3ea8", "#744ecd"]
+      }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "Hero dashboard metrics and page headings." },
+      "headline": { "displayName": "Headline", "purpose": "Card headers and modal titles." },
+      "body": { "displayName": "Body", "purpose": "Standard UI copy, table rows, and descriptions." },
+      "label": { "displayName": "Label", "purpose": "Section labels, metadata tags, and filter badges." }
+    },
+    "shadows": [
+      { "name": "card-rest", "value": "0 20px 40px -15px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.05)", "purpose": "Standard elevation for glass cards at rest." },
+      { "name": "card-hover", "value": "0 25px 50px -12px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.08)", "purpose": "Interactive hover elevation." },
+      { "name": "btn-glow", "value": "0 4px 14px rgba(138, 61, 255, 0.3)", "purpose": "Primary button elevation." },
+      { "name": "shadow-glow", "value": "0 0 30px rgba(138, 61, 255, 0.18)", "purpose": "Ambient purple atmospheric glow." }
+    ],
+    "motion": [
+      { "name": "ease-spring", "value": "cubic-bezier(0.2, 0.8, 0.2, 1)", "purpose": "Default easing for state and hover transitions." }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "480px" },
+      { "name": "md", "value": "768px" },
+      { "name": "lg", "value": "1024px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Primary action button for key flows and submission.",
+      "html": "<button class=\"ds-btn-primary\">LOG ACTIVITY</button>",
+      "css": ".ds-btn-primary { background: #8A3DFF; color: #FFFFFF; font-family: 'Outfit', sans-serif; font-size: 0.9rem; font-weight: 700; height: 44px; padding: 0.6rem 1.5rem; border: none; border-radius: 10px; cursor: pointer; box-shadow: 0 4px 14px rgba(138, 61, 255, 0.3); transition: all 0.25s cubic-bezier(0.2, 0.8, 0.2, 1); } .ds-btn-primary:hover { background: #6E30E8; transform: translateY(-1px); box-shadow: 0 6px 20px rgba(138, 61, 255, 0.45); } .ds-btn-primary:active { transform: translateY(1px); }"
+    },
+    {
+      "name": "Outline Button",
+      "kind": "button",
+      "refersTo": "button-outline",
+      "description": "Secondary action button for filters and modal cancellations.",
+      "html": "<button class=\"ds-btn-outline\">Cancel</button>",
+      "css": ".ds-btn-outline { background: rgba(255, 255, 255, 0.02); color: #F1F5F9; border: 1px solid rgba(255, 255, 255, 0.08); font-family: 'Inter', sans-serif; font-size: 0.85rem; font-weight: 700; height: 42px; padding: 0.6rem 1rem; border-radius: 10px; cursor: pointer; transition: all 0.2s; } .ds-btn-outline:hover { border-color: #8A3DFF; color: #FFFFFF; background: rgba(138, 61, 255, 0.12); }"
+    },
+    {
+      "name": "Glass Card",
+      "kind": "card",
+      "refersTo": "card-glass",
+      "description": "Fundamental surface container for metrics and timelines.",
+      "html": "<div class=\"ds-glass-card\"><span class=\"ds-label\">CURRENT SESSION</span><div class=\"ds-metric\">02h 45m</div></div>",
+      "css": ".ds-glass-card { background: rgba(18, 11, 33, 0.70); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 16px; padding: 1.75rem; backdrop-filter: blur(16px); box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.05); transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1); } .ds-glass-card:hover { transform: translateY(-2px); } .ds-label { font-family: 'Outfit', sans-serif; font-size: 0.75rem; font-weight: 800; color: #94A3B8; letter-spacing: 0.15em; text-transform: uppercase; } .ds-metric { font-family: 'Outfit', sans-serif; font-size: 1.8rem; font-weight: 800; color: #FFFFFF; margin-top: 0.5rem; }"
+    },
+    {
+      "name": "Running Status Indicator",
+      "kind": "chip",
+      "refersTo": "status-indicator",
+      "description": "Live daemon connection pulse indicator.",
+      "html": "<div class=\"ds-status\"><span class=\"ds-pulse-dot\"></span><span class=\"ds-status-text\">DAEMON ACTIVE</span></div>",
+      "css": ".ds-status { display: inline-flex; align-items: center; gap: 0.5rem; font-family: 'Inter', sans-serif; font-size: 0.75rem; color: #94A3B8; } .ds-pulse-dot { width: 8px; height: 8px; border-radius: 50%; background: #00FA9A; box-shadow: 0 0 10px #00FA9A; } .ds-status-text { font-weight: 700; letter-spacing: 0.05em; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "Chronos Orbit: Purple Obsidian & Neon Radiance",
+    "overview": "atracker presents a precision high-density operational telemetry cockpit designed for developers, systems thinkers, and power users. Inspired by high-end quantitative trading consoles and wealth management interfaces, the visual world pairs deep, atmospheric obsidian purple backgrounds with luminous, high-contrast neon accents.",
+    "keyCharacteristics": [
+      "Atmospheric Obsidian Depth: Deep purple-black canvas with layered translucent glass cards.",
+      "Luminescent Accent Hierarchy: Purpose-driven neon accents (Purple for actions, Cyan for metrics, Mint for status).",
+      "Bimodal Platform Cohesion: Shared aesthetic across Desktop Web and Android Compose.",
+      "Glanceable Telemetry Density: Tabular figures, monospace timestamps, and clear categorization badges."
+    ],
+    "rules": [
+      { "name": "The Tracking Green Rule", "body": "Neon Mint (#00FA9A) is strictly reserved for the live status of the daemon and active tracking.", "section": "colors" },
+      { "name": "The Glass Perimeter Rule", "body": "Translucent glass cards must always pair with a subtle 1px border and ambient backdrop blur.", "section": "colors" },
+      { "name": "The Tabular Time Rule", "body": "All durations, timestamps, and percentages must render with monospace tabular numbers.", "section": "typography" },
+      { "name": "The Tonal Layering Rule", "body": "Depth is created through surface opacities rather than opaque gray steps.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do use font-variant-numeric: tabular-nums for all real-time counters and durations.",
+      "Do wrap every glassmorphic panel in a 1px border and backdrop blur.",
+      "Do reserve Neon Mint exclusively for active watcher and positive tracking states.",
+      "Do maintain 48×48dp minimum touch targets on Android and mobile web controls."
+    ],
+    "donts": [
+      "Don't use opaque muddy gray backgrounds; always tint dark backgrounds with subtle obsidian purple.",
+      "Don't mix multiple conflicting saturated colors in the same metric card.",
+      "Don't let live WebSocket metric updates cause horizontal layout shifts.",
+      "Don't ship phone-sized bottom navigation bars to wide desktop monitors or tablet viewports."
+    ]
+  }
+}

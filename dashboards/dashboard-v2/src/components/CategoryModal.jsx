@@ -74,32 +74,35 @@ const CategoryModal = ({ isOpen, onClose, category, onSave }) => {
         <form onSubmit={handleSubmit} className="manual-form" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           <div className="modal-row-grid">
             <div className="form-group" style={{ flex: 2 }}>
-              <label style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '0.5rem', display: 'block' }}>Category Name</label>
+              <label className="form-label">Category Name</label>
               <input 
                 type="text" 
                 required 
                 placeholder="e.g. Work, Entertainment"
                 value={formData.name}
                 onChange={e => setFormData({...formData, name: e.target.value})}
-                style={{ width: '100%', padding: '0.75rem', borderRadius: 10, border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontSize: '1rem' }}
+                className="form-input"
               />
             </div>
             <div className="form-group" style={{ flex: 1 }}>
-              <label style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '0.5rem', display: 'block' }}>Color</label>
-              <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', background: 'var(--bg-secondary)', padding: '0.4rem', borderRadius: 10, border: '1px solid var(--border-color)' }}>
+              <label className="form-label">Color</label>
+              <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', background: 'rgba(26, 18, 48, 0.85)', padding: '0.45rem 0.65rem', borderRadius: 10, border: '1px solid rgba(255, 255, 255, 0.16)' }}>
                 <input 
                   type="color" 
                   value={formData.color}
                   onChange={e => setFormData({...formData, color: e.target.value})}
                   style={{ padding: 0, height: '32px', width: '32px', border: 'none', background: 'none', cursor: 'pointer' }}
                 />
-                <span style={{ fontSize: '0.85rem', fontFamily: 'monospace', fontWeight: 600, color: 'var(--text-secondary)' }}>{formData.color.toUpperCase()}</span>
+                <span style={{ fontSize: '0.85rem', fontFamily: 'monospace', fontWeight: 600, color: 'var(--text-primary)' }}>{formData.color.toUpperCase()}</span>
               </div>
             </div>
           </div>
 
           <div className="form-group">
-            <label style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '0.5rem', display: 'block' }}>Class Pattern (Regex)</label>
+            <div className="form-label">
+              <span>Class Pattern (Regex)</span>
+              <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', fontWeight: 500 }}>e.g. Chrome|Firefox|code</span>
+            </div>
             <input 
               type="text" 
               placeholder="e.g. Chrome|Firefox|code"
@@ -108,13 +111,17 @@ const CategoryModal = ({ isOpen, onClose, category, onSave }) => {
                 setFormData({...formData, wm_class_pattern: e.target.value});
                 validateRegex(e.target.value, 'wm_class');
               }}
-              style={{ width: '100%', padding: '0.75rem', borderRadius: 10, border: `1px solid ${regexErrors.wm_class ? '#ef4444' : 'var(--border-color)'}`, background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontSize: '1rem', fontFamily: 'monospace' }}
+              className={`form-input ${regexErrors.wm_class ? 'has-error' : ''}`}
+              style={{ fontFamily: 'monospace' }}
             />
-            {regexErrors.wm_class && <div style={{ color: '#ef4444', fontSize: '0.75rem', marginTop: '0.4rem', fontWeight: 500 }}>{regexErrors.wm_class}</div>}
+            {regexErrors.wm_class && <div className="form-error-inline">{regexErrors.wm_class}</div>}
           </div>
 
           <div className="form-group">
-            <label style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '0.5rem', display: 'block' }}>Title Pattern (Regex)</label>
+            <div className="form-label">
+              <span>Title Pattern (Regex)</span>
+              <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', fontWeight: 500 }}>e.g. Gmail|GitHub|.*Google Search.*</span>
+            </div>
             <input 
               type="text" 
               placeholder="e.g. Gmail|GitHub|.*Google Search.*"
@@ -123,9 +130,10 @@ const CategoryModal = ({ isOpen, onClose, category, onSave }) => {
                 setFormData({...formData, title_pattern: e.target.value});
                 validateRegex(e.target.value, 'title');
               }}
-              style={{ width: '100%', padding: '0.75rem', borderRadius: 10, border: `1px solid ${regexErrors.title ? '#ef4444' : 'var(--border-color)'}`, background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontSize: '1rem', fontFamily: 'monospace' }}
+              className={`form-input ${regexErrors.title ? 'has-error' : ''}`}
+              style={{ fontFamily: 'monospace' }}
             />
-            {regexErrors.title && <div style={{ color: '#ef4444', fontSize: '0.75rem', marginTop: '0.4rem', fontWeight: 500 }}>{regexErrors.title}</div>}
+            {regexErrors.title && <div className="form-error-inline">{regexErrors.title}</div>}
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', background: 'var(--bg-secondary)', padding: '0.75rem 1rem', borderRadius: 10, border: '1px solid var(--border-color)' }}>
