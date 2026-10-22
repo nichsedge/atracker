@@ -6,7 +6,7 @@ mod api;
 mod cosmic;
 
 use std::sync::Arc;
-use tokio::sync::{broadcast, Mutex};
+use tokio::sync::{broadcast, Mutex, RwLock};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use crate::api::{AppState, PauseState};
 use crate::watcher::Watcher;
@@ -34,6 +34,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         tx: tx.clone(),
         pause_state: Mutex::new(PauseState { is_paused: false, until: 0 }),
         current_tracking: Mutex::new(None),
+        cached_categories: RwLock::new(None),
     });
 
     // Start API

@@ -5,7 +5,7 @@ use axum::{
     Router, Json,
 };
 use std::sync::Arc;
-use tokio::sync::{broadcast, Mutex};
+use tokio::sync::{broadcast, Mutex, RwLock};
 use crate::config::Config;
 use crate::db;
 use sqlx::SqlitePool;
@@ -22,12 +22,42 @@ pub struct PauseState {
     pub until: i64,
 }
 
+#[derive(Clone)]
+pub struct CompiledCategoryMatcher {
+    pub name: String,
+    pub color: String,
+    pub is_case_sensitive: bool,
+    pub title_re: Option<Regex>,
+    pub wm_class_re: Option<Regex>,
+}
+
 pub struct AppState {
     pub pool: SqlitePool,
     pub config: Config,
     pub tx: broadcast::Sender<String>,
     pub pause_state: Mutex<PauseState>,
     pub current_tracking: Mutex<Option<serde_json::Value>>,
+    pub cached_categories: RwLock<Option<Arc<Vec<CompiledCategoryMatcher>>>>,
+}
+
+impl AppState {
+    pub async fn get_compiled_categories(&self) -> Arc<Vec<CompiledCategoryMatcher>> {
+        {
+            let read = self.cached_categories.read().await;
+            if let Some(ref cached) = *read {
+                return cached.clone();
+            }
+        }
+        self.reload_cached_categories().await
+    }
+
+    pub async fn reload_cached_categories(&self) -> Arc<Vec<CompiledCategoryMatcher>> {
+        let mut write = self.cached_categories.write().await;
+        let categories = db::get_categories(&self.pool).await;
+        let compiled = Arc::new(compile_category_matchers(&categories));
+        *write = Some(compiled.clone());
+        compiled
+    }
 }
 
 #[derive(Deserialize)]
@@ -89,14 +119,6 @@ pub struct DeviceMergeRequest {
 #[derive(Deserialize)]
 pub struct RenameDeviceRequest {
     pub name: String,
-}
-
-struct CompiledCategoryMatcher {
-    name: String,
-    color: String,
-    is_case_sensitive: bool,
-    title_re: Option<Regex>,
-    wm_class_re: Option<Regex>,
 }
 
 pub async fn run_api(state: Arc<AppState>) {
@@ -204,8 +226,7 @@ async fn get_summary(State(state): State<Arc<AppState>>, Query(q): Query<DateQue
         }
     }
 
-    let categories = db::get_categories(&state.pool).await;
-    let compiled_categories = compile_category_matchers(&categories);
+    let compiled_categories = state.get_compiled_categories().await;
     let min_secs = db::get_setting(&state.pool, "min_app_usage_secs", "120").await.parse::<f64>().unwrap_or(120.0);
 
     let mut filtered_rows = Vec::new();
@@ -252,8 +273,7 @@ async fn get_timeline(State(state): State<Arc<AppState>>, Query(q): Query<DateQu
         }
     }
 
-    let categories = db::get_categories(&state.pool).await;
-    let compiled_categories = compile_category_matchers(&categories);
+    let compiled_categories = state.get_compiled_categories().await;
     let mut timeline_with_color = Vec::new();
     for row in rows {
         let (_, color) = match_category(&row.wm_class, &row.title, &compiled_categories);
@@ -280,8 +300,7 @@ async fn get_range_summary(State(state): State<Arc<AppState>>, Query(q): Query<R
     let device_ids = q.devices.map(|d| d.split(',').map(|s| s.to_string()).collect());
     let rows = db::get_summary_range(&state.pool, &q.start, &q.end, device_ids).await;
 
-    let categories = db::get_categories(&state.pool).await;
-    let compiled_categories = compile_category_matchers(&categories);
+    let compiled_categories = state.get_compiled_categories().await;
     let min_secs = db::get_setting(&state.pool, "min_app_usage_secs", "120").await.parse::<f64>().unwrap_or(120.0);
 
     let mut filtered_rows = Vec::new();
@@ -339,22 +358,31 @@ async fn get_categories(State(state): State<Arc<AppState>>) -> Json<serde_json::
 
 async fn add_category(State(state): State<Arc<AppState>>, Json(cat): Json<db::Category>) -> impl IntoResponse {
     match db::add_category(&state.pool, cat).await {
-        Ok(id) => (StatusCode::CREATED, Json(serde_json::json!({ "id": id }))),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() }))),
+        Ok(id) => {
+            state.reload_cached_categories().await;
+            (StatusCode::CREATED, Json(serde_json::json!({ "id": id }))).into_response()
+        }
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() }))).into_response(),
     }
 }
 
 async fn update_category(State(state): State<Arc<AppState>>, Path(id): Path<String>, Json(mut cat): Json<db::Category>) -> impl IntoResponse {
     cat.id = id;
     match db::update_category(&state.pool, cat).await {
-        Ok(_) => StatusCode::OK,
+        Ok(_) => {
+            state.reload_cached_categories().await;
+            StatusCode::OK
+        }
         Err(_) => StatusCode::INTERNAL_SERVER_ERROR,
     }
 }
 
 async fn delete_category(State(state): State<Arc<AppState>>, Path(id): Path<String>) -> StatusCode {
     match db::delete_category(&state.pool, &id).await {
-        Ok(_) => StatusCode::NO_CONTENT,
+        Ok(_) => {
+            state.reload_cached_categories().await;
+            StatusCode::NO_CONTENT
+        }
         Err(_) => StatusCode::INTERNAL_SERVER_ERROR,
     }
 }
@@ -370,10 +398,12 @@ async fn import_categories(State(state): State<Arc<AppState>>, Query(q): Query<s
         let _ = db::clear_categories(&state.pool).await;
     }
 
-    match db::add_categories(&state.pool, data.categories).await {
+    let res = match db::add_categories(&state.pool, data.categories).await {
         Ok(count) => Json(serde_json::json!({ "message": format!("Imported {} categories.", count) })),
         Err(e) => Json(serde_json::json!({ "error": e.to_string() })),
-    }
+    };
+    state.reload_cached_categories().await;
+    res
 }
 
 async fn get_rules(State(state): State<Arc<AppState>>) -> Json<Vec<db::FilterRule>> {
@@ -667,5 +697,54 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
     let mut rx = state.tx.subscribe();
     while let Ok(msg) = rx.recv().await {
         if socket.send(Message::Text(msg)).await.is_err() { break; }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_compile_and_match_category_title_and_wm() {
+        let categories = vec![
+            db::Category {
+                id: "1".to_string(),
+                name: "Development".to_string(),
+                wm_class_pattern: "code|ghostty|alacritty".to_string(),
+                title_pattern: "".to_string(),
+                color: "#10b981".to_string(),
+                daily_goal_secs: 0,
+                daily_limit_secs: 0,
+                is_case_sensitive: false,
+            },
+            db::Category {
+                id: "2".to_string(),
+                name: "Communication".to_string(),
+                wm_class_pattern: "slack|discord".to_string(),
+                title_pattern: "chat|direct message".to_string(),
+                color: "#6366f1".to_string(),
+                daily_goal_secs: 0,
+                daily_limit_secs: 0,
+                is_case_sensitive: false,
+            },
+        ];
+
+        let matchers = compile_category_matchers(&categories);
+        assert_eq!(matchers.len(), 2);
+
+        // Match by wm_class
+        let (cat_name, color) = match_category("Ghostty", "zsh", &matchers);
+        assert_eq!(cat_name, "Development");
+        assert_eq!(color, "#10b981");
+
+        // Match by title
+        let (cat_name2, color2) = match_category("chrome", "Direct Message with Team", &matchers);
+        assert_eq!(cat_name2, "Communication");
+        assert_eq!(color2, "#6366f1");
+
+        // Fallback to Uncategorized
+        let (fallback_name, fallback_color) = match_category("unknown_app", "Random Window", &matchers);
+        assert_eq!(fallback_name, "Uncategorized");
+        assert_eq!(fallback_color, "#64748b");
     }
 }
