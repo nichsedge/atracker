@@ -6,6 +6,7 @@ Maintains a single rolling snapshot:
 - Local: Overwrites `~/.local/share/atracker-rs/backups/atracker_backup_latest.sqlite` with a single previous backup rotation.
 """
 
+import argparse
 import datetime
 import hashlib
 import hmac
@@ -17,37 +18,57 @@ import sys
 import urllib.request
 from pathlib import Path
 
-R2_BUCKET = "ichsanul-dev"
-R2_KEY_LATEST = "db/atracker_latest.sqlite"
-DB_SOURCE = Path.home() / ".local" / "share" / "atracker-rs" / "atracker-rs.db"
+DEFAULT_R2_KEY = "db/atracker_latest.sqlite"
+DEFAULT_DB_SOURCE = Path.home() / ".local" / "share" / "atracker-rs" / "atracker-rs.db"
 LOCAL_BACKUPS_DIR = Path.home() / ".local" / "share" / "atracker-rs" / "backups"
-CREDS_CANDIDATES = [
-    Path.home() / "Projects" / "sansfinance" / "app" / "src" / "main" / "assets" / "r2_cred.json",
-    Path.home() / "Projects" / "fitly" / "android" / "app" / "src" / "main" / "assets" / "r2_cred.json",
-]
+DEFAULT_CREDS_PATH = Path.home() / ".config" / "atracker-rs" / "r2_cred.json"
 
 
-def load_credentials():
+def load_credentials(creds_file: Path | None = None, bucket_override: str | None = None):
     account_id = os.getenv("R2_ACCOUNT_ID") or os.getenv("CLOUDFLARE_ACCOUNT_ID")
     access_key = os.getenv("R2_ACCESS_KEY_ID") or os.getenv("AWS_ACCESS_KEY_ID")
     secret_key = os.getenv("R2_SECRET_ACCESS_KEY") or os.getenv("AWS_SECRET_ACCESS_KEY")
-    bucket = os.getenv("R2_BUCKET_NAME") or R2_BUCKET
+    bucket = bucket_override or os.getenv("R2_BUCKET_NAME") or os.getenv("R2_BUCKET")
 
-    if not (account_id and access_key and secret_key):
-        for candidate in CREDS_CANDIDATES:
-            if candidate.exists():
-                try:
-                    data = json.loads(candidate.read_text())
-                    account_id = account_id or data.get("account_id")
-                    access_key = access_key or data.get("access_key_id")
-                    secret_key = secret_key or data.get("secret_access_key")
-                    bucket = data.get("bucket_name") or bucket
+    file_candidates: list[Path] = []
+    if creds_file:
+        file_candidates.append(Path(creds_file).expanduser().resolve())
+
+    env_creds_file = os.getenv("R2_CREDENTIALS_FILE") or os.getenv("R2_CREDS_PATH")
+    if env_creds_file:
+        file_candidates.append(Path(env_creds_file).expanduser().resolve())
+
+    # Only look inside atracker-rs config dir as default local fallback
+    file_candidates.append(DEFAULT_CREDS_PATH)
+
+    for candidate in file_candidates:
+        if candidate.exists():
+            try:
+                data = json.loads(candidate.read_text())
+                account_id = account_id or data.get("account_id")
+                access_key = access_key or data.get("access_key_id") or data.get("access_key")
+                secret_key = secret_key or data.get("secret_access_key") or data.get("secret_key")
+                bucket = bucket or data.get("bucket_name") or data.get("bucket")
+                if account_id and access_key and secret_key and bucket:
                     break
-                except Exception:
-                    continue
+            except Exception as e:
+                print(f"Warning: Failed to parse credentials from {candidate}: {e}", file=sys.stderr)
 
-    if not (account_id and access_key and secret_key):
-        raise RuntimeError("Cloudflare R2 credentials not found")
+    missing = []
+    if not account_id:
+        missing.append("R2_ACCOUNT_ID (or CLOUDFLARE_ACCOUNT_ID)")
+    if not access_key:
+        missing.append("R2_ACCESS_KEY_ID (or AWS_ACCESS_KEY_ID)")
+    if not secret_key:
+        missing.append("R2_SECRET_ACCESS_KEY (or AWS_SECRET_ACCESS_KEY)")
+    if not bucket:
+        missing.append("R2_BUCKET (or R2_BUCKET_NAME)")
+
+    if missing:
+        raise RuntimeError(
+            f"Missing required Cloudflare R2 configuration: {', '.join(missing)}.\n"
+            "Provide them via environment variables or set R2_CREDENTIALS_FILE / ~/.config/atracker-rs/r2_cred.json."
+        )
 
     return account_id, access_key, secret_key, bucket
 
@@ -92,9 +113,12 @@ def upload_to_r2(data_bytes: bytes, key: str, account_id: str, access_key: str, 
             raise RuntimeError(f"Failed to upload {key} to R2 (HTTP {resp.status})")
 
 
-def backup_database():
-    if not DB_SOURCE.exists():
-        raise FileNotFoundError(f"Database not found at {DB_SOURCE}")
+def backup_database(db_source: Path = DEFAULT_DB_SOURCE, bucket: str | None = None, key: str = DEFAULT_R2_KEY, creds_file: Path | None = None):
+    if not db_source.exists():
+        raise FileNotFoundError(f"Database not found at {db_source}")
+
+    # Validate credentials upfront before performing backup operations
+    account_id, access_key, secret_key, resolved_bucket = load_credentials(creds_file=creds_file, bucket_override=bucket)
 
     LOCAL_BACKUPS_DIR.mkdir(parents=True, exist_ok=True)
     latest_file = LOCAL_BACKUPS_DIR / "atracker_backup_latest.sqlite"
@@ -110,7 +134,7 @@ def backup_database():
             old_file.unlink(missing_ok=True)
 
     # Step 2: Online atomic backup
-    src_conn = sqlite3.connect(DB_SOURCE)
+    src_conn = sqlite3.connect(db_source)
     dst_conn = sqlite3.connect(latest_file)
     with dst_conn:
         src_conn.backup(dst_conn)
@@ -120,16 +144,25 @@ def backup_database():
     backup_size = latest_file.stat().st_size
 
     # Step 3: Upload strictly to latest pointer on Cloudflare R2 (in-place overwrite)
-    account_id, access_key, secret_key, bucket = load_credentials()
     data_bytes = latest_file.read_bytes()
 
-    upload_to_r2(data_bytes, R2_KEY_LATEST, account_id, access_key, secret_key, bucket)
-    print(f"✅ aTracker snapshot backed up & overwritten in R2 ({R2_KEY_LATEST}, {backup_size:,} bytes). Zero storage growth.")
+    upload_to_r2(data_bytes, key, account_id, access_key, secret_key, resolved_bucket)
+    print(f"✅ aTracker snapshot backed up & overwritten in R2 ({resolved_bucket}/{key}, {backup_size:,} bytes). Zero storage growth.")
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Backup aTracker SQLite database to Cloudflare R2")
+    parser.add_argument("--source", type=Path, default=DEFAULT_DB_SOURCE, help=f"Path to SQLite database (default: {DEFAULT_DB_SOURCE})")
+    parser.add_argument("--bucket", type=str, default=None, help="Cloudflare R2 bucket name (env: R2_BUCKET or R2_BUCKET_NAME)")
+    parser.add_argument("--key", type=str, default=os.getenv("R2_KEY", DEFAULT_R2_KEY), help=f"Remote object key (default: {DEFAULT_R2_KEY})")
+    parser.add_argument("--credentials-file", type=Path, default=None, help="Path to JSON credentials file")
+    return parser.parse_args()
 
 
 if __name__ == "__main__":
+    args = parse_args()
     try:
-        backup_database()
+        backup_database(db_source=args.source, bucket=args.bucket, key=args.key, creds_file=args.credentials_file)
     except Exception as e:
         print(f"❌ Backup failed: {e}", file=sys.stderr)
         sys.exit(1)

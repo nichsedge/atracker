@@ -92,8 +92,14 @@ Once the installation is complete, visit **[http://localhost:8933](http://localh
 
 ## ☁️ Cloudflare R2 Backup
 
-Atomic online SQLite snapshot and rolling overwrite to Cloudflare R2 (`db/atracker_latest.sqlite` in bucket `ichsanul-dev`):
+Atomic online SQLite snapshot and rolling overwrite to Cloudflare R2 (`db/atracker_latest.sqlite`):
 ```bash
+# Configure credentials via environment or ~/.config/atracker-rs/r2_cred.json
+export R2_ACCOUNT_ID="your_account_id"
+export R2_ACCESS_KEY_ID="your_access_key"
+export R2_SECRET_ACCESS_KEY="your_secret_key"
+export R2_BUCKET="your_bucket"
+
 python3 scripts/backup_r2.py
 ```
 Integrated into workstation-wide scheduled sync (`~/Projects/_scheduled_jobs/sync_ecosystem.py`).

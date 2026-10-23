@@ -109,6 +109,7 @@ All helper scripts reside in the `scripts/` directory.
 - `scripts/wipe-data.sh` / `scripts/wipe-data.ps1`: delete the SQLite DB and its WAL/SHM sidecars after a `[y/N]` confirmation (or `--yes` / `-Yes` to skip). Leaves the config file alone. Pass `--db <path>` / `-DbPath <path>` if your DB lives outside the default.
 
 **Maintenance:**
+- `scripts/backup_r2.py`: Backs up local SQLite database to Cloudflare R2 snapshot with single-rotation rolling backup. Configurable via CLI args (`--bucket`, `--key`, `--source`, `--credentials-file`) or environment variables (`R2_BUCKET`, `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`).
 - `scripts/dedup_events.py`: Cleans near-duplicate sequential rows in the SQLite database.
 - `scripts/sync_db.py`: Merges and upserts track event databases.
 - `scripts/generate_icons.py`: Compiles and exports launchers and web favicon assets.
