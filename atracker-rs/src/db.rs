@@ -218,12 +218,16 @@ pub async fn init_db(config: &Config) -> SqlitePool {
     sqlx::query("CREATE INDEX IF NOT EXISTS idx_events_timestamp ON events(timestamp)").execute(&pool).await.unwrap();
     sqlx::query("CREATE INDEX IF NOT EXISTS idx_events_wm_class ON events(wm_class)").execute(&pool).await.unwrap();
     sqlx::query("CREATE INDEX IF NOT EXISTS idx_events_time_idle ON events(timestamp, is_idle)").execute(&pool).await.unwrap();
+    sqlx::query("CREATE INDEX IF NOT EXISTS idx_events_idle_timestamp ON events(is_idle, timestamp)").execute(&pool).await.unwrap();
     sqlx::query("CREATE INDEX IF NOT EXISTS idx_events_device_id ON events(device_id)").execute(&pool).await.unwrap();
     sqlx::query("CREATE INDEX IF NOT EXISTS idx_events_device_time ON events(device_id, timestamp)").execute(&pool).await.unwrap();
+    sqlx::query("CREATE INDEX IF NOT EXISTS idx_events_device_idle_time ON events(device_id, is_idle, timestamp)").execute(&pool).await.unwrap();
     sqlx::query("CREATE INDEX IF NOT EXISTS idx_events_desktop_env ON events(desktop_env)").execute(&pool).await.unwrap();
     sqlx::query("CREATE INDEX IF NOT EXISTS idx_android_events_timestamp ON android_events(timestamp)").execute(&pool).await.unwrap();
+    sqlx::query("CREATE INDEX IF NOT EXISTS idx_android_events_idle_timestamp ON android_events(is_idle, timestamp)").execute(&pool).await.unwrap();
     sqlx::query("CREATE INDEX IF NOT EXISTS idx_android_events_device_id ON android_events(device_id)").execute(&pool).await.unwrap();
     sqlx::query("CREATE INDEX IF NOT EXISTS idx_android_events_device_time ON android_events(device_id, timestamp)").execute(&pool).await.unwrap();
+    sqlx::query("CREATE INDEX IF NOT EXISTS idx_android_events_device_idle_time ON android_events(device_id, is_idle, timestamp)").execute(&pool).await.unwrap();
 
     // Default settings
     let settings_defaults = [

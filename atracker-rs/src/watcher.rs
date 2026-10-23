@@ -16,6 +16,9 @@ use uuid::Uuid;
 use tracing::{info, debug};
 use serde::{Serialize, Deserialize};
 
+#[cfg(target_os = "linux")]
+static CACHED_NIRI_SOCKET: std::sync::RwLock<Option<PathBuf>> = std::sync::RwLock::new(None);
+
 pub struct Watcher {
     config: Config,
     pool: SqlitePool,
@@ -25,7 +28,7 @@ pub struct Watcher {
     #[cfg(target_os = "linux")]
     cosmic_tracker: Arc<crate::cosmic::CosmicTracker>,
     tx: broadcast::Sender<String>,
-    filter_rules: Arc<Mutex<Vec<db::FilterRule>>>,
+    filter_rules: Arc<Mutex<Vec<CompiledFilterRule>>>,
     last_settings_refresh: Arc<Mutex<i64>>,
     last_poll_time: Arc<Mutex<Option<DateTime<Utc>>>>,
     missing_window_since: Arc<Mutex<Option<DateTime<Utc>>>>,
@@ -361,12 +364,54 @@ pub(crate) enum FilterDecision {
     Ignore(String),
 }
 
-/// Walks rules in order. The first matching `ignore` rule short-circuits and
-/// returns `Ignore(rule_id)`. Any matching `redact` rules promote the result
-/// to `Redact`. Later rules see the redacted title (matches the pre-extraction
-/// in-place mutation behavior).
-pub(crate) fn apply_filter_rules(
-    rules: &[db::FilterRule],
+#[derive(Clone)]
+pub(crate) struct CompiledPattern {
+    is_empty: bool,
+    re: Option<regex::Regex>,
+}
+
+impl CompiledPattern {
+    fn new(pattern: &str) -> Self {
+        if pattern.is_empty() {
+            Self { is_empty: true, re: None }
+        } else {
+            Self {
+                is_empty: false,
+                re: regex::RegexBuilder::new(pattern).case_insensitive(true).build().ok(),
+            }
+        }
+    }
+
+    fn is_match(&self, s: &str) -> bool {
+        if self.is_empty {
+            true
+        } else {
+            self.re.as_ref().map(|r| r.is_match(s)).unwrap_or(false)
+        }
+    }
+}
+
+#[derive(Clone)]
+pub(crate) struct CompiledFilterRule {
+    pub id: String,
+    pub rule_type: String,
+    pub wm_class: CompiledPattern,
+    pub title: CompiledPattern,
+}
+
+pub(crate) fn compile_filter_rules(rules: &[db::FilterRule]) -> Vec<CompiledFilterRule> {
+    rules.iter().map(|rule| {
+        CompiledFilterRule {
+            id: rule.id.clone(),
+            rule_type: rule.rule_type.clone(),
+            wm_class: CompiledPattern::new(&rule.wm_class_pattern),
+            title: CompiledPattern::new(&rule.title_pattern),
+        }
+    }).collect()
+}
+
+pub(crate) fn apply_compiled_filter_rules(
+    rules: &[CompiledFilterRule],
     wm_class: &str,
     title: &str,
 ) -> FilterDecision {
@@ -374,22 +419,8 @@ pub(crate) fn apply_filter_rules(
     let mut redacted = false;
 
     for rule in rules {
-        let wm_match = rule.wm_class_pattern.is_empty() || {
-            regex::RegexBuilder::new(&rule.wm_class_pattern)
-                .case_insensitive(true)
-                .build()
-                .ok()
-                .map(|r| r.is_match(wm_class))
-                .unwrap_or(false)
-        };
-        let title_match = rule.title_pattern.is_empty() || {
-            regex::RegexBuilder::new(&rule.title_pattern)
-                .case_insensitive(true)
-                .build()
-                .ok()
-                .map(|r| r.is_match(&current_title))
-                .unwrap_or(false)
-        };
+        let wm_match = rule.wm_class.is_match(wm_class);
+        let title_match = rule.title.is_match(&current_title);
 
         if wm_match && title_match {
             if rule.rule_type == "ignore" {
@@ -406,6 +437,19 @@ pub(crate) fn apply_filter_rules(
     } else {
         FilterDecision::Keep
     }
+}
+
+/// Walks rules in order. The first matching `ignore` rule short-circuits and
+/// returns `Ignore(rule_id)`. Any matching `redact` rules promote the result
+/// to `Redact`. Later rules see the redacted title.
+#[allow(dead_code)]
+pub(crate) fn apply_filter_rules(
+    rules: &[db::FilterRule],
+    wm_class: &str,
+    title: &str,
+) -> FilterDecision {
+    let compiled = compile_filter_rules(rules);
+    apply_compiled_filter_rules(&compiled, wm_class, title)
 }
 
 impl Watcher {
@@ -460,8 +504,9 @@ impl Watcher {
         }
 
         let rules = db::get_rules(&self.pool).await;
+        let compiled = compile_filter_rules(&rules);
         let mut filter_rules = self.filter_rules.lock().await;
-        *filter_rules = rules;
+        *filter_rules = compiled;
         *last_refresh = now;
         debug!("Refreshed filter rules from DB");
     }
@@ -513,84 +558,134 @@ impl Watcher {
     }
 
     #[cfg(target_os = "linux")]
-    async fn probe_platform(&self) -> Result<Probe, Box<dyn std::error::Error + Send + Sync>> {
-        // 1. Check if COSMIC is running by querying CosmicTracker
+    async fn probe_cosmic(&self) -> Option<Probe> {
         if self.cosmic_tracker.is_available() {
             let idle_ms = self.get_linux_idle_ms().await.unwrap_or(0);
             let win_opt = self.cosmic_tracker.get_active_window();
-            return Ok(Probe {
+            Some(Probe {
                 idle_ms,
                 window: win_opt.map(|win| (win.wm_class, win.title, win.pid)),
                 desktop_env: "cosmic".to_string(),
-            });
+            })
+        } else {
+            None
         }
+    }
 
-        // 2. Check if Niri is running by querying Niri IPC socket
+    #[cfg(target_os = "linux")]
+    async fn probe_niri(&self) -> Option<Probe> {
         match self.get_niri_active_window().await {
             Ok(win_opt) => {
                 let idle_ms = self.get_linux_idle_ms().await.unwrap_or(0);
-                return Ok(Probe {
+                Some(Probe {
                     idle_ms,
                     window: win_opt.map(|win| (win.wm_class, win.title, win.pid)),
                     desktop_env: "niri".to_string(),
-                });
+                })
             }
             Err(e) => {
                 debug!("Niri IPC check failed/skipped: {}", e);
+                None
             }
         }
+    }
 
-        // 2. Check if Hyprland is running by querying Hyprland IPC socket
+    #[cfg(target_os = "linux")]
+    async fn probe_hyprland(&self) -> Option<Probe> {
         match self.get_hyprland_active_window().await {
             Ok(win_opt) => {
                 let idle_ms = self.get_linux_idle_ms().await.unwrap_or(0);
-                return Ok(Probe {
+                Some(Probe {
                     idle_ms,
                     window: win_opt.map(|win| (win.wm_class, win.title, win.pid)),
                     desktop_env: "hyprland".to_string(),
-                });
+                })
             }
             Err(e) => {
                 debug!("Hyprland IPC check failed/skipped: {}", e);
+                None
+            }
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    async fn probe_gnome(&self) -> Result<Option<Probe>, Box<dyn std::error::Error + Send + Sync>> {
+        let mut conn_lock = self.dbus_conn.lock().await;
+        if conn_lock.is_none() {
+            match Connection::session().await {
+                Ok(c) => *conn_lock = Some(c),
+                Err(e) => return Err(Box::new(e)),
+            }
+        }
+        let conn = conn_lock.as_ref().unwrap();
+        let idle_ms = self.get_idle_time(conn).await.unwrap_or(0);
+        let window_result = self.get_active_window(conn).await;
+
+        match window_result {
+            Ok(Some(win)) => Ok(Some(Probe {
+                idle_ms,
+                window: Some((win.wm_class, win.title, win.pid)),
+                desktop_env: "gnome".to_string(),
+            })),
+            Ok(None) => Ok(Some(Probe {
+                idle_ms,
+                window: None,
+                desktop_env: "gnome".to_string(),
+            })),
+            Err(_) => {
+                *self.dbus_conn.lock().await = None;
+                Ok(None)
+            }
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    async fn probe_platform(&self) -> Result<Probe, Box<dyn std::error::Error + Send + Sync>> {
+        let env_hint = std::env::var("XDG_CURRENT_DESKTOP")
+            .or_else(|_| std::env::var("DESKTOP_SESSION"))
+            .unwrap_or_default()
+            .to_lowercase();
+
+        // 1. Try environment-hinted desktop first to eliminate unnecessary IPC scans across other compositors
+        if env_hint.contains("gnome") {
+            if let Ok(Some(probe)) = self.probe_gnome().await {
+                return Ok(probe);
+            }
+        } else if env_hint.contains("niri") {
+            if let Some(probe) = self.probe_niri().await {
+                return Ok(probe);
+            }
+        } else if env_hint.contains("cosmic") {
+            if let Some(probe) = self.probe_cosmic().await {
+                return Ok(probe);
+            }
+        } else if env_hint.contains("hypr") {
+            if let Some(probe) = self.probe_hyprland().await {
+                return Ok(probe);
             }
         }
 
-        // 3. GNOME / Mutter fallback via DBus
-        let (idle_ms, window_result) = {
-            let mut conn_lock = self.dbus_conn.lock().await;
-            if conn_lock.is_none() {
-                match Connection::session().await {
-                    Ok(c) => *conn_lock = Some(c),
-                    Err(e) => return Err(Box::new(e)),
-                }
-            }
-            let conn = conn_lock.as_ref().unwrap();
-            let idle_ms = self.get_idle_time(conn).await.unwrap_or(0);
-            let window_result = self.get_active_window(conn).await;
-            (idle_ms, window_result)
-        };
+        // 2. Fallbacks if hinted environment wasn't detected or active
+        if let Some(probe) = self.probe_cosmic().await {
+            return Ok(probe);
+        }
+        if let Some(probe) = self.probe_niri().await {
+            return Ok(probe);
+        }
+        if let Some(probe) = self.probe_hyprland().await {
+            return Ok(probe);
+        }
+        if let Ok(Some(probe)) = self.probe_gnome().await {
+            return Ok(probe);
+        }
 
-        let is_gnome = window_result.is_ok();
-        let window = match window_result {
-            Ok(Some(win)) => Some((win.wm_class, win.title, win.pid)),
-            Ok(None) => None,
-            Err(_) => {
-                // D-Bus call failed; drop the cached connection so we reconnect next poll.
-                *self.dbus_conn.lock().await = None;
-                None
-            }
-        };
-
-        let desktop_env = if is_gnome {
-            "gnome".to_string()
+        let idle_ms = self.get_linux_idle_ms().await.unwrap_or(0);
+        let desktop_env = if !env_hint.is_empty() {
+            env_hint
         } else {
-            std::env::var("XDG_CURRENT_DESKTOP")
-                .or_else(|_| std::env::var("DESKTOP_SESSION"))
-                .unwrap_or_else(|_| "linux".to_string())
-                .to_lowercase()
+            "linux".to_string()
         };
-
-        Ok(Probe { idle_ms, window, desktop_env })
+        Ok(Probe { idle_ms, window: None, desktop_env })
     }
 
     #[cfg(target_os = "windows")]
@@ -670,7 +765,7 @@ impl Watcher {
         // Apply filter rules
         if curr.wm_class != "__idle__" && curr.wm_class != "__paused__" {
             let rules = self.filter_rules.lock().await;
-            match apply_filter_rules(&rules, &curr.wm_class, &curr.title) {
+            match apply_compiled_filter_rules(&rules, &curr.wm_class, &curr.title) {
                 FilterDecision::Ignore(rule_id) => {
                     debug!("Ignoring event due to rule: {}", rule_id);
                     return Ok(());
@@ -713,6 +808,14 @@ impl Watcher {
             }
         }
 
+        if let Ok(guard) = CACHED_NIRI_SOCKET.read() {
+            if let Some(ref p) = *guard {
+                if p.exists() {
+                    return Some(p.clone());
+                }
+            }
+        }
+
         let base_dirs = [
             std::env::var("XDG_RUNTIME_DIR").ok().map(PathBuf::from),
             dirs::runtime_dir(),
@@ -733,6 +836,9 @@ impl Watcher {
                 }
                 candidates.sort_by(|a, b| b.0.cmp(&a.0));
                 if let Some((_, sock_path)) = candidates.into_iter().next() {
+                    if let Ok(mut guard) = CACHED_NIRI_SOCKET.write() {
+                        *guard = Some(sock_path.clone());
+                    }
                     return Some(sock_path);
                 }
             }
@@ -752,6 +858,9 @@ impl Watcher {
             Ok(s) => s,
             Err(e) => {
                 debug!("Failed to connect to Niri socket {:?}: {}", sock_path, e);
+                if let Ok(mut guard) = CACHED_NIRI_SOCKET.write() {
+                    *guard = None;
+                }
                 return Err(Box::new(e));
             }
         };
