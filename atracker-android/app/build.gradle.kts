@@ -20,6 +20,15 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        named("debug") {
+            val projectKeystore = rootProject.file("../.android_home/debug.keystore")
+            if (projectKeystore.exists()) {
+                storeFile = projectKeystore
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false

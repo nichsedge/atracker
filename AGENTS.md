@@ -14,7 +14,7 @@ This repository uses a single unified stack:
 
 `atracker` is the **High-Frequency Activity Telemetry Recorder** in the workstation's Personal Data Architecture ([`~/Projects/DATA_ARCHITECTURE.md`](file:///home/al/Projects/DATA_ARCHITECTURE.md)):
 
-- **Primary Domain**: Continuous foreground window polling, process usage tracking, and idle detection across Linux (COSMIC/Niri/Hyprland/GNOME), Windows, and macOS.
+- **Primary Domain**: Continuous foreground window polling, process usage tracking, and idle detection across Linux (KDE Plasma/COSMIC/Niri/Hyprland/GNOME), Windows, and macOS.
 - **Storage**: Local SQLite database at `~/.local/share/atracker-rs/atracker-rs.db`.
 - **Promotion to Core SSOTs**:
   - Significant work sessions, project milestones, or travel blocks can be promoted to structured timeline events in `ierp` (`uv run ierp insert`).
@@ -62,7 +62,7 @@ To build the dashboard and Rust backend, reload systemd, and restart the service
 ### Backend & API (`atracker-rs`)
 
 - **`src/watcher.rs`**: Core activity watcher. Polls the foreground window/app state and idle status every 5 seconds. Each platform is gated with `#[cfg(target_os = ...)]`:
-  - **Linux**: Dynamic compositor and desktop environment detection with per-event tagging (`desktop_env`: `niri`, `gnome`, `hyprland`). Native Niri JSON IPC (`FocusedWindow` via `$NIRI_SOCKET` or runtime socket discovery), native Hyprland IPC support (`activewindow`), and D-Bus listener with the GNOME Shell extension `org.atracker.WindowTracker` / Mutter's `org.gnome.Mutter.IdleMonitor` (via `zbus`).
+  - **Linux**: Dynamic compositor and desktop environment detection with per-event tagging (`desktop_env`: `kde`, `cosmic`, `niri`, `gnome`, `hyprland`). Native KDE Plasma 6 Wayland tracking via dynamic KWin scripting bridge (`org.kde.KWin` and `org.atracker.KWinReceiver`), native COSMIC Wayland protocol (`zcosmic_toplevel_info_v1`), native Niri JSON IPC (`FocusedWindow` via `$NIRI_SOCKET` or runtime socket discovery), native Hyprland IPC support (`activewindow`), and D-Bus listener with the GNOME Shell extension `org.atracker.WindowTracker` / Mutter's `org.gnome.Mutter.IdleMonitor` (via `zbus`).
   - **Windows**: Direct Win32 FFI — `GetForegroundWindow`/`QueryFullProcessImageNameW` for the active window, `GetLastInputInfo` for idle time.
   - **macOS**: Raw `objc_msgSend` calls into `NSWorkspace.sharedWorkspace.frontmostApplication` for the active app, and `CGEventSourceSecondsSinceLastEventType` for idle time. AppKit is linked via [atracker-rs/build.rs](atracker-rs/build.rs) so `objc_getClass("NSWorkspace")` resolves at runtime. Per-window titles are read via `CGWindowListCopyWindowInfo` (matching on `kCGWindowOwnerPID` and `kCGWindowLayer == 0`); if Screen Recording permission isn't granted, `kCGWindowName` is absent and `title` falls back to the app's localized name. NSStrings from accessor methods are drained via an `NSAutoreleasePool` around the per-poll work.
 - **`src/db.rs`**: Database abstraction using `sqlx` (SQLite). Automatically initializes tables/indexes at `~/.local/share/atracker-rs/atracker-rs.db`.

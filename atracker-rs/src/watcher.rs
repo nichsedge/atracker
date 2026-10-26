@@ -27,6 +27,8 @@ pub struct Watcher {
     dbus_conn: Arc<Mutex<Option<Connection>>>,
     #[cfg(target_os = "linux")]
     cosmic_tracker: Arc<crate::cosmic::CosmicTracker>,
+    #[cfg(target_os = "linux")]
+    kde_tracker: Arc<crate::kde::KdeTracker>,
     tx: broadcast::Sender<String>,
     filter_rules: Arc<Mutex<Vec<CompiledFilterRule>>>,
     last_settings_refresh: Arc<Mutex<i64>>,
@@ -462,6 +464,8 @@ impl Watcher {
             dbus_conn: Arc::new(Mutex::new(None)),
             #[cfg(target_os = "linux")]
             cosmic_tracker: Arc::new(crate::cosmic::CosmicTracker::new()),
+            #[cfg(target_os = "linux")]
+            kde_tracker: Arc::new(crate::kde::KdeTracker::new()),
             tx,
             filter_rules: Arc::new(Mutex::new(Vec::new())),
             last_settings_refresh: Arc::new(Mutex::new(0)),
@@ -558,6 +562,23 @@ impl Watcher {
     }
 
     #[cfg(target_os = "linux")]
+    async fn probe_kde(&self) -> Option<Probe> {
+        if self.kde_tracker.is_available() {
+            let idle_ms = self.get_linux_idle_ms().await.unwrap_or(0);
+            let win_opt = self.kde_tracker.get_active_window();
+            debug!("probe_kde: idle_ms={}, win={:?}", idle_ms, win_opt);
+            Some(Probe {
+                idle_ms,
+                window: win_opt.map(|win| (win.wm_class, win.title, win.pid)),
+                desktop_env: "kde".to_string(),
+            })
+        } else {
+            debug!("probe_kde: kde_tracker not available");
+            None
+        }
+    }
+
+    #[cfg(target_os = "linux")]
     async fn probe_cosmic(&self) -> Option<Probe> {
         if self.cosmic_tracker.is_available() {
             let idle_ms = self.get_linux_idle_ms().await.unwrap_or(0);
@@ -646,7 +667,17 @@ impl Watcher {
             .unwrap_or_default()
             .to_lowercase();
 
-        // 1. Try environment-hinted desktop first to eliminate unnecessary IPC scans across other compositors
+        // 1. Try environment-hinted desktop first
+        if env_hint.contains("kde") || env_hint.contains("plasma") {
+            let idle_ms = self.get_linux_idle_ms().await.unwrap_or(0);
+            let win_opt = self.kde_tracker.get_active_window();
+            return Ok(Probe {
+                idle_ms,
+                window: win_opt.map(|win| (win.wm_class, win.title, win.pid)),
+                desktop_env: "kde".to_string(),
+            });
+        }
+
         if env_hint.contains("gnome") {
             if let Ok(Some(probe)) = self.probe_gnome().await {
                 return Ok(probe);
@@ -666,6 +697,11 @@ impl Watcher {
         }
 
         // 2. Fallbacks if hinted environment wasn't detected or active
+        if self.kde_tracker.is_available() {
+            if let Some(probe) = self.probe_kde().await {
+                return Ok(probe);
+            }
+        }
         if let Some(probe) = self.probe_cosmic().await {
             return Ok(probe);
         }
@@ -675,8 +711,10 @@ impl Watcher {
         if let Some(probe) = self.probe_hyprland().await {
             return Ok(probe);
         }
-        if let Ok(Some(probe)) = self.probe_gnome().await {
-            return Ok(probe);
+        if env_hint.contains("gnome") {
+            if let Ok(Some(probe)) = self.probe_gnome().await {
+                return Ok(probe);
+            }
         }
 
         let idle_ms = self.get_linux_idle_ms().await.unwrap_or(0);
@@ -1087,8 +1125,13 @@ impl Watcher {
             }
         }
 
-        // 2. Try GNOME Mutter IdleMonitor (works on GNOME)
-        {
+        let env_hint = std::env::var("XDG_CURRENT_DESKTOP")
+            .or_else(|_| std::env::var("DESKTOP_SESSION"))
+            .unwrap_or_default()
+            .to_lowercase();
+
+        // 2. Try GNOME Mutter IdleMonitor (works on GNOME only)
+        if env_hint.contains("gnome") {
             let mut conn_lock = self.dbus_conn.lock().await;
             if conn_lock.is_none() {
                 if let Ok(c) = Connection::session().await {
@@ -1101,8 +1144,6 @@ impl Watcher {
                         return Ok(idle);
                     }
                 }
-                // 3. Fallback: ScreenSaver GetActive (DMS provides org.gnome.ScreenSaver; hypridle provides org.freedesktop.ScreenSaver)
-                //    If locked, treat as idle with threshold + 1 to trigger idle branch
                 if let Ok(proxy) = Proxy::new(conn, "org.gnome.ScreenSaver", "/org/gnome/ScreenSaver", "org.gnome.ScreenSaver").await {
                     if let Ok(active) = proxy.call("GetActive", &()).await as Result<bool, _> {
                         if active {
@@ -1110,6 +1151,18 @@ impl Watcher {
                         }
                     }
                 }
+            }
+        }
+
+        // 3. Fallback: ScreenSaver GetActive (KDE, hypridle, etc. provide org.freedesktop.ScreenSaver)
+        {
+            let mut conn_lock = self.dbus_conn.lock().await;
+            if conn_lock.is_none() {
+                if let Ok(c) = Connection::session().await {
+                    *conn_lock = Some(c);
+                }
+            }
+            if let Some(conn) = conn_lock.as_ref() {
                 if let Ok(proxy) = Proxy::new(conn, "org.freedesktop.ScreenSaver", "/org/freedesktop/ScreenSaver", "org.freedesktop.ScreenSaver").await {
                     if let Ok(active) = proxy.call("GetActive", &()).await as Result<bool, _> {
                         if active {
@@ -1166,6 +1219,8 @@ impl Watcher {
     }
 
     pub async fn stop(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        #[cfg(target_os = "linux")]
+        self.kde_tracker.stop().await;
         let mut current = self.current_event.lock().await;
         if let Some(curr) = current.take() { self.flush_event(curr).await?; }
         Ok(())

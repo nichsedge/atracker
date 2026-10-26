@@ -4,6 +4,8 @@ mod watcher;
 mod api;
 #[cfg(target_os = "linux")]
 mod cosmic;
+#[cfg(target_os = "linux")]
+mod kde;
 
 use std::sync::Arc;
 use tokio::sync::{broadcast, Mutex, RwLock};
@@ -78,18 +80,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
 
-            if let Ok(current) = watcher_clone.run_once(effectively_paused).await {
-                let mut state_curr = watcher_state.current_tracking.lock().await;
-                if let Some(curr) = current {
-                    *state_curr = Some(serde_json::json!({
-                        "wm_class": curr.wm_class,
-                        "title": curr.title,
-                        "timestamp": curr.timestamp,
-                        "is_idle": curr.is_idle,
-                        "desktop_env": curr.desktop_env,
-                    }));
-                } else {
-                    *state_curr = None;
+            match watcher_clone.run_once(effectively_paused).await {
+                Ok(current) => {
+                    let mut state_curr = watcher_state.current_tracking.lock().await;
+                    if let Some(curr) = current {
+                        tracing::info!("Current tracking updated: {} - {}", curr.wm_class, curr.title);
+                        *state_curr = Some(serde_json::json!({
+                            "wm_class": curr.wm_class,
+                            "title": curr.title,
+                            "timestamp": curr.timestamp,
+                            "is_idle": curr.is_idle,
+                            "desktop_env": curr.desktop_env,
+                        }));
+                    } else {
+                        tracing::info!("Current tracking set to None!");
+                        *state_curr = None;
+                    }
+                }
+                Err(e) => {
+                    tracing::error!("Watcher run_once error: {}", e);
                 }
             }
 

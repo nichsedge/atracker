@@ -18,7 +18,7 @@ This version (v2) is built with **Rust** for the backend and **React** for the d
     - 📱 **Multi-Device**: View stats from your Linux desktop and Android phone in one place.
     - 🏷️ **Smart Categorization**: Auto-categorize apps using regex patterns.
 - 📱 **Android Sync**: Companion app to track mobile usage.
-- 🐧 **Linux Native**: Optimized for **COSMIC** (native `zcosmic_toplevel_info_v1` Wayland protocol), **Niri** (native JSON IPC), **Hyprland** (native IPC), and **GNOME/Wayland** (dedicated shell extension) with dynamic desktop environment detection and per-event tagging.
+- 🐧 **Linux Native**: Optimized for **KDE Plasma 6 / KWin** (dynamic D-Bus scripting bridge), **COSMIC** (native `zcosmic_toplevel_info_v1` Wayland protocol), **Niri** (native JSON IPC), **Hyprland** (native IPC), and **GNOME/Wayland** (dedicated shell extension) with dynamic desktop environment detection and per-event tagging.
 - 🪟 **Windows Native**: Integrated natively using direct Win32 APIs for foreground window and idle monitoring.
 - 🍎 **macOS Native**: Uses AppKit (NSWorkspace) and CoreGraphics for foreground app and idle detection — no extra runtime dependencies.
 
@@ -79,7 +79,7 @@ Once the installation is complete, visit **[http://localhost:8933](http://localh
 
 - **Backend (`atracker-rs`)**: Rust + Axum + SQLx (SQLite).
 - **Frontend (`dashboard-v2`)**: React + Vite + Tailwind (Legacy) / Vanilla CSS.
-- **Watcher**: Native IPC on Niri and Hyprland, D-Bus on GNOME (GNOME Shell + Mutter), Win32 on Windows, AppKit + CoreGraphics on macOS.
+- **Watcher**: Native KWin scripting bridge on KDE Plasma, native Wayland protocol on COSMIC, native IPC on Niri and Hyprland, D-Bus on GNOME (GNOME Shell + Mutter), Win32 on Windows, AppKit + CoreGraphics on macOS.
 - **Android**: Kotlin app syncing via REST API.
 
 
