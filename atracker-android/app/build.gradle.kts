@@ -11,7 +11,7 @@ android {
     compileSdk = 37
 
     defaultConfig {
-        applicationId = rootProject.extra["defaultApplicationId"] as String
+        applicationId = "com.sans.atracker"
         minSdk = 33
         targetSdk = 37
         versionCode = 1
