@@ -24,11 +24,28 @@ LOCAL_BACKUPS_DIR = Path.home() / ".local" / "share" / "atracker-rs" / "backups"
 DEFAULT_CREDS_PATH = Path.home() / ".config" / "atracker-rs" / "r2_cred.json"
 
 
+def parse_secrets_file():
+    secrets_path = Path.home() / ".secrets"
+    creds = {}
+    if secrets_path.exists():
+        for line in secrets_path.read_text().splitlines():
+            line = line.strip()
+            if line.startswith("export "):
+                line = line[7:]
+            if "=" in line:
+                k, v = line.split("=", 1)
+                k = k.strip()
+                v = v.strip().strip("'\"")
+                creds[k] = v
+    return creds
+
+
 def load_credentials(creds_file: Path | None = None, bucket_override: str | None = None):
-    account_id = os.getenv("R2_ACCOUNT_ID") or os.getenv("CLOUDFLARE_ACCOUNT_ID")
-    access_key = os.getenv("R2_ACCESS_KEY_ID") or os.getenv("AWS_ACCESS_KEY_ID")
-    secret_key = os.getenv("R2_SECRET_ACCESS_KEY") or os.getenv("AWS_SECRET_ACCESS_KEY")
-    bucket = bucket_override or os.getenv("R2_BUCKET_NAME") or os.getenv("R2_BUCKET")
+    secrets = parse_secrets_file()
+    account_id = secrets.get("R2_ACCOUNT_ID") or os.getenv("R2_ACCOUNT_ID") or os.getenv("CLOUDFLARE_ACCOUNT_ID")
+    access_key = secrets.get("R2_ACCESS_KEY_ID") or os.getenv("R2_ACCESS_KEY_ID") or os.getenv("AWS_ACCESS_KEY_ID")
+    secret_key = secrets.get("R2_SECRET_ACCESS_KEY") or os.getenv("R2_SECRET_ACCESS_KEY") or os.getenv("AWS_SECRET_ACCESS_KEY")
+    bucket = bucket_override or secrets.get("R2_BUCKET_NAME") or os.getenv("R2_BUCKET_NAME") or os.getenv("R2_BUCKET")
 
     file_candidates: list[Path] = []
     if creds_file:
@@ -146,7 +163,18 @@ def backup_database(db_source: Path = DEFAULT_DB_SOURCE, bucket: str | None = No
     # Step 3: Upload strictly to latest pointer on Cloudflare R2 (in-place overwrite)
     data_bytes = latest_file.read_bytes()
 
-    upload_to_r2(data_bytes, key, account_id, access_key, secret_key, resolved_bucket)
+    try:
+        upload_to_r2(data_bytes, key, account_id, access_key, secret_key, resolved_bucket)
+    except Exception as sigv4_err:
+        import subprocess
+        wrangler_bin = shutil.which("wrangler") or shutil.which("bunx")
+        if wrangler_bin:
+            cmd = ["bunx", "wrangler", "r2", "object", "put", f"{resolved_bucket}/{key}", f"--file={latest_file}", "--remote"]
+            res = subprocess.run(cmd, capture_output=True, text=True)
+            if res.returncode != 0:
+                raise RuntimeError(f"SigV4 upload failed ({sigv4_err}) and wrangler fallback failed: {res.stderr}")
+        else:
+            raise sigv4_err
     print(f"✅ aTracker snapshot backed up & overwritten in R2 ({resolved_bucket}/{key}, {backup_size:,} bytes). Zero storage growth.")
 
 
