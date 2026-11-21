@@ -150,8 +150,13 @@ def backup_database(db_source: Path = DEFAULT_DB_SOURCE, bucket: str | None = No
         if old_file.name not in {"atracker_backup_latest.sqlite", "atracker_backup_previous.sqlite"}:
             old_file.unlink(missing_ok=True)
 
-    # Step 2: Online atomic backup
+    # Step 2: Online atomic backup with WAL checkpoint truncate
     src_conn = sqlite3.connect(db_source)
+    try:
+        src_conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
+    except Exception as e:
+        print(f"Warning: WAL checkpoint failed: {e}", file=sys.stderr)
+
     dst_conn = sqlite3.connect(latest_file)
     with dst_conn:
         src_conn.backup(dst_conn)
