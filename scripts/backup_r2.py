@@ -160,8 +160,19 @@ def backup_database(db_source: Path = DEFAULT_DB_SOURCE, bucket: str | None = No
     dst_conn = sqlite3.connect(latest_file)
     with dst_conn:
         src_conn.backup(dst_conn)
-    dst_conn.close()
     src_conn.close()
+
+    # Strip secondary indexes from the backup snapshot (atracker-rs recreates them on boot)
+    # and VACUUM to shrink the R2 upload by >50% while keeping a valid .sqlite file.
+    idx_rows = dst_conn.execute(
+        "SELECT name FROM sqlite_master WHERE type = 'index' AND name NOT LIKE 'sqlite_autoindex_%'"
+    ).fetchall()
+    for (idx_name,) in idx_rows:
+        escaped = idx_name.replace('"', '""')
+        dst_conn.execute(f'DROP INDEX IF EXISTS "{escaped}"')
+    dst_conn.commit()
+    dst_conn.execute("VACUUM")
+    dst_conn.close()
 
     backup_size = latest_file.stat().st_size
 
