@@ -671,11 +671,20 @@ pub async fn set_setting(pool: &SqlitePool, key: &str, value: &str) -> Result<()
 
 // --- Pruning ---
 pub async fn prune_events(pool: &SqlitePool, days_to_keep: i64) -> Result<u64, sqlx::Error> {
-    let result = sqlx::query("DELETE FROM events WHERE timestamp < DATE('now', ?)")
-        .bind(format!("-{} days", days_to_keep))
+    let cutoff = format!("-{} days", days_to_keep);
+    let events_res = sqlx::query("DELETE FROM events WHERE timestamp < DATE('now', ?)")
+        .bind(&cutoff)
         .execute(pool)
         .await?;
-    Ok(result.rows_affected())
+    let android_res = sqlx::query("DELETE FROM android_events WHERE timestamp < DATE('now', ?)")
+        .bind(&cutoff)
+        .execute(pool)
+        .await?;
+    let total = events_res.rows_affected() + android_res.rows_affected();
+    if total > 0 {
+        let _ = sqlx::query("VACUUM").execute(pool).await;
+    }
+    Ok(total)
 }
 
 // --- Devices ---
