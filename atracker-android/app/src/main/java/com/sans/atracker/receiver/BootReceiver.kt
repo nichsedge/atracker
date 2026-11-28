@@ -35,6 +35,8 @@ class BootReceiver : BroadcastReceiver() {
                         // Also (re-)schedule the WorkManager watchdog in case it was wiped
                         WatchdogWorker.schedule(context)
                     }
+                } catch (_: Exception) {
+                    // Credential-encrypted DataStore is unavailable during LOCKED_BOOT_COMPLETED
                 } finally {
                     pendingResult.finish()
                 }

@@ -72,61 +72,69 @@ class SyncWorker @AssistedInject constructor(
                 return Result.success()
             }
 
-            val byDay = unsynced.groupBy { event ->
-                dayFormatter.format(Instant.ofEpochMilli(event.startTimestamp))
-            }
+            val syncedDays = mutableSetOf<String>()
+            var totalSyncedEvents = 0
 
-            val payloadDays = byDay.mapValues { (_, events) ->
-                events.map { e ->
-                    AndroidEventPayload(
-                        id = e.id,
-                        device_id = deviceId,
-                        timestamp = isoFormatter.format(Instant.ofEpochMilli(e.startTimestamp)),
-                        end_timestamp = isoFormatter.format(Instant.ofEpochMilli(e.endTimestamp)),
-                        package_name = e.packageName,
-                        app_label = e.appLabel,
-                        duration_secs = e.durationSecs,
-                        is_idle = e.isIdle,
-                        source_type = e.sourceType,
-                        domain = e.domain,
-                        page_title = e.pageTitle,
-                        browser_package = e.browserPackage
+            for (batch in unsynced.chunked(500)) {
+                val byDay = batch.groupBy { event ->
+                    dayFormatter.format(Instant.ofEpochMilli(event.startTimestamp))
+                }
+
+                val payloadDays = byDay.mapValues { (_, events) ->
+                    events.map { e ->
+                        AndroidEventPayload(
+                            id = e.id,
+                            device_id = deviceId,
+                            timestamp = isoFormatter.format(Instant.ofEpochMilli(e.startTimestamp)),
+                            end_timestamp = isoFormatter.format(Instant.ofEpochMilli(e.endTimestamp)),
+                            package_name = e.packageName,
+                            app_label = e.appLabel,
+                            duration_secs = e.durationSecs,
+                            is_idle = e.isIdle,
+                            source_type = e.sourceType,
+                            domain = e.domain,
+                            page_title = e.pageTitle,
+                            browser_package = e.browserPackage
+                        )
+                    }
+                }
+
+                val response: HttpResponse = httpClient.post("$baseUrl/api/sync/android") {
+                    contentType(ContentType.Application.Json)
+                    setBody(
+                        AndroidSyncPayload(
+                            device_name = android.os.Build.MODEL,
+                            days = payloadDays
+                        )
                     )
                 }
-            }
 
-            val response: HttpResponse = httpClient.post("$baseUrl/api/sync/android") {
-                contentType(ContentType.Application.Json)
-                setBody(
-                    AndroidSyncPayload(
-                        device_name = android.os.Build.MODEL,
-                        days = payloadDays
+                if (!response.status.isSuccess()) {
+                    return Result.failure(
+                        Data.Builder()
+                            .putString("error", "Server returned ${response.status.value}")
+                            .build()
                     )
-                )
+                }
+
+                eventRepository.markSynced(batch.map { it.id })
+                syncedDays.addAll(byDay.keys)
+                totalSyncedEvents += batch.size
             }
 
-            if (response.status.isSuccess()) {
-                eventRepository.markSynced(unsynced.map { it.id })
+            settingsRepository.setLastSyncTime(System.currentTimeMillis())
 
-                // Auto-prune synced events older than 30 days to keep local SQLite database compact
-                val thirtyDaysAgo = System.currentTimeMillis() - (30L * 86_400_000L)
-                val prunedCount = eventRepository.pruneSyncedEvents(thirtyDaysAgo)
+            // Auto-prune synced events older than 30 days to keep local SQLite database compact
+            val thirtyDaysAgo = System.currentTimeMillis() - (30L * 86_400_000L)
+            val prunedCount = eventRepository.pruneSyncedEvents(thirtyDaysAgo)
 
-                Result.success(
-                    Data.Builder()
-                        .putInt("syncedEvents", unsynced.size)
-                        .putInt("syncedDays", byDay.size)
-                        .putInt("prunedEvents", prunedCount)
-                        .build()
-                )
-            } else {
-                // Return failure or retry if the server returned an error
-                Result.failure(
-                    Data.Builder()
-                        .putString("error", "Server returned ${response.status.value}")
-                        .build()
-                )
-            }
+            Result.success(
+                Data.Builder()
+                    .putInt("syncedEvents", totalSyncedEvents)
+                    .putInt("syncedDays", syncedDays.size)
+                    .putInt("prunedEvents", prunedCount)
+                    .build()
+            )
         } catch (e: Exception) {
             Result.failure(
                 Data.Builder()
@@ -158,7 +166,7 @@ class SyncWorker @AssistedInject constructor(
 
             WorkManager.getInstance(context).enqueueUniquePeriodicWork(
                 SYNC_WORK_NAME,
-                ExistingPeriodicWorkPolicy.UPDATE,
+                ExistingPeriodicWorkPolicy.KEEP,
                 syncRequest
             )
         }

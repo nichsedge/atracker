@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -284,8 +285,9 @@ class MainViewModel @Inject constructor(
     }
 
     fun saveBackendUrl(url: String) {
+        val trimmed = url.trim()
         viewModelScope.launch {
-            settingsRepository.setBackendUrl(url)
+            settingsRepository.setBackendUrl(trimmed)
         }
     }
 
@@ -301,36 +303,42 @@ class MainViewModel @Inject constructor(
         }
     }
 
-    fun performSync() {
-        val url = _uiState.value.backendUrl
+    fun performSync(urlOverride: String? = null) {
+        val url = (urlOverride ?: _uiState.value.backendUrl).trim()
         if (url.isBlank() || !isValidBackendUrl(url)) {
             syncFinished(false, "Please set a valid backend URL first.")
             return
         }
 
         syncStarted()
-        val workRequest = OneTimeWorkRequestBuilder<SyncWorker>().build()
-        workManager.enqueue(workRequest)
 
         viewModelScope.launch {
-            workManager.getWorkInfoByIdFlow(workRequest.id).collect { workInfo ->
-                if (workInfo != null && workInfo.state.isFinished) {
-                    if (workInfo.state == WorkInfo.State.SUCCEEDED) {
-                        settingsRepository.setLastSyncTime(System.currentTimeMillis())
-                        val syncedEvents = workInfo.outputData.getInt("syncedEvents", 0)
-                        val syncedDays = workInfo.outputData.getInt("syncedDays", 0)
+            if (url != _uiState.value.backendUrl) {
+                settingsRepository.setBackendUrl(url)
+            }
 
-                        val msg = if (syncedEvents == 0) {
-                            "Already up to date."
-                        } else {
-                            "Synced $syncedEvents events across $syncedDays day(s). ✓"
-                        }
-                        syncFinished(true, msg)
-                    } else {
-                        val error = workInfo.outputData.getString("error") ?: "Unknown error"
-                        syncFinished(false, "Sync failed: $error")
-                    }
+            val workRequest = OneTimeWorkRequestBuilder<SyncWorker>().build()
+            workManager.enqueue(workRequest)
+
+            val workInfo = workManager.getWorkInfoByIdFlow(workRequest.id).first { info ->
+                info != null && (info.state.isFinished || (info.state == WorkInfo.State.ENQUEUED && info.runAttemptCount > 0))
+            }
+
+            if (workInfo != null && workInfo.state == WorkInfo.State.SUCCEEDED) {
+                val syncedEvents = workInfo.outputData.getInt("syncedEvents", 0)
+                val syncedDays = workInfo.outputData.getInt("syncedDays", 0)
+
+                val msg = if (syncedEvents == 0) {
+                    "Already up to date."
+                } else {
+                    "Synced $syncedEvents events across $syncedDays day(s). ✓"
                 }
+                syncFinished(true, msg)
+            } else if (workInfo != null && workInfo.state == WorkInfo.State.ENQUEUED) {
+                syncFinished(false, "No internet connection. Will retry automatically.")
+            } else {
+                val error = workInfo?.outputData?.getString("error") ?: "Unknown error"
+                syncFinished(false, "Sync failed: $error")
             }
         }
     }

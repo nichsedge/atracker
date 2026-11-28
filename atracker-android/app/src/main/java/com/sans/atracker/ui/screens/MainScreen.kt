@@ -434,13 +434,29 @@ fun ConfigurationSection(
     syncMessage: String,
     isSyncSuccess: Boolean?,
     onSaveUrl: (String) -> Unit,
-    onSync: () -> Unit
+    onSync: (String) -> Unit
 ) {
     val keyboardController = LocalSoftwareKeyboardController.current
     var urlInput by remember { mutableStateOf(backendUrl) }
+    var showSavedHint by remember { mutableStateOf(false) }
+
+    val trimmedInput = urlInput.trim()
+    val isUrlValid = remember(trimmedInput) {
+        val lower = trimmedInput.lowercase()
+        (lower.startsWith("http://") && lower.length > 7) ||
+            (lower.startsWith("https://") && lower.length > 8)
+    }
+    val hasInvalidInput = trimmedInput.isNotEmpty() && !isUrlValid
 
     LaunchedEffect(backendUrl) {
         urlInput = backendUrl
+    }
+
+    LaunchedEffect(showSavedHint) {
+        if (showSavedHint) {
+            kotlinx.coroutines.delay(2000)
+            showSavedHint = false
+        }
     }
 
     Column {
@@ -448,21 +464,38 @@ fun ConfigurationSection(
         AtrackerCard {
             OutlinedTextField(
                 value = urlInput,
-                onValueChange = { urlInput = it },
+                onValueChange = {
+                    urlInput = it
+                    showSavedHint = false
+                },
                 label = { Text("Backend Endpoint") },
                 placeholder = { Text("http://192.xx.xx.xx:8932") },
                 modifier = Modifier.fillMaxWidth(),
                 shape = MaterialTheme.shapes.medium,
                 singleLine = true,
+                isError = hasInvalidInput,
+                supportingText = when {
+                    hasInvalidInput -> {
+                        { Text("Must start with http:// or https://") }
+                    }
+                    showSavedHint -> {
+                        { Text("Endpoint saved", color = MaterialTheme.colorScheme.tertiary) }
+                    }
+                    else -> null
+                },
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                 keyboardActions = KeyboardActions(onDone = {
-                    onSaveUrl(urlInput)
-                    keyboardController?.hide()
+                    if (isUrlValid) {
+                        onSaveUrl(trimmedInput)
+                        showSavedHint = true
+                        keyboardController?.hide()
+                    }
                 }),
                 trailingIcon = {
-                    if (urlInput != backendUrl) {
+                    if (trimmedInput != backendUrl && isUrlValid) {
                         IconButton(onClick = {
-                            onSaveUrl(urlInput)
+                            onSaveUrl(trimmedInput)
+                            showSavedHint = true
                             keyboardController?.hide()
                         }) {
                             Icon(
@@ -504,9 +537,12 @@ fun ConfigurationSection(
 
                 PrimaryButton(
                     text = "Sync Now",
-                    onClick = onSync,
+                    onClick = {
+                        keyboardController?.hide()
+                        onSync(trimmedInput)
+                    },
                     isLoading = isSyncing,
-                    enabled = backendUrl.isNotEmpty(),
+                    enabled = isUrlValid,
                     modifier = Modifier.width(140.dp)
                 )
             }
